@@ -90,6 +90,8 @@ type SharedWindow = {
   wbProviders?: { labelOf?: (provider: string) => string }
   /** 账号展示模型（editionSuffix：国际版 / 国内版的判定，与账号页同一处口径） */
   wbAccountsModel?: { editionSuffix?: (account: AccountLike) => string }
+  /** 整站内联 SVG 图标集（icons.js）：统计卡的图标块与空态图标都从这儿取 */
+  wbIcons?: { icon?: (name: string, size?: number) => string }
 }
 
 function shared(): SharedWindow {
@@ -162,9 +164,27 @@ type LoadOptions = { silent?: boolean }
 
 /* ─── 小件 ─────────────────────────────────── */
 
-/** 统一的空态 / 错误态文案：与组件层 .empty 同档留白 */
+/** 纯文本空态 / 错误态：一行居中灰字，用在「正在加载…」这类不该摆大图标的地方 */
 function placeholder(text: string, className = 'empty') {
   return <div className={className} style={{ padding: '14px 0' }}>{text}</div>
+}
+
+/**
+ * 结构化空态：图标 + 标题 + 说明三档（参考项目 .ui-empty）。
+ *
+ * 图标取整站图标集里语义最近的一枚，不新画、不用 emoji（理由见 icons.js 顶部）。
+ * 留白由 `.empty:has(.t)` 给足，所以调用方不用再各自传内联 padding ——
+ * 之前 placeholder 里那个 `padding:'14px 0'` 是为了压掉 .empty 自带的 30px，
+ * 现在结构化档走另一条规则，内联样式就不用留了。
+ */
+function emptyState(icon: string, title: string, desc?: string, className = 'empty') {
+  return (
+    <div className={className}>
+      <span className='big'><Ico name={icon} size={22} /></span>
+      <div className='t'>{title}</div>
+      {desc ? <div className='d'>{desc}</div> : null}
+    </div>
+  )
 }
 
 /** 面板头上的小问号：内容由 tooltip.js 增强（见 TIP_* 的说明），这里只留空壳 */
@@ -194,16 +214,46 @@ function ProviderBadge({ accountId }: { accountId: string }) {
 
 /* ─── 板块一：统计概览 ────────────────────── */
 
+/** 图标（icons.js 的内联 SVG 串）：与设置页同一份注入方式，取不到时留空 */
+function iconHtml(name: string, size: number): string {
+  return shared().wbIcons?.icon?.(name, size) || ''
+}
+
+/** 一枚图标：图标集给的是 SVG 串，这里只做注入容器（line-height:0 见 components.css） */
+function Ico({ name, size = 18 }: { name: string; size?: number }) {
+  return <span className='svg-ico' dangerouslySetInnerHTML={{ __html: iconHtml(name, size) }} />
+}
+
+/**
+ * 六格指标卡：左侧一枚 44px 渐变图标块，右侧标签 + 大号读数 + 副行。
+ *
+ * 图标按格子语义从整站图标集里挑（icons.js），不新画也不用 emoji ——
+ * icons.js 顶部写明了理由：emoji 是字体字形，跨机器粗细/基线都不同。
+ * 「成功请求数」借 shield 而不是新增一枚✓：盾牌在这个界面里一直表示「校验通过」，
+ * 复用同一枚意象比再造一个同义图标好认。
+ */
+const STAT_ICON: Record<string, string> = {
+  requests: 'requests',
+  successful: 'shield',
+  tokens: 'traffic',
+  activeDays: 'timer',
+  streak: 'refresh',
+  topModel: 'database',
+}
+
 function OverviewCells({ summary, range }: { summary: StatsSummary; range: string }) {
   const trend = Array.isArray(summary.dailyTrend) ? summary.dailyTrend : []
   return (
     <>
       {overviewCells(summary.overview, range, trend.length).map(cell => (
-        <div className='field' key={cell.key}>
-          <div className='label'>{cell.label}</div>
-          <div className={cell.mono ? 'value mono' : 'value'}>
-            {cell.value}
-            {cell.sub ? <div className='sub'>{cell.sub}</div> : null}
+        <div className={'stat' + (cell.key === 'topModel' ? ' model' : '')} key={cell.key}>
+          <span className='stat-ico' data-k={cell.key}>
+            <Ico name={STAT_ICON[cell.key] || 'overview'} size={20} />
+          </span>
+          <div className='stat-txt'>
+            <div className='stat-lbl'>{cell.label}</div>
+            <div className='stat-val'>{cell.value}</div>
+            {cell.sub ? <div className='stat-sub'>{cell.sub}</div> : null}
           </div>
         </div>
       ))}
@@ -218,7 +268,7 @@ function OverviewCells({ summary, range }: { summary: StatsSummary; range: strin
  * 摆一个空卡片只会让人以为哪里坏了）；空数组表示这一维这段时间没有数据（给空态）。
  * 小标题读数是 Token 总量，与行内读数同一口径。
  */
-function RankPanel({ panelId, listId, labelId, title, tip, rows, totalText, withBadge, emptyText }: {
+function RankPanel({ panelId, listId, labelId, title, tip, rows, totalText, withBadge, emptyText, emptyIcon }: {
   panelId: string; listId: string; labelId: string
   title: string; tip: string
   rows: RankRowView[]
@@ -227,6 +277,8 @@ function RankPanel({ panelId, listId, labelId, title, tip, rows, totalText, with
   /** 账号行名字前带一枚提供商徽章（providers 卡没有这一项） */
   withBadge: boolean
   emptyText: string
+  /** 空态图标：按这一卡的维度挑（账号 / 提供商），由调用方给 */
+  emptyIcon: string
 }) {
   return (
     <section className='panel' id={panelId}>
@@ -247,7 +299,7 @@ function RankPanel({ panelId, listId, labelId, title, tip, rows, totalText, with
               <span className='num' title={`${row.tokensText} tokens`}>{row.tokensText}</span>
               <span className='pct'>{row.percentText}</span>
             </div>
-          )) : placeholder(emptyText)}
+          )) : emptyState(emptyIcon, emptyText)}
         </div>
       </div>
     </section>
@@ -256,11 +308,13 @@ function RankPanel({ panelId, listId, labelId, title, tip, rows, totalText, with
 
 /* ─── 板块三：用量环形图（模型 / 提供商）──── */
 
-function DonutPanel({ panelId, listId, title, tip, ariaLabel, view, emptyText }: {
-  panelId: string; listId: string; title: string; tip: string
+function DonutPanel({ panelId, listId, title, tip, ariaLabel, view, emptyText, emptyIcon }: {
+  panelId: string; listId: string
+  title: string; tip: string
   ariaLabel: string
   view: DonutView | null
   emptyText: string
+  emptyIcon: string
 }) {
   return (
     <section className='panel' id={panelId}>
@@ -305,7 +359,7 @@ function DonutPanel({ panelId, listId, title, tip, ariaLabel, view, emptyText }:
                 ))}
               </div>
             </div>
-          ) : placeholder(emptyText)}
+          ) : emptyState(emptyIcon, emptyText)}
         </div>
       </div>
     </section>
@@ -708,7 +762,7 @@ function ReportPage() {
           </div>
         </div>
         <div className='panel-body'>
-          <div className='field-grid' id='report-overview'>
+          <div className='stat-grid' id='report-overview'>
             {summary ? <OverviewCells summary={summary} range={rangeKey} /> : loading}
           </div>
         </div>
@@ -719,12 +773,12 @@ function ReportPage() {
         {accountList ? (
           <RankPanel panelId='report-accounts-panel' listId='report-accounts' labelId='report-accounts-label'
             title='Top 账号' tip={TIP_ACCOUNTS} rows={rankRows(accountList) || []}
-            totalText={rankTotalText(accountList)} withBadge emptyText='所选范围内还没有账号用量' />
+            totalText={rankTotalText(accountList)} withBadge emptyText='所选范围内还没有账号用量' emptyIcon='accounts' />
         ) : null}
         {providerList ? (
           <RankPanel panelId='report-providers-panel' listId='report-providers' labelId='report-providers-label'
             title='Top 提供商' tip={TIP_PROVIDERS} rows={rankRows(providerList) || []}
-            totalText={rankTotalText(providerList)} withBadge={false} emptyText='所选范围内还没有请求记录' />
+            totalText={rankTotalText(providerList)} withBadge={false} emptyText='所选范围内还没有请求记录' emptyIcon='gateway' />
         ) : null}
       </div>
 
@@ -733,12 +787,12 @@ function ReportPage() {
         {modelList ? (
           <DonutPanel panelId='report-models-panel' listId='report-models-donut' title='模型用量'
             tip={TIP_MODELS} ariaLabel='模型用量占比'
-            view={donutView(modelList, '未知模型')} emptyText='所选范围内还没有模型用量' />
+            view={donutView(modelList, '未知模型')} emptyText='所选范围内还没有模型用量' emptyIcon='database' />
         ) : null}
         {providerList ? (
           <DonutPanel panelId='report-providers-pie-panel' listId='report-providers-donut' title='提供商用'
             tip={TIP_PROVIDERS_PIE} ariaLabel='提供商用占比'
-            view={donutView(providerList, '未知')} emptyText='所选范围内还没有提供商用量' />
+            view={donutView(providerList, '未知')} emptyText='所选范围内还没有提供商用量' emptyIcon='gateway' />
         ) : null}
       </div>
 
@@ -751,7 +805,7 @@ function ReportPage() {
         <div className='panel-body'>
           <div className='heat-wrap' id='report-heatmap' ref={heatWidth[0]}>
             {summary
-              ? (heatView ? <HeatmapChart view={heatView} /> : placeholder('暂无热力图数据'))
+              ? (heatView ? <HeatmapChart view={heatView} /> : emptyState('overview', '暂无热力图数据', '所选范围内还没有按天的请求分布'))
               : loading}
           </div>
         </div>
@@ -801,7 +855,7 @@ function ReportPage() {
         <div className='panel-body'>
           <div className='chart-wrap' id='report-cache-trend' ref={trendWidth[0]}>
             {summary
-              ? (trendView ? <CacheTrendChart view={trendView} /> : placeholder('暂无缓存趋势数据'))
+              ? (trendView ? <CacheTrendChart view={trendView} /> : emptyState('traffic', '暂无缓存趋势数据', '这段时间没有记录到缓存命中情况'))
               : loading}
           </div>
         </div>
@@ -831,7 +885,7 @@ function ReportPage() {
         <div className='panel-body'>
           <div className='chart-wrap tall' id='report-daily-trend' ref={dailyWidth[0]}>
             {summary
-              ? (dailyView ? <DailyTrendChart view={dailyView} /> : placeholder('暂无趋势数据'))
+              ? (dailyView ? <DailyTrendChart view={dailyView} /> : emptyState('requests', '暂无趋势数据', '所选范围内还没有每天的请求数与 Token'))
               : loading}
           </div>
         </div>

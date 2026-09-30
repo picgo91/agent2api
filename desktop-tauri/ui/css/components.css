@@ -104,6 +104,10 @@ button.icon.sm { width: 26px; }
 .badge.tag.plain { padding: 0; border-color: transparent; background: transparent; color: var(--text-3); }
 
 /* ─── 指标块（.field-grid / .field 沿用既有类名） ─── */
+/* .svg-ico 是图标串的注入容器（icons.js 给的是 <svg …> 串，React 侧只能 dangerouslySetInnerHTML）。
+   line-height:0 去掉内联 SVG 底下那截行高留白 —— 外层是 grid 居中时它会让图标看起来偏低一点 */
+.svg-ico { display: inline-flex; line-height: 0; }
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
@@ -176,12 +180,46 @@ button.icon.sm { width: 26px; }
 .hint strong, .detail strong { color: var(--text); }
 
 /* ─── 空状态 ─── */
+/* 空状态：两种形态共用这一组类
+   纯文本（不带子元素的 .empty）：就是一行居中的灰字，留白维持原来的 30px，
+   日志列表、表格内联空态这些地方用它，不必被下面那套大留白撑高。
+   结构化（带 .big / .t / .d）：图标 + 标题 + 说明三档，留白放大到 44px ——
+   参考项目 .ui-empty 就是这个层级。一页几十行列表里的空格子用不上它，
+   独立卡片 / 图表占位这类「大空白」位置才值得摆出来。 */
 .empty {
   padding: 30px 16px;
   color: var(--text-3);
   font-size: 12.5px;
   text-align: center;
 }
+
+.empty .big {
+  display: grid;
+  place-items: center;
+  margin: 0 auto 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: var(--surface-inset);
+  color: var(--text-3);
+  opacity: .8;
+}
+
+.empty .t {
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.empty .d {
+  margin-top: 4px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* 结构化空态的大留白只给带 .t 的那档（见上面的说明） */
+.empty:has(.t) { padding: 44px 24px; }
 
 /* ─── 加载指示 ─── */
 .spinner {

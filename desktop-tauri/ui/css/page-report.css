@@ -13,6 +13,12 @@
    而 Token 用量本身没有好坏之分，借它会让这条线的颜色带上原本没有的暗示。 */
 :root {
   --chart-tokens: oklch(0.72 0.16 65);
+  /* 报表统计卡（参考项目 .ui-stat） */
+  --stat-bg: color-mix(in srgb, var(--surface) 98%, white);
+  --stat-border: var(--border);
+  --stat-radius: var(--r-lg);
+  --stat-shadow: var(--shadow-1);
+  --stat-ico-shadow: var(--shadow-1);
 
   --hm-0: var(--surface-3);
   --hm-1: color-mix(in srgb, var(--primary) 22%, var(--surface-3));
@@ -55,7 +61,97 @@
     --hm-3: color-mix(in srgb, var(--primary) 78%, var(--surface-inset));
     --hm-4: var(--primary);
     --chart-tokens: oklch(0.8 0.15 75);
+    /* 深色下统计卡不再往白里提（那会亮得刺眼），改成往卡片底色里沉一点 */
+    --stat-bg: color-mix(in srgb, var(--surface) 96%, var(--surface-inset));
+    --stat-ico-shadow: none;
   }
+}
+
+/* ─── 统计概览：六张指标卡 ───
+   抄参考项目 dashboard.php 的 .ui-stat：左侧一枚 44px 渐变图标块，右侧大号读数 +
+   小标签。图标块是这一排唯一的彩色，扫一眼就知道这排是「读数」而不是「操作」。
+
+   图标块用 135° 渐变（六种色相轮换，见 .stat-ico 的 --g），不用语义色：
+   六个指标没有好坏之分，借 --ok / --warn 会给「总 Token」这种中性读数带上
+   原本不存在的暗示（与热力图用琥珀而不用 warn 是同一条理由）。
+   渐变两端写死在 .stat-ico 上：它们是装饰性的品牌配色，不参与浅色/深色语义，
+   两套主题下用同一组值反而更稳（深色主题下卡片本身已经压暗，图标块保持饱和才撑得住）。 */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+  gap: 10px;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--stat-border);
+  border-radius: var(--stat-radius);
+  background: var(--stat-bg);
+  box-shadow: var(--stat-shadow);
+}
+
+/* 默认色（石板蓝）。六个格子都有各自的 data-k 规则，这里只是兜底 ——
+   万一加新格子忘了配色，图标块会退成一块透明而不是塌成一个洞 */
+.stat-ico {
+  --g1: #94a3b8;
+  --g2: #475569;
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, var(--g1), var(--g2));
+  box-shadow: var(--stat-ico-shadow);
+  color: #fff;
+}
+
+.stat-txt {
+  min-width: 0;
+}
+
+.stat-lbl {
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.stat-val {
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -.01em;
+}
+
+.stat-sub {
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+/* 六格各一色：靛（请求）/ 绿（成功）/ 蓝（Token）/ 琥珀（活跃天）/ 紫（连续）/ 石板（Top 模型）。
+   色相按格子顺序绕一圈，相邻两格不会撞色。 */
+.stat-ico[data-k="requests"]  { --g1: #818cf8; --g2: #4f46e5; }
+.stat-ico[data-k="successful"] { --g1: #34d399; --g2: #059669; }
+.stat-ico[data-k="tokens"]    { --g1: #60a5fa; --g2: #2563eb; }
+.stat-ico[data-k="activeDays"] { --g1: #fbbf24; --g2: #d97706; }
+.stat-ico[data-k="streak"]    { --g1: #a78bfa; --g2: #7c3aed; }
+.stat-ico[data-k="topModel"]  { --g1: #94a3b8; --g2: #475569; }
+
+/* Top 模型那格的读数是模型名而不是数字：等宽 + 收一号 + 允许断行，
+   否则长模型名在 19px 下会撑破卡片，或被 min-width:0 裁成一行省略号 */
+.stat.model .stat-val {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 /* ─── 页头里的时间范围筛选 ───
