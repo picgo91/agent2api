@@ -484,7 +484,11 @@ body.nav-collapsed .nav-toggle .icon-expand { display: none; }
   background: var(--surface);
   color: var(--text);
   font-weight: 600;
-  box-shadow: var(--shadow-1);
+  /* 选中档位靠「白底 + 一圈描边」浮起来，不靠投影。
+     原来那层 --shadow-1 在 3 个 24px 高的小按钮上几乎看不出来，
+     却让这组开关比周围任何控件都显得更立体 —— 扁平取向下去掉更干净。 */
+  box-shadow: none;
+  border-color: var(--control-border-hover);
 }
 
 @media (max-width: 900px) {
@@ -597,7 +601,11 @@ body.nav-collapsed .nav-toggle .icon-expand { display: none; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-2);
+  /* 面板不投影。面板是全站出现最多的盒子（一页 3~6 个），一旦都带阴影，
+     页面就成了「一堆浮起的卡片」，正是扁平取向要避开的观感。
+     它与画布的区分靠三样：--surface 比 --bg 亮一档、--border 那条细描边、
+     以及内容自身的留白。投影 --shadow-2 现在只留给真正的浮层。 */
+  box-shadow: none;
   /* 这里只需要「按圆角裁掉子内容」，不是滚动：hidden 会把面板变成滚动容器，
      模型表（tbody 整体重绘）触发浏览器的滚动锚定补偿时，面板会被滚走一大截
      且永远没人把它滚回来（面板头 / 工具栏 / 表头全被卷出视野，看起来像坍缩）。

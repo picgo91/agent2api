@@ -9,7 +9,9 @@
    出厂样式能保证它们不会变成没有边框的裸文字。
    .btn 用于静态结构，样式更精细。
    填充与描边取 --control-* 一组：它们与承载面（--surface / --surface-2）分开，
-   于是按钮在内容表面提亮之后依然立得住，不再需要靠压暗整块内容来衬托。 */
+   于是按钮在内容表面提亮之后依然立得住，不再需要靠压暗整块内容来衬托。
+   按钮**不投影**（扁平取向）：层级由那层略深于承载面的 --control-bg 与
+   hairline 级描边承担。原来那层 --shadow-1 在一页几十个按钮时会糊成一片灰边。 */
 button {
   display: inline-flex;
   align-items: center;
@@ -24,7 +26,7 @@ button {
   font-size: 12.5px;
   font-weight: 500;
   white-space: nowrap;
-  box-shadow: var(--shadow-1);
+  box-shadow: none;
   transition: background .15s ease, border-color .15s ease, color .15s ease, transform .08s ease;
 }
 
@@ -34,13 +36,13 @@ button:disabled { opacity: .45; box-shadow: none; cursor: not-allowed; }
 
 /* 主按钮：平铺主色 + 近白文字。前景从 --surface 向白提亮派生：浅色得到纯白，
    深色得到近白；直接用 --surface / --primary-fg 会在深色主题压出近黑或浅蓝，读不清。
-   背景去掉原来的竖向渐变，改用平色 + --glow，与新体系「平色 + 品牌柔光」一致 */
+   平色，不再叠 --glow —— 柔和发光是上一套「卡片浮起」观感的配件，
+   与现在「靠留白和细线分层」的做法冲突，主按钮反而会比周围更抢眼。 */
 button.primary {
   background: var(--primary);
   border-color: var(--primary);
   color: color-mix(in srgb, var(--surface) 8%, white);
   font-weight: 600;
-  box-shadow: var(--glow);
 }
 
 button.primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
@@ -64,13 +66,17 @@ button.icon { width: 30px; padding: 0; }
 button.icon.sm { width: 26px; }
 
 /* ─── 徽章 ─── */
+/* 徽章是全站唯一保留胶囊形的东西：它表达的是「一个可数的小事实」，
+   圆头让数字读起来更好认。其余控件都走直角小圆角。
+   描边用 hairline 而不是 control-border —— 徽章多半落在卡片里，
+   再深一档会和所在卡片的边框叠在一起。 */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   min-height: 21px;
   padding: 1px 9px;
-  border: 1px solid var(--control-border);
+  border: 1px solid var(--hairline);
   border-radius: var(--r-pill);
   background: var(--control-bg);
   color: var(--text-2);
@@ -323,7 +329,6 @@ input[type="number"] { max-width: 130px; }
   height: 17px;
   border-radius: 50%;
   background: color-mix(in srgb, var(--surface) 8%, white);
-  box-shadow: var(--shadow-1);
   transition: transform .18s cubic-bezier(.3, 1.4, .6, 1);
 }
 
