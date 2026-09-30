@@ -34,9 +34,17 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        /** 主按钮：平铺主色 + 近白文字 */
+        /**
+         * 主按钮：135° 主色渐变 + 近白文字。
+         * 渐变两端走令牌（primary-lite #3b82f6 → primary #2563eb），不写死在
+         * 类名里 —— 深色主题下浅端要提亮，写死就翻不过去了。
+         * 描边用 transparent：参考项目 .ui-btn-primary 也是 transparent，
+         * 渐变本身已经有明暗变化，再压一条实色描边会在按钮四周留一圈亮边。
+         */
         default:
-          'border-primary bg-primary font-semibold text-primary-on shadow-glow hover:border-primary-hover hover:bg-primary-hover',
+          'border-transparent bg-linear-135 from-primary-lite to-primary font-semibold text-primary-on shadow-glow ' +
+          'hover:from-primary hover:to-primary-hover hover:-translate-y-px ' +
+          'active:translate-y-[0.5px]',
         /** 默认按钮：控件底 + 控件描边 */
         outline:
           'border-control-border bg-control text-foreground shadow-1 hover:border-control-border-hover hover:bg-control-hover',

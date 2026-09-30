@@ -7,134 +7,130 @@
 :root {
   color-scheme: light;
 
-  --font-sans: "Segoe UI", "Microsoft YaHei", "Microsoft YaHei UI", system-ui, sans-serif;
+--font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono: Consolas, "Cascadia Mono", "Courier New", monospace;
 
-  /* 导航、工作区、内容表面分别配色；表格不再单独压暗。 */
-  /* --bg 是工作区画布（body）：比内容卡片浅一档，卡片靠描边与投影浮在上面 */
-  --bg: oklch(0.978 0.00265 286.35);
+  /* ── 设计基准：ymzf/workbuddy/php templates.php uiStyles() ──────────────
+     页面画布用参考项目的垂直渐变（#f5f7fb → #eef2f9），侧栏纯白。
+     渐变必须是 background-image，令牌只能给颜色，所以拆成两个变量：
+     --bg 给兜底实色，--bg-gradient 才是真正生效的那一层。 */
+  --bg: oklch(0.9758 0.0057 264.53);
+  --bg-gradient: linear-gradient(180deg, oklch(0.9758 0.0057 264.53) 0%, oklch(0.9601 0.0103 261.79) 100%);
   --surface: oklch(1 0 0);
-  --surface-2: oklch(0.97670 0.00265 286.35);
-  --surface-3: oklch(0.95 0 0);
-  /* 浮层（下拉、菜单、提示气泡）：坐在控件之上，取承载面同色 + 大投影 */
+  /* --surface-2 是参考项目的表头底 / 输入框底（#f8fafc）*/
+  --surface-2: oklch(0.9842 0.0034 247.86);
+  /* --surface-3 是 muted 档（#f1f5f9）*/
+  --surface-3: oklch(0.9683 0.0069 247.9);
   --surface-raised: oklch(1 0 0);
-  /* 内嵌凹槽：卡片里那些「凹下去」的小块（表单块、切换卡、代码块、明细面板）。
-     它是卡内的一小块，不是整块内容表面，所以仍比卡片深一档。 */
-  --surface-inset: oklch(0.93517 0.00535 286.30);
-  /* 列表区底：与所在卡片同色（表格不再自成一层暗底）。
-     行与行靠 1px 分隔线区分，不再靠明度反差。 */
+  --surface-inset: oklch(0.9842 0.0034 247.86);
   --table-bg: var(--surface);
-  /* 表头必须不透明（行要从它下面滚过），但只与表体同色 ——
-     它与表体的分界交给底部那条 1px 描边，不另起一条色带。 */
-  --table-head-bg: var(--surface);
-  /* 行悬浮：比表面深（浅色）/ 亮（深色）一档的薄底，同一表达式两套主题都成立 */
-  --row-hover: var(--surface-2);
-  /* 描边是这套设计里唯一的分隔手段，所以刻意压得很淡：卡片与卡片之间靠
-     hairline（5%）而不是 border（7%）区分，只有真正的控件边界才用 border。
-     现代扁平取向：不用投影做层级，投影全部留给浮层。 */
-  --border: oklch(0.145 0 0 / 7%);
-  --border-strong: oklch(0.145 0 0 / 14%);
-  --hairline: oklch(0.145 0 0 / 5%);
+  /* 表头单独一档浅灰底（参考项目 .ui-table th background:#f8fafc）——
+     这是参考项目和本项目原先的一处差异：原来表头与表体同色、只靠一条下沿
+     线区分。表头成带之后，长表格里横向扫读会明显轻松。 */
+  --table-head-bg: var(--surface-2);
+  /* 行悬浮用参考项目的 #f8fbff —— 极淡的冷白，不是灰，所以不显得脏 */
+  --row-hover: oklch(0.987 0.0062 255.47);
 
-  /* 控件填充与描边：与承载面分开，于是表面提亮后按钮、输入框依然立得住，
-     不必再靠压暗整块内容来衬托它们。 */
-  --control-bg: oklch(0.95815 0 0);
-  --control-hover: oklch(0.93214 0.00536 286.30);
-  --control-border: oklch(0.145 0 0 / 14%);
-  --control-border-hover: oklch(0.145 0 0 / 24%);
+  /* 描边一律实色（参考项目就写成 hex 实色），不用半透明黑：半透明黑叠在
+     渐变画布上会随位置深浅不一，同一条分隔线看起来像断成几段。 */
+  --border: oklch(0.9476 0.012 259.82);
+  --border-strong: oklch(0.9288 0.0126 255.51);
+  --hairline: oklch(0.9595 0.008 253.85);
 
-  /* 侧栏：全站唯一「退后一层」的大面积底色，深浅两套都取中性灰。 */
-  --sidebar-bg: oklch(0.92123 0.00460 258.33);
-  /* 「模型管理」页左栏（.prov-rail）：比侧栏浅一档 —— 它是面板内的一段
-     内嵌导航，不是侧栏的延伸（与侧栏同色会被读成同一块区域）。 */
-  --rail-bg: oklch(0.955 0.004 286);
-  --sidebar-border: oklch(0.145 0 0 / 16%);
-  --sidebar-fg: oklch(0.43287 0.01676 258.37);
-  --sidebar-muted: oklch(0.51200 0.02088 261.29);
-  --nav-hover: oklch(0.145 0 0 / 5%);
-  /* 选中项不用填充块 + 描边（那是一「药丸」按钮的观感），改为极淡中性底
-     + 主色文字，选中状态由左侧主色条承担（见 layout.css 的 .nav-item.active）。
-     文字取 --primary-fg 而不是 --primary：--primary 在浅色主题下明度 0.60，
-     配 0.92 的侧栏底只有约 3.4:1，达不到正文 4.5:1；--primary-fg（明度 0.48）
-     约 5.4:1。饱和的 --primary 留给左侧那根 2px 色条 —— 色条不需要读文字，
-     用高饱和色反而更醒目。 */
-  --nav-selected-bg: oklch(0.145 0 0 / 4%);
+  /* 控件：底色 #f8fafc（不是纯白）、描边 #e2e8f0，聚焦边框换成 #93c5fd */
+  --control-bg: oklch(0.9842 0.0034 247.86);
+  --control-hover: oklch(0.9683 0.0069 247.9);
+  --control-border: oklch(0.9288 0.0126 255.51);
+  --control-border-hover: oklch(0.8091 0.0956 251.81);
+
+  /* 侧栏纯白（参考项目 aside class="bg-white"）。白侧栏配浅灰渐变内容区，
+     两者分界只靠右侧那条 #e9eef6 —— 比给侧栏压一层灰更干净。 */
+  --sidebar-bg: oklch(1 0 0);
+  --rail-bg: oklch(0.9842 0.0034 247.86);
+  --sidebar-border: oklch(0.9476 0.012 259.82);
+  --sidebar-fg: oklch(0.4461 0.0263 256.8);
+  --sidebar-muted: oklch(0.7137 0.0192 261.32);
+  --nav-hover: oklch(0.9846 0.0017 247.84);
+  /* 选中项 = blue-50 底 + blue-600 字（参考项目 navItems 的 $cls）。
+     原来这里是「极淡中性底 + 左侧色条」，选中态弱到要盯着才看得出来；
+     蓝色底本身就把「你在哪一页」说清楚了，色条退成辅助。 */
+  --nav-selected-bg: oklch(0.9705 0.0142 254.6);
   --nav-selected-border: transparent;
-  --nav-selected-fg: var(--primary-fg);
-  --nav-count-bg: oklch(0.84405 0.05294 251.09);
+  --nav-selected-fg: oklch(0.5461 0.2152 262.88);
+  --nav-count-bg: oklch(0.8823 0.0571 254.13);
 
-  /* 文本三档 */
-  --text: oklch(0.145 0 0);
-  --text-2: oklch(0.37 0 0);
-  --text-3: oklch(0.49 0 0);
+  /* 文本三档（参考项目 #0f172a / #334155 / #64748b）。
+     第三档没用参考项目的 #94a3b8 —— 它在白底上只有 2.8:1，表格 th 与卡片
+     副标题都是小字号，读起来费劲；上抬到 #64748b 有 4.6:1，达 AA。 */
+  --text: oklch(0.2077 0.0398 265.75);
+  --text-2: oklch(0.3717 0.0392 257.29);
+  --text-3: oklch(0.5544 0.0407 257.42);
 
-  /* 品牌 */
-  --primary: oklch(0.603 0.218 257.3);
-  --primary-hover: oklch(0.543 0.218 257.3);
-  --primary-soft: color-mix(in srgb, var(--primary) 10%, white);
-  --primary-bd: color-mix(in srgb, var(--primary) 28%, white);
-  --primary-fg: oklch(0.48 0.2 257.3);
+  /* 品牌：参考项目用 #3b82f6 → #2563eb 的 135° 渐变。令牌只能给单色，取渐变
+     偏深的一端（#2563eb）—— 实底按钮上的白字对比度更稳。渐变本身留给
+     组件层（button-primary 的 background-image）。 */
+  --primary-lite: oklch(0.6231 0.188 259.81);
+  --primary: oklch(0.5461 0.2152 262.88);
+  --primary-hover: oklch(0.4882 0.2172 264.38);
+  --primary-soft: oklch(0.9705 0.0142 254.6);
+  --primary-bd: oklch(0.8823 0.0571 254.13);
+  --primary-fg: oklch(0.5461 0.2152 262.88);
 
-  /* 语义色 */
-  --ok: oklch(0.596 0.145 163.225);
-  --ok-soft: color-mix(in srgb, var(--ok) 10%, white);
-  --ok-bd: color-mix(in srgb, var(--ok) 28%, white);
-  --warn: oklch(0.681 0.162 75.834);
-  --warn-soft: color-mix(in srgb, var(--warn) 10%, white);
-  --warn-bd: color-mix(in srgb, var(--warn) 28%, white);
-  --danger: oklch(0.577 0.245 27.325);
-  --danger-soft: color-mix(in srgb, var(--danger) 10%, white);
-  --danger-bd: color-mix(in srgb, var(--danger) 28%, white);
-  --info: oklch(0.588 0.158 241.966);
-  --info-soft: color-mix(in srgb, var(--info) 10%, white);
-  --info-bd: color-mix(in srgb, var(--info) 28%, white);
+  /* 语义色：参考项目 .ui-chip-* 的四组底/字 */
+  --ok: oklch(0.596 0.1274 163.23);
+  --ok-soft: oklch(0.9793 0.0207 166.11);
+  --ok-bd: oklch(0.9049 0.0895 164.15);
+  --warn: oklch(0.6658 0.1574 58.32);
+  --warn-soft: oklch(0.9869 0.0214 95.28);
+  --warn-bd: oklch(0.9243 0.1151 95.75);
+  --danger: oklch(0.5771 0.2152 27.33);
+  --danger-soft: oklch(0.9705 0.0129 17.38);
+  --danger-bd: oklch(0.8845 0.0593 18.33);
+  --info: oklch(0.5461 0.2152 262.88);
+  --info-soft: oklch(0.9705 0.0142 254.6);
+  --info-bd: oklch(0.8823 0.0571 254.13);
 
-  /* 版本标签 */
-  --cn: oklch(0.577 0.245 27.325);
-  --cn-soft: color-mix(in srgb, var(--cn) 10%, white);
-  --cn-bd: color-mix(in srgb, var(--cn) 28%, white);
-  --intl: oklch(0.52 0.16 268);
-  --intl-soft: color-mix(in srgb, var(--intl) 10%, white);
-  --intl-bd: color-mix(in srgb, var(--intl) 28%, white);
+  --cn: oklch(0.5771 0.2152 27.33);
+  --cn-soft: oklch(0.9705 0.0129 17.38);
+  --cn-bd: oklch(0.8845 0.0593 18.33);
+  --intl: oklch(0.5106 0.2301 276.97);
+  --intl-soft: oklch(0.9691 0.0161 293.76);
+  --intl-bd: oklch(0.8823 0.0571 254.13);
 
-  /* 形状：所有圆角都由 --radius 派生，改一个值即可整体缩放。
-     紧凑专业取向：取 0.5rem（8px），卡片圆角克制、控件更方正，
-     不再是原来 1rem（16px）那种偏消费级的圆润感。 */
-  --radius: 0.5rem;
+  /* 形状：参考项目实测 —— 卡片 16px、输入框 12px、按钮 11px、导航项 8px、
+     徽标/头像 pill。基准从 0.5rem 提到 1rem，整站圆角一起换挡。
+     倍数与 ui-kit/styles/theme.css 的 --radius-* 保持一致，两套别再分叉。 */
+  --radius: 1rem;
   --r-xs: calc(var(--radius) * 0.5);
-  --r-sm: calc(var(--radius) * 0.6);
-  --r-md: calc(var(--radius) * 0.8);
+  --r-sm: calc(var(--radius) * 0.6875);
+  --r-md: calc(var(--radius) * 0.75);
   --r-lg: var(--radius);
-  --r-xl: calc(var(--radius) * 1.4);
+  --r-xl: calc(var(--radius) * 1.375);
   --r-pill: 999px;
 
-  /* 阴影只服务于「浮层」——下拉、菜单、气泡、弹窗、toast。
-     卡片、面板、按钮一律不投影：它们与画布的区分全靠上面那几条 hairline。
-     所以这里的扩散半径给得比常规卡片式设计大（浮层要真的浮起来），
-     而 --shadow-1 压到几乎不可见，只够托住贴着画布的元素。 */
-  --shadow-1: 0 1px 1px oklch(0.145 0 0 / 3%);
-  --shadow-2: 0 4px 12px -4px oklch(0.145 0 0 / 12%);
-  --shadow-3: 0 12px 32px -12px oklch(0.145 0 0 / 18%);
-  --glow: 0 1px 2px oklch(0.145 0 0 / 6%), 0 10px 22px -12px color-mix(in srgb, var(--primary) 45%, transparent);
-  --ring: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
+  /* 投影：四档，全部照抄参考项目（不是另拟的一套）。关键是 --shadow-1 那道
+     只有 2px 高、4% 不透明度的投影 —— 它几乎看不见，但正是它把白卡片和
+     浅灰画布分开。之前的「一律不投影」把这条也一起去掉了，卡片因此糊在
+     画布上；参考项目恰恰是靠它撑住层次的。 */
+  --shadow-1: 0 1px 2px oklch(0.2077 0.0398 265.75 / 4%);
+  --shadow-2: 0 4px 10px -4px oklch(0.2077 0.0398 265.75 / 10%);
+  --shadow-3: 0 12px 32px -12px oklch(0.2077 0.0398 265.75 / 40%);
+  /* 卡片悬停抬升（参考项目 .ui-card:hover）*/
+  --shadow-lift: 0 12px 30px -18px oklch(0.2077 0.0398 265.75 / 25%);
+  /* 主色按钮的同色投影（参考项目 .ui-btn-primary 的 box-shadow）*/
+  --glow: 0 6px 16px -8px oklch(0.5461 0.2152 262.88 / 75%);
+  --ring: 0 0 0 4px oklch(0.6231 0.188 259.81 / 18%);
 
   /* 尺寸 */
-  /* 侧栏两档宽度：展开态带文字，折叠态收成图标条（只剩图标与角标）。
-     折叠由 body.nav-collapsed 切换，.shell 的栅格轨道跟着换成 --sidebar-rail-w，
-     宽度变化交给 transition，折叠时表格类页面能立刻多出 156px 横向空间。 */
-  --sidebar-w: 212px;
-  --sidebar-rail-w: 56px;
+  /* 侧栏宽度对齐参考项目的 w-60（240px）。折叠态图标条 56px → 60px，
+     保持 16 的整数倍。 */
+  --sidebar-w: 240px;
+  --sidebar-rail-w: 60px;
   --sidebar-collapse-ms: 180ms;
   --topbar-h: 46px;
-  /* 自定义标题栏高度（桌面端）：主窗口去掉了系统装饰（src-tauri 建窗处
-     decorations(false)），界面自绘 32px 标题条补上三键与拖动区（titlebar.js）。
-     网页端不创建标题栏，该变量只在 body.has-titlebar 的规则里被引用。 */
   --titlebar-h: 32px;
   --pad: 16px;
-  /* 内容区最大宽度（不含侧边栏）。取「先到 1680px 封顶、没到就吃满 92vw」：
-     之前是 80vw，在 2560px 这类宽屏上会把内容压到 2048px 再居中，
-     账号页 / 请求日志页这种宽表格左右留白过大；92vw + 封顶让常见窗口
-     （1440 / 1920）下内容几乎铺满，只有超宽屏才留白。 */
   --content-max: min(1680px, 92vw);
   --sb-w: 11px;          /* 滚动条宽度：表头对齐要靠它补偿 */
 }
@@ -142,72 +138,80 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: oklch(0 0 0);
-  --surface: oklch(0.19212 0.00399 286.02);
-  --surface-2: oklch(0.28254 0.00726 285.93);
-  --surface-3: oklch(0.32737 0.01050 285.81);
-  --surface-raised: oklch(0.30 0.005 286);
-  /* 内嵌凹槽：比卡片（0.2615）深一档；列表区与表面同色，见 --table-bg */
-  --surface-inset: oklch(0.215 0.005 286);
+--bg: oklch(0.2077 0.0398 265.75);
+  /* 深色下的渐变：参考项目本身没有深色模式，这一组按它浅色的明度关系
+     反推 —— 上端 #0f172a，下端再压暗一档，保留同样的「顶部亮、底部沉」。 */
+  --bg-gradient: linear-gradient(180deg, oklch(0.2077 0.0398 265.75) 0%, oklch(0.1585 0.0305 265.9) 100%);
+  --surface: oklch(0.2795 0.0368 260.03);
+  --surface-2: oklch(0.2447 0.0325 260.62);
+  --surface-3: oklch(0.3712 0.0442 259.4);
+  --surface-raised: oklch(0.3135 0.0405 259.76);
+  --surface-inset: oklch(0.235 0.03 260.6);
   --table-bg: var(--surface);
-  --table-head-bg: var(--surface);
-  --row-hover: var(--surface-2);
-  --border: oklch(1 0 0 / 8%);
-  --border-strong: oklch(1 0 0 / 15%);
-  --hairline: oklch(1 0 0 / 6%);
+  --table-head-bg: var(--surface-2);
+  --row-hover: oklch(1 0 0 / 4%);
 
-  --control-bg: oklch(0.36572 0.00850 285.97);
-  --control-hover: oklch(0.40758 0.00993 285.95);
-  --control-border: oklch(1 0 0 / 15%);
-  --control-border-hover: oklch(1 0 0 / 25%);
+  --border: oklch(1 0 0 / 11%);
+  --border-strong: oklch(1 0 0 / 16%);
+  --hairline: oklch(1 0 0 / 8%);
 
-  --sidebar-bg: oklch(0.19212 0.00399 286.02);
-  /* 与浅色块同义：比侧栏亮一档（深色主题下「浅」= 亮度更高） */
-  --rail-bg: oklch(0.24 0.005 286);
-  --sidebar-border: oklch(1 0 0 / 13%);
-  --sidebar-fg: oklch(0.79794 0.01342 266.68);
-  --sidebar-muted: oklch(0.67832 0.01760 262.73);
+  --control-bg: oklch(0.3135 0.0405 259.76);
+  --control-hover: oklch(0.3712 0.0442 259.4);
+  --control-border: oklch(1 0 0 / 14%);
+  --control-border-hover: oklch(1 0 0 / 24%);
+
+  /* 深色下「白侧栏」的对偶：侧栏比画布亮一档，而不是更暗。浅色版是
+     白侧栏配更暗的灰画布，这里保持同一个方向感。 */
+  --sidebar-bg: oklch(0.2447 0.0325 260.62);
+  --rail-bg: oklch(0.235 0.03 260.6);
+  --sidebar-border: oklch(1 0 0 / 11%);
+  --sidebar-fg: oklch(0.9289 0.0104 258);
+  --sidebar-muted: oklch(0.7107 0.0351 256.79);
   --nav-hover: oklch(1 0 0 / 6%);
-  --nav-selected-bg: oklch(1 0 0 / 7%);
+  --nav-selected-bg: oklch(0.7137 0.1434 254.62 / 14%);
   --nav-selected-border: transparent;
-  --nav-selected-fg: var(--primary-fg);
-  --nav-count-bg: oklch(0.43273 0.06483 250.27);
+  --nav-selected-fg: oklch(0.7868 0.111 255.34);
+  --nav-count-bg: oklch(0.7137 0.1434 254.62 / 30%);
 
-  --text: oklch(0.965 0 0);
-  --text-2: oklch(0.85 0 0);
-  --text-3: oklch(0.78 0 0);
+  --text: oklch(0.9842 0.0034 247.86);
+  --text-2: oklch(0.8569 0.0218 256.94);
+  --text-3: oklch(0.7107 0.0351 256.79);
 
-  --primary: oklch(0.623 0.206 255.3);
-  --primary-hover: oklch(0.68 0.206 255.3);
-  --primary-soft: oklch(0.623 0.206 255.3 / 15%);
-  --primary-bd: oklch(0.623 0.206 255.3 / 38%);
-  --primary-fg: oklch(0.75 0.12 255.3);
+  --primary-lite: oklch(0.8091 0.1056 249.12);
+  --primary: oklch(0.7137 0.1434 254.62);
+  --primary-hover: oklch(0.7868 0.111 255.34);
+  --primary-soft: oklch(0.7137 0.1434 254.62 / 16%);
+  --primary-bd: oklch(0.7137 0.1434 254.62 / 34%);
+  --primary-fg: oklch(0.7868 0.111 255.34);
 
-  --ok: oklch(0.696 0.17 162.48);
-  --ok-soft: oklch(0.696 0.17 162.48 / 14%);
-  --ok-bd: oklch(0.696 0.17 162.48 / 32%);
-  --warn: oklch(0.769 0.188 70.08);
-  --warn-soft: oklch(0.769 0.188 70.08 / 14%);
-  --warn-bd: oklch(0.769 0.188 70.08 / 32%);
+  --ok: oklch(0.7231 0.174 149.58);
+  --ok-soft: oklch(0.7231 0.174 149.58 / 14%);
+  --ok-bd: oklch(0.7231 0.174 149.58 / 30%);
+  --warn: oklch(0.8282 0.189 84.429);
+  --warn-soft: oklch(0.8282 0.189 84.429 / 14%);
+  --warn-bd: oklch(0.8282 0.189 84.429 / 30%);
   --danger: oklch(0.704 0.191 22.216);
   --danger-soft: oklch(0.704 0.191 22.216 / 14%);
-  --danger-bd: oklch(0.704 0.191 22.216 / 32%);
-  --info: oklch(0.613 0.14 239.919);
-  --info-soft: oklch(0.613 0.14 239.919 / 14%);
-  --info-bd: oklch(0.613 0.14 239.919 / 32%);
+  --danger-bd: oklch(0.704 0.191 22.216 / 30%);
+  --info: oklch(0.7137 0.1434 254.62);
+  --info-soft: oklch(0.7137 0.1434 254.62 / 14%);
+  --info-bd: oklch(0.7137 0.1434 254.62 / 30%);
 
   --cn: oklch(0.704 0.191 22.216);
   --cn-soft: oklch(0.704 0.191 22.216 / 14%);
-  --cn-bd: oklch(0.704 0.191 22.216 / 32%);
-  --intl: oklch(0.68 0.14 268);
-  --intl-soft: oklch(0.68 0.14 268 / 14%);
-  --intl-bd: oklch(0.68 0.14 268 / 32%);
+  --cn-bd: oklch(0.704 0.191 22.216 / 30%);
+  --intl: oklch(0.6542 0.184 286.06);
+  --intl-soft: oklch(0.6542 0.184 286.06 / 14%);
+  --intl-bd: oklch(0.6542 0.184 286.06 / 30%);
 
-  --shadow-1: 0 1px 1px oklch(0 0 0 / 30%);
-  --shadow-2: 0 4px 12px -4px oklch(0 0 0 / 55%);
-  --shadow-3: 0 12px 32px -12px oklch(0 0 0 / 65%);
-  --glow: 0 1px 2px oklch(0 0 0 / 40%), 0 10px 22px -14px oklch(0.623 0.206 255.3 / 50%);
-  --ring: 0 0 0 3px oklch(0.623 0.206 255.3 / 30%);
+  /* 深色下的投影必须用纯黑：沿用浅色那套带蓝相的 oklch 会在暗底上
+     显出一圈脏边。透明度整体抬高，否则 4% 在黑底上等于没有。 */
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 30%);
+  --shadow-2: 0 4px 10px -4px oklch(0 0 0 / 50%);
+  --shadow-3: 0 12px 32px -12px oklch(0 0 0 / 70%);
+  --shadow-lift: 0 12px 30px -18px oklch(0 0 0 / 60%);
+  --glow: 0 6px 16px -8px oklch(0.7137 0.1434 254.62 / 45%);
+  --ring: 0 0 0 4px oklch(0.7137 0.1434 254.62 / 35%);
 }
 
 /* system 模式跟随系统深浅 */
@@ -215,71 +219,81 @@
   :root[data-theme="system"] {
     color-scheme: dark;
 
-    --bg: oklch(0 0 0);
-    --surface: oklch(0.19212 0.00399 286.02);
-    --surface-2: oklch(0.28254 0.00726 285.93);
-    --surface-3: oklch(0.32737 0.01050 285.81);
-    --surface-raised: oklch(0.30 0.005 286);
-    --surface-inset: oklch(0.215 0.005 286);
+  --bg: oklch(0.2077 0.0398 265.75);
+    /* 深色下的渐变：参考项目本身没有深色模式，这一组按它浅色的明度关系
+       反推 —— 上端 #0f172a，下端再压暗一档，保留同样的「顶部亮、底部沉」。 */
+    --bg-gradient: linear-gradient(180deg, oklch(0.2077 0.0398 265.75) 0%, oklch(0.1585 0.0305 265.9) 100%);
+    --surface: oklch(0.2795 0.0368 260.03);
+    --surface-2: oklch(0.2447 0.0325 260.62);
+    --surface-3: oklch(0.3712 0.0442 259.4);
+    --surface-raised: oklch(0.3135 0.0405 259.76);
+    --surface-inset: oklch(0.235 0.03 260.6);
     --table-bg: var(--surface);
-    --table-head-bg: var(--surface);
-    --row-hover: var(--surface-2);
-    --border: oklch(1 0 0 / 8%);
-    --border-strong: oklch(1 0 0 / 15%);
-    --hairline: oklch(1 0 0 / 6%);
+    --table-head-bg: var(--surface-2);
+    --row-hover: oklch(1 0 0 / 4%);
 
-    --control-bg: oklch(0.36572 0.00850 285.97);
-    --control-hover: oklch(0.40758 0.00993 285.95);
-    --control-border: oklch(1 0 0 / 15%);
-    --control-border-hover: oklch(1 0 0 / 25%);
+    --border: oklch(1 0 0 / 11%);
+    --border-strong: oklch(1 0 0 / 16%);
+    --hairline: oklch(1 0 0 / 8%);
 
-    --sidebar-bg: oklch(0.19212 0.00399 286.02);
-    /* 与浅色块同义：比侧栏亮一档（深色主题下「浅」= 亮度更高） */
-    --rail-bg: oklch(0.24 0.005 286);
-    --sidebar-border: oklch(1 0 0 / 13%);
-    --sidebar-fg: oklch(0.79794 0.01342 266.68);
-    --sidebar-muted: oklch(0.67832 0.01760 262.73);
+    --control-bg: oklch(0.3135 0.0405 259.76);
+    --control-hover: oklch(0.3712 0.0442 259.4);
+    --control-border: oklch(1 0 0 / 14%);
+    --control-border-hover: oklch(1 0 0 / 24%);
+
+    /* 深色下「白侧栏」的对偶：侧栏比画布亮一档，而不是更暗。浅色版是
+       白侧栏配更暗的灰画布，这里保持同一个方向感。 */
+    --sidebar-bg: oklch(0.2447 0.0325 260.62);
+    --rail-bg: oklch(0.235 0.03 260.6);
+    --sidebar-border: oklch(1 0 0 / 11%);
+    --sidebar-fg: oklch(0.9289 0.0104 258);
+    --sidebar-muted: oklch(0.7107 0.0351 256.79);
     --nav-hover: oklch(1 0 0 / 6%);
-    --nav-selected-bg: oklch(1 0 0 / 7%);
+    --nav-selected-bg: oklch(0.7137 0.1434 254.62 / 14%);
     --nav-selected-border: transparent;
-    --nav-selected-fg: var(--primary-fg);
-    --nav-count-bg: oklch(0.43273 0.06483 250.27);
+    --nav-selected-fg: oklch(0.7868 0.111 255.34);
+    --nav-count-bg: oklch(0.7137 0.1434 254.62 / 30%);
 
-    --text: oklch(0.965 0 0);
-    --text-2: oklch(0.85 0 0);
-    --text-3: oklch(0.78 0 0);
+    --text: oklch(0.9842 0.0034 247.86);
+    --text-2: oklch(0.8569 0.0218 256.94);
+    --text-3: oklch(0.7107 0.0351 256.79);
 
-    --primary: oklch(0.623 0.206 255.3);
-    --primary-hover: oklch(0.68 0.206 255.3);
-    --primary-soft: oklch(0.623 0.206 255.3 / 15%);
-    --primary-bd: oklch(0.623 0.206 255.3 / 38%);
-    --primary-fg: oklch(0.75 0.12 255.3);
+    --primary-lite: oklch(0.8091 0.1056 249.12);
+    --primary: oklch(0.7137 0.1434 254.62);
+    --primary-hover: oklch(0.7868 0.111 255.34);
+    --primary-soft: oklch(0.7137 0.1434 254.62 / 16%);
+    --primary-bd: oklch(0.7137 0.1434 254.62 / 34%);
+    --primary-fg: oklch(0.7868 0.111 255.34);
 
-    --ok: oklch(0.696 0.17 162.48);
-    --ok-soft: oklch(0.696 0.17 162.48 / 14%);
-    --ok-bd: oklch(0.696 0.17 162.48 / 32%);
-    --warn: oklch(0.769 0.188 70.08);
-    --warn-soft: oklch(0.769 0.188 70.08 / 14%);
-    --warn-bd: oklch(0.769 0.188 70.08 / 32%);
+    --ok: oklch(0.7231 0.174 149.58);
+    --ok-soft: oklch(0.7231 0.174 149.58 / 14%);
+    --ok-bd: oklch(0.7231 0.174 149.58 / 30%);
+    --warn: oklch(0.8282 0.189 84.429);
+    --warn-soft: oklch(0.8282 0.189 84.429 / 14%);
+    --warn-bd: oklch(0.8282 0.189 84.429 / 30%);
     --danger: oklch(0.704 0.191 22.216);
     --danger-soft: oklch(0.704 0.191 22.216 / 14%);
-    --danger-bd: oklch(0.704 0.191 22.216 / 32%);
-    --info: oklch(0.613 0.14 239.919);
-    --info-soft: oklch(0.613 0.14 239.919 / 14%);
-    --info-bd: oklch(0.613 0.14 239.919 / 32%);
+    --danger-bd: oklch(0.704 0.191 22.216 / 30%);
+    --info: oklch(0.7137 0.1434 254.62);
+    --info-soft: oklch(0.7137 0.1434 254.62 / 14%);
+    --info-bd: oklch(0.7137 0.1434 254.62 / 30%);
 
     --cn: oklch(0.704 0.191 22.216);
     --cn-soft: oklch(0.704 0.191 22.216 / 14%);
-    --cn-bd: oklch(0.704 0.191 22.216 / 32%);
-    --intl: oklch(0.68 0.14 268);
-    --intl-soft: oklch(0.68 0.14 268 / 14%);
-    --intl-bd: oklch(0.68 0.14 268 / 32%);
+    --cn-bd: oklch(0.704 0.191 22.216 / 30%);
+    --intl: oklch(0.6542 0.184 286.06);
+    --intl-soft: oklch(0.6542 0.184 286.06 / 14%);
+    --intl-bd: oklch(0.6542 0.184 286.06 / 30%);
 
-    --shadow-1: 0 1px 1px oklch(0 0 0 / 30%);
-    --shadow-2: 0 4px 12px -4px oklch(0 0 0 / 55%);
-    --shadow-3: 0 12px 32px -12px oklch(0 0 0 / 65%);
-    --glow: 0 1px 2px oklch(0 0 0 / 40%), 0 10px 22px -14px oklch(0.623 0.206 255.3 / 50%);
-    --ring: 0 0 0 3px oklch(0.623 0.206 255.3 / 30%);
+    /* 深色下的投影必须用纯黑：沿用浅色那套带蓝相的 oklch 会在暗底上
+       显出一圈脏边。透明度整体抬高，否则 4% 在黑底上等于没有。 */
+    --shadow-1: 0 1px 2px oklch(0 0 0 / 30%);
+    --shadow-2: 0 4px 10px -4px oklch(0 0 0 / 50%);
+    --shadow-3: 0 12px 32px -12px oklch(0 0 0 / 70%);
+    --shadow-lift: 0 12px 30px -18px oklch(0 0 0 / 60%);
+    --glow: 0 6px 16px -8px oklch(0.7137 0.1434 254.62 / 45%);
+    --ring: 0 0 0 4px oklch(0.7137 0.1434 254.62 / 35%);
+
   }
 }
 
@@ -297,6 +311,10 @@ body {
   line-height: 1.5;
   color: var(--text);
   background-color: var(--bg);
+  /* 参考项目 layout()：body 上是 180deg 垂直渐变 + fixed。fixed 把渐变钉在
+     视口上，内容区滚动时底色不会跟着一起动。 */
+  background-image: var(--bg-gradient);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
 }
 

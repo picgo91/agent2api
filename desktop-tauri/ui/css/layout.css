@@ -601,11 +601,13 @@ body.nav-collapsed .nav-toggle .icon-expand { display: none; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  /* 面板不投影。面板是全站出现最多的盒子（一页 3~6 个），一旦都带阴影，
-     页面就成了「一堆浮起的卡片」，正是扁平取向要避开的观感。
-     它与画布的区分靠三样：--surface 比 --bg 亮一档、--border 那条细描边、
-     以及内容自身的留白。投影 --shadow-2 现在只留给真正的浮层。 */
-  box-shadow: none;
+  /* 常态给一道 shadow-1（0 1px 2px / 4%）。看着几乎是平的，但正是它把白卡片
+     从渐变画布上托起来 —— 参考项目 .ui-card 就是这个值。之前这里是 none，
+     卡片只能靠 1px 描边和底色差区分，在浅灰画布上糊成一片。
+     悬停抬升（shadow-lift）刻意没做：.panel 有 overflow:clip（表头要粘住、
+     行要从它下面滚过），投影会被自己裁掉。要抬升的场合留给不裁剪的面：
+     弹窗、气泡、以及用 bg-card 的 React 区块（登录卡等）。 */
+  box-shadow: var(--shadow-1);
   /* 这里只需要「按圆角裁掉子内容」，不是滚动：hidden 会把面板变成滚动容器，
      模型表（tbody 整体重绘）触发浏览器的滚动锚定补偿时，面板会被滚走一大截
      且永远没人把它滚回来（面板头 / 工具栏 / 表头全被卷出视野，看起来像坍缩）。

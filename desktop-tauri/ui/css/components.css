@@ -34,18 +34,24 @@ button:hover:not(:disabled) { background: var(--control-hover); border-color: va
 button:active:not(:disabled) { transform: translateY(.5px); }
 button:disabled { opacity: .45; box-shadow: none; cursor: not-allowed; }
 
-/* 主按钮：平铺主色 + 近白文字。前景从 --surface 向白提亮派生：浅色得到纯白，
-   深色得到近白；直接用 --surface / --primary-fg 会在深色主题压出近黑或浅蓝，读不清。
-   平色，不再叠 --glow —— 柔和发光是上一套「卡片浮起」观感的配件，
-   与现在「靠留白和细线分层」的做法冲突，主按钮反而会比周围更抢眼。 */
+/* 主按钮：135° 主色渐变 + 近白文字 + 同色投影（参考项目 .ui-btn-primary）。
+   渐变两端走令牌，深色主题能整体翻面；描边 transparent，否则渐变自身的
+   明暗变化外面还会压一圈实色亮边。
+   基础 button 保持不投影（同参考项目 .ui-btn）：一页几十个按钮各带一道
+   投影会糊成一片灰边，只有主按钮该有分量。 */
 button.primary {
-  background: var(--primary);
-  border-color: var(--primary);
+  background: linear-gradient(135deg, var(--primary-lite), var(--primary));
+  border-color: transparent;
   color: color-mix(in srgb, var(--surface) 8%, white);
   font-weight: 600;
+  box-shadow: var(--glow);
 }
 
-button.primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+button.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  transform: translateY(-1px);
+}
+button.primary:active:not(:disabled) { transform: translateY(0); }
 
 button.danger { color: var(--danger); border-color: var(--danger-bd); background: var(--danger-soft); }
 
