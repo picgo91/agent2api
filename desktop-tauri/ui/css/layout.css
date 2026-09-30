@@ -242,12 +242,19 @@ body.has-titlebar .shell {
   border-color: transparent;
 }
 
+/* 选中态：主色文字 + 极淡中性底，**不再**用填充药丸 + 描边。
+   真正承担「你在哪一页」的是左侧那根 2px 主色条。 */
 .nav-item.active,
 .nav-item.active:hover:not(:disabled) {
   color: var(--nav-selected-fg);
   background: var(--nav-selected-bg);
   border-color: var(--nav-selected-border);
   font-weight: 600;
+  /* 指示条用内嵌阴影而不是 ::before 绝对定位：.nav 是 overflow-y:auto，
+     而 overflow-y 非 visible 时 overflow-x 会被计算成 auto —— 负偏移的
+     伪元素会被横向裁掉，甚至挤出一条横向滚动条。内嵌阴影不参与布局，
+     随圆角自然收边，折叠成图标条时也不用另写一份定位。 */
+  box-shadow: inset 2px 0 0 var(--primary);
 }
 
 .nav-item .label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -271,10 +278,92 @@ body.has-titlebar .shell {
 .nav-item .count:not(.muted) { border-color: var(--danger-bd); background: var(--danger-soft); color: var(--danger); }
 .nav-item.active .count:not(.muted) { background: var(--surface); }
 
-@media (max-width: 900px) {
-  .nav-item { justify-content: center; padding: 9px 0; }
-  .nav-item .label, .nav-item .count { display: none; }
+/* ─────────────────────────────
+   侧栏折叠（图标条）
+   ─────────────────────────────
+   折叠态由 body.nav-collapsed 一个 class 表达，两种触发方式共用它：
+   用户点顶栏的折叠按钮（app.js 写入 localStorage），或窗口窄到 app.js
+   设定的断点（自动折叠，不覆盖用户已手动选择的展开态）。
+   刻意**不用 @media** 写两套侧栏布局 —— 那会让「窗口窄」和「用户手动收起」
+   互相覆盖，且每次改尺寸都要在两个地方同步。现在只有一套折叠样式。 */
+.shell {
+  transition: grid-template-columns var(--sidebar-collapse-ms) ease;
 }
+
+body.nav-collapsed .shell {
+  grid-template-columns: var(--sidebar-rail-w) minmax(0, 1fr);
+}
+
+body.nav-collapsed .sidebar {
+  padding: 12px 8px 8px;
+  align-items: center;
+}
+
+body.nav-collapsed .brand {
+  justify-content: center;
+  padding: 2px 0 12px;
+}
+
+body.nav-collapsed .brand-text,
+body.nav-collapsed .nav-group-label { display: none; }
+
+body.nav-collapsed .nav-item {
+  justify-content: center;
+  padding: 8px 0;
+  width: 36px;
+}
+
+body.nav-collapsed .nav-item .label { display: none; }
+
+/* 折叠后没有文字位，未读角标改成图标右上角的一颗小圆点：
+   数字在 36px 宽的轨道里必然被裁，而「有没有未读」这个信息必须保留。 */
+body.nav-collapsed .nav-item .count {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  min-width: 0;
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--danger);
+  color: transparent;
+  font-size: 0;
+}
+
+body.nav-collapsed .nav-item .count.muted { display: none; }
+
+/* 折叠按钮：顶栏最左侧，收起时给一个 32px 的方块（与 topbar 高度齐平） */
+.nav-toggle {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: -4px;
+  padding: 0;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-3);
+  transition: background .15s ease, color .15s ease;
+}
+
+.nav-toggle:hover:not(:disabled) {
+  background: var(--nav-hover);
+  color: var(--text);
+}
+
+.nav-toggle svg { display: block; }
+
+/* 两枚镜像图标叠在同一个格子里，靠 display 决定露出哪一枚 —— 不重新画 button，
+   切状态时也就没有「图标重建 → 一帧空白」的问题。两枚同时在 DOM 里，
+   title / aria-label 由 app.js 按状态改写。 */
+.nav-toggle > span { grid-area: 1 / 1; display: grid; place-items: center; }
+.nav-toggle .icon-collapse { display: none; }
+body.nav-collapsed .nav-toggle .icon-collapse { display: grid; }
+body.nav-collapsed .nav-toggle .icon-expand { display: none; }
 
 /* 侧栏底部 */
 .sidebar-foot {

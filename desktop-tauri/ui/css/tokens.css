@@ -29,9 +29,12 @@
   --table-head-bg: var(--surface);
   /* 行悬浮：比表面深（浅色）/ 亮（深色）一档的薄底，同一表达式两套主题都成立 */
   --row-hover: var(--surface-2);
-  --border: oklch(0.145 0 0 / 10%);
-  --border-strong: oklch(0.145 0 0 / 20%);
-  --hairline: oklch(0.145 0 0 / 8%);
+  /* 描边是这套设计里唯一的分隔手段，所以刻意压得很淡：卡片与卡片之间靠
+     hairline（5%）而不是 border（7%）区分，只有真正的控件边界才用 border。
+     现代扁平取向：不用投影做层级，投影全部留给浮层。 */
+  --border: oklch(0.145 0 0 / 7%);
+  --border-strong: oklch(0.145 0 0 / 14%);
+  --hairline: oklch(0.145 0 0 / 5%);
 
   /* 控件填充与描边：与承载面分开，于是表面提亮后按钮、输入框依然立得住，
      不必再靠压暗整块内容来衬托它们。 */
@@ -49,9 +52,11 @@
   --sidebar-fg: oklch(0.43287 0.01676 258.37);
   --sidebar-muted: oklch(0.51200 0.02088 261.29);
   --nav-hover: oklch(0.145 0 0 / 5%);
-  --nav-selected-bg: oklch(0.89318 0.04237 253.82);
-  --nav-selected-border: oklch(0.83311 0.05788 254.15);
-  --nav-selected-fg: oklch(0.42649 0.12275 255.60);
+  /* 选中项不用填充块 + 描边（那是一「药丸」按钮的观感），改为极淡中性底
+     + 主色文字，选中状态由左侧主色条承担（见 layout.css 的 .nav-item.active::before）。 */
+  --nav-selected-bg: oklch(0.145 0 0 / 4%);
+  --nav-selected-border: transparent;
+  --nav-selected-fg: var(--primary);
   --nav-count-bg: oklch(0.84405 0.05294 251.09);
 
   /* 文本三档 */
@@ -99,32 +104,34 @@
   --r-xl: calc(var(--radius) * 1.4);
   --r-pill: 999px;
 
-  /* 阴影 */
-  --shadow-1: 0 1px 2px oklch(0.145 0 0 / 5%);
-  --shadow-2: 0 1px 2px oklch(0.145 0 0 / 5%), 0 4px 12px -8px oklch(0.145 0 0 / 14%);
-  --shadow-3: 0 2px 6px oklch(0.145 0 0 / 6%), 0 14px 32px -18px oklch(0.145 0 0 / 18%);
+  /* 阴影只服务于「浮层」——下拉、菜单、气泡、弹窗、toast。
+     卡片、面板、按钮一律不投影：它们与画布的区分全靠上面那几条 hairline。
+     所以这里的扩散半径给得比常规卡片式设计大（浮层要真的浮起来），
+     而 --shadow-1 压到几乎不可见，只够托住贴着画布的元素。 */
+  --shadow-1: 0 1px 1px oklch(0.145 0 0 / 3%);
+  --shadow-2: 0 4px 12px -4px oklch(0.145 0 0 / 12%);
+  --shadow-3: 0 12px 32px -12px oklch(0.145 0 0 / 18%);
   --glow: 0 1px 2px oklch(0.145 0 0 / 6%), 0 10px 22px -12px color-mix(in srgb, var(--primary) 45%, transparent);
   --ring: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
 
   /* 尺寸 */
-  --sidebar-w: 204px;
+  /* 侧栏两档宽度：展开态带文字，折叠态收成图标条（只剩图标与角标）。
+     折叠由 body.nav-collapsed 切换，.shell 的栅格轨道跟着换成 --sidebar-rail-w，
+     宽度变化交给 transition，折叠时表格类页面能立刻多出 156px 横向空间。 */
+  --sidebar-w: 212px;
+  --sidebar-rail-w: 56px;
+  --sidebar-collapse-ms: 180ms;
   --topbar-h: 46px;
   /* 自定义标题栏高度（桌面端）：主窗口去掉了系统装饰（src-tauri 建窗处
      decorations(false)），界面自绘 32px 标题条补上三键与拖动区（titlebar.js）。
      网页端不创建标题栏，该变量只在 body.has-titlebar 的规则里被引用。 */
   --titlebar-h: 32px;
   --pad: 16px;
-  /* 内容区最大宽度（不含侧边栏）。用 vw 而不是 %：
-     % 相对的是「已排除侧边栏和内边距」的可用宽度，那样任何窗口下都会被限制成 80%，
-     内容永远占不满；vw 相对整个窗口，于是窗口 ≤1280px 时内容占满、
-     更宽时才收在这个值上并居中。
-     值不要往 90vw 以上调：侧边栏吃掉约 13% 的窗口宽度后，92vw 在 3200px 以下
-     永远碰不到，限宽等于失效 —— 宽屏上各页直接铺到窗口边，只有账号页
-     （自带 1400px 限宽）还留着左右留白，看起来像两个版本。80vw 才是
-     「各页都收在版心里、左右都有留白」的那个口径。
-     这个变量只描述内容区的限宽，全站所有页面（含账号页）一律用它，
-     不存在按页面的覆盖。 */
-  --content-max: 80vw;
+  /* 内容区最大宽度（不含侧边栏）。取「先到 1680px 封顶、没到就吃满 92vw」：
+     之前是 80vw，在 2560px 这类宽屏上会把内容压到 2048px 再居中，
+     账号页 / 请求日志页这种宽表格左右留白过大；92vw + 封顶让常见窗口
+     （1440 / 1920）下内容几乎铺满，只有超宽屏才留白。 */
+  --content-max: min(1680px, 92vw);
   --sb-w: 11px;          /* 滚动条宽度：表头对齐要靠它补偿 */
 }
 
@@ -141,9 +148,9 @@
   --table-bg: var(--surface);
   --table-head-bg: var(--surface);
   --row-hover: var(--surface-2);
-  --border: oklch(1 0 0 / 10%);
-  --border-strong: oklch(1 0 0 / 20%);
-  --hairline: oklch(1 0 0 / 9%);
+  --border: oklch(1 0 0 / 8%);
+  --border-strong: oklch(1 0 0 / 15%);
+  --hairline: oklch(1 0 0 / 6%);
 
   --control-bg: oklch(0.36572 0.00850 285.97);
   --control-hover: oklch(0.40758 0.00993 285.95);
@@ -157,9 +164,9 @@
   --sidebar-fg: oklch(0.79794 0.01342 266.68);
   --sidebar-muted: oklch(0.67832 0.01760 262.73);
   --nav-hover: oklch(1 0 0 / 6%);
-  --nav-selected-bg: oklch(0.34658 0.05986 253.12);
-  --nav-selected-border: oklch(0.46337 0.07464 249.11);
-  --nav-selected-fg: oklch(0.93281 0.03331 250.99);
+  --nav-selected-bg: oklch(1 0 0 / 7%);
+  --nav-selected-border: transparent;
+  --nav-selected-fg: var(--primary);
   --nav-count-bg: oklch(0.43273 0.06483 250.27);
 
   --text: oklch(0.965 0 0);
@@ -192,9 +199,9 @@
   --intl-soft: oklch(0.68 0.14 268 / 14%);
   --intl-bd: oklch(0.68 0.14 268 / 32%);
 
-  --shadow-1: 0 1px 2px oklch(0 0 0 / 40%);
-  --shadow-2: 0 1px 2px oklch(0 0 0 / 40%), 0 4px 12px -8px oklch(0 0 0 / 55%);
-  --shadow-3: 0 2px 6px oklch(0 0 0 / 45%), 0 14px 32px -18px oklch(0 0 0 / 60%);
+  --shadow-1: 0 1px 1px oklch(0 0 0 / 30%);
+  --shadow-2: 0 4px 12px -4px oklch(0 0 0 / 55%);
+  --shadow-3: 0 12px 32px -12px oklch(0 0 0 / 65%);
   --glow: 0 1px 2px oklch(0 0 0 / 40%), 0 10px 22px -14px oklch(0.623 0.206 255.3 / 50%);
   --ring: 0 0 0 3px oklch(0.623 0.206 255.3 / 30%);
 }
@@ -213,9 +220,9 @@
     --table-bg: var(--surface);
     --table-head-bg: var(--surface);
     --row-hover: var(--surface-2);
-    --border: oklch(1 0 0 / 10%);
-    --border-strong: oklch(1 0 0 / 20%);
-    --hairline: oklch(1 0 0 / 9%);
+    --border: oklch(1 0 0 / 8%);
+    --border-strong: oklch(1 0 0 / 15%);
+    --hairline: oklch(1 0 0 / 6%);
 
     --control-bg: oklch(0.36572 0.00850 285.97);
     --control-hover: oklch(0.40758 0.00993 285.95);
@@ -229,9 +236,9 @@
     --sidebar-fg: oklch(0.79794 0.01342 266.68);
     --sidebar-muted: oklch(0.67832 0.01760 262.73);
     --nav-hover: oklch(1 0 0 / 6%);
-    --nav-selected-bg: oklch(0.34658 0.05986 253.12);
-    --nav-selected-border: oklch(0.46337 0.07464 249.11);
-    --nav-selected-fg: oklch(0.93281 0.03331 250.99);
+    --nav-selected-bg: oklch(1 0 0 / 7%);
+    --nav-selected-border: transparent;
+    --nav-selected-fg: var(--primary);
     --nav-count-bg: oklch(0.43273 0.06483 250.27);
 
     --text: oklch(0.965 0 0);
@@ -264,9 +271,9 @@
     --intl-soft: oklch(0.68 0.14 268 / 14%);
     --intl-bd: oklch(0.68 0.14 268 / 32%);
 
-    --shadow-1: 0 1px 2px oklch(0 0 0 / 40%);
-    --shadow-2: 0 1px 2px oklch(0 0 0 / 40%), 0 12px 28px -18px oklch(0 0 0 / 80%);
-    --shadow-3: 0 2px 10px oklch(0 0 0 / 45%), 0 26px 60px -24px oklch(0 0 0 / 85%);
+    --shadow-1: 0 1px 1px oklch(0 0 0 / 30%);
+    --shadow-2: 0 4px 12px -4px oklch(0 0 0 / 55%);
+    --shadow-3: 0 12px 32px -12px oklch(0 0 0 / 65%);
     --glow: 0 1px 2px oklch(0 0 0 / 40%), 0 10px 22px -14px oklch(0.623 0.206 255.3 / 50%);
     --ring: 0 0 0 3px oklch(0.623 0.206 255.3 / 30%);
   }

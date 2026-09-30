@@ -39,6 +39,23 @@
     pulse: '<circle cx="12" cy="12" r="5"/>',
 
     /**
+     * 侧栏折叠 / 展开（顶栏最左的折叠按钮）
+     *
+     * 两枚互为镜像：同一个外框 + 一条竖分隔线，折叠态（panelExpand）的分隔线
+     * 挪到右边。画「面板 + 分隔线」而不是画箭头，是因为按钮本身就贴在侧栏边上，
+     * 箭头要读方向得回头看，而分隔线的位置一眼就是「面板还剩多少」。
+     *
+     * 描边组约定（stroke-width 1.8 + 圆头圆角）：这是 16px 的图形，
+     * 填充块在这个尺寸下笔画会糊。
+     */
+    panelCollapse: '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+      + '<rect x="3" y="4" width="18" height="16" rx="2"/>'
+      + '<path d="M9.5 4v16"/></g>',
+    panelExpand: '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+      + '<rect x="3" y="4" width="18" height="16" rx="2"/>'
+      + '<path d="M14.5 4v16"/></g>',
+
+    /**
      * 设置页左栏的分类图标（2026-09 新增，九个一组）。
      *
      * ── 为什么单独一组（不复用上面那些导航图标）──────────────

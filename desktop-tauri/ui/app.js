@@ -811,6 +811,67 @@ function paintIcons() {
 }
 paintIcons();
 
+// ─── 侧栏折叠 ──────────────────────────────────────
+//
+// 折叠态只有一处事实来源：body.nav-collapsed。CSS（layout.css 的「侧栏折叠」一节）
+// 完全按这个 class 表达，不再用 @media 写第二套侧栏布局 —— 于是「窗口变窄」与
+// 「用户手动收起」不会互相覆盖，改尺寸也只需改一处。
+//
+// 三种来源的优先级：用户手动选择 > 窄窗自动折叠 > 默认展开。
+// 手动选择写进 localStorage，所以「我收起了侧栏」这件事跨重启保留。
+
+const NAV_COLLAPSE_KEY = 'workbuddy-nav-collapsed';
+
+/** 窗口窄到这个宽度以下就折叠侧栏：图标条 56px + 内容的最小可读宽度。 */
+const NAV_AUTO_BREAKPOINT = 1100;
+
+function applyNavCollapse(collapsed, { persist = false } = {}) {
+  document.body.classList.toggle('nav-collapsed', collapsed);
+  const btn = $('nav-toggle');
+  if (btn) {
+    const icon = window.wbIcons?.icon;
+    // 两枚图标都画进同一个按钮，靠 CSS 按 .nav-collapsed 决定显示哪一枚
+    if (icon) {
+      btn.innerHTML =
+        `<span class="icon-collapse">${icon('panelCollapse', 16)}</span>` +
+        `<span class="icon-expand">${icon('panelExpand', 16)}</span>`;
+    }
+    const label = collapsed ? '展开侧栏' : '折叠侧栏';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-expanded', String(!collapsed));
+  }
+  if (persist) {
+    try { localStorage.setItem(NAV_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* 隐私模式忽略 */ }
+  }
+}
+
+$('nav-toggle')?.addEventListener('click', () => {
+  applyNavCollapse(!document.body.classList.contains('nav-collapsed'), { persist: true });
+});
+
+/** 窄窗自动折叠：只在用户没手动选过时生效，手动选择优先于它。 */
+function syncNavAutoCollapse() {
+  let manual = null;
+  try { manual = localStorage.getItem(NAV_COLLAPSE_KEY); } catch { /* 忽略 */ }
+  if (manual === '1' || manual === '0') {
+    applyNavCollapse(manual === '1');
+    return;
+  }
+  applyNavCollapse(window.innerWidth < NAV_AUTO_BREAKPOINT);
+}
+
+syncNavAutoCollapse();
+window.addEventListener('resize', () => {
+  // resize 频繁，只在跨越断点时真正改 class，避免每次拖窗口都重排侧栏
+  const want = window.innerWidth < NAV_AUTO_BREAKPOINT;
+  if (want !== document.body.classList.contains('nav-collapsed')) {
+    let manual = null;
+    try { manual = localStorage.getItem(NAV_COLLAPSE_KEY); } catch { /* 忽略 */ }
+    if (manual !== '1' && manual !== '0') applyNavCollapse(want);
+  }
+});
+
 // ─── 端口状态与冲突处置 ───────────────────────
 //
 // 侧栏那两条状态（网关进程 / 可用账号）与端口冲突时的两个出口
