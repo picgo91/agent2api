@@ -86,7 +86,7 @@ print(resp.choices[0].message.content)
 ```bash
 docker run -d --name agent2api --restart unless-stopped \
   -p 3065:3065 -v ./data:/data \
-  aimodcc/agent2api:latest
+  picgo91/agent2api:latest
 ```
 
 Open `http://<host>:3065` in a browser — the first visit walks you through **registering the admin account**; log in and create an API key in the "Gateway Keys" page for your clients — `http://<host>:3065/v1` is the OpenAI-compatible endpoint (it refuses to forward until the first key exists, then recovers automatically). All state (SQLite database / config / logs) lives in the `./data` volume.
@@ -96,7 +96,7 @@ Compose users (this is the whole `docker-compose.yml`; images are published for 
 ```yaml
 services:
   agent2api:
-    image: aimodcc/agent2api:latest
+    image: picgo91/agent2api:latest
     container_name: agent2api
     restart: unless-stopped
     ports:
@@ -313,11 +313,11 @@ One caveat: the LICENSE file carries a **Usage Notice** after the MIT text, whos
 
 ## Star History
 
-<a href="https://star-history.com/#aimod-cc/agent2api&Date">
+<a href="https://star-history.com/#picgo91/agent2api&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=aimod-cc/agent2api&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=aimod-cc/agent2api&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=aimod-cc/agent2api&type=Date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=picgo91/agent2api&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=picgo91/agent2api&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=picgo91/agent2api&type=Date" />
   </picture>
 </a>
 

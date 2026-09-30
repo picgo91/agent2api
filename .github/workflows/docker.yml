@@ -2,8 +2,8 @@ name: docker
 
 # 构建网关镜像（amd64 + arm64）并推送到 **你自己的** Docker Hub。
 #
-# ── 这是分叉自上游 aimod-cc/agent2api 后改过的版本 ────────────
-# 原文件把镜像写死成 aimodcc/agent2api（作者的账号）；这里改成
+# ── 这是分叉自上游 picgo91/agent2api 后改过的版本 ────────────
+# 原文件把镜像写死成 picgo91/agent2api（作者的账号）；这里改成
 # `${{ secrets.DOCKERHUB_USERNAME }}/agent2api`，即推到你自己的账号，
 # 这样你改完代码 push 就能自动构建上架，不必等作者发版。
 #

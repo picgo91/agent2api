@@ -15,8 +15,8 @@
   },
   "bundle": {
     "active": true,
-    "publisher": "aimod-cc",
-    "copyright": "Copyright (c) 2026 aimod-cc",
+    "publisher": "picgo91",
+    "copyright": "Copyright (c) 2026 picgo91",
     "targets": [
       "nsis"
     ],

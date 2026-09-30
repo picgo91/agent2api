@@ -91,7 +91,7 @@ print(resp.choices[0].message.content)
 ```bash
 docker run -d --name agent2api --restart unless-stopped \
   -p 3065:3065 -v ./data:/data \
-  aimodcc/agent2api:latest
+  picgo91/agent2api:latest
 ```
 
 浏览器打开 `http://<主机>:3065`，首次进入会引导**注册管理员账号**（后续登录用它）；登录后在「网关 Key」页创建一把 API Key 给客户端用 —— `http://<主机>:3065/v1` 即 OpenAI 兼容端点，未建 Key 前拒绝转发，建第一把后自动恢复。所有状态（SQLite 库 / 配置 / 日志）都落在 `./data` 一个卷里。
@@ -101,7 +101,7 @@ compose 用户（`docker-compose.yml` 全文就这么多；amd64 / arm64 都有�
 ```yaml
 services:
   agent2api:
-    image: aimodcc/agent2api:latest
+    image: picgo91/agent2api:latest
     container_name: agent2api
     restart: unless-stopped
     ports:
@@ -320,11 +320,11 @@ npm run build:icon         # 生成图标源图（改图标设计后执行，再
 
 ## Star History
 
-<a href="https://star-history.com/#aimod-cc/agent2api&Date">
+<a href="https://star-history.com/#picgo91/agent2api&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=aimod-cc/agent2api&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=aimod-cc/agent2api&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=aimod-cc/agent2api&type=Date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=picgo91/agent2api&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=picgo91/agent2api&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=picgo91/agent2api&type=Date" />
   </picture>
 </a>
 
