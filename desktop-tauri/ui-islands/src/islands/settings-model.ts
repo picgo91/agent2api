@@ -21,8 +21,16 @@
 /** 启动与托盘设置（壳命令 get_app_settings / save_app_settings） */
 export type AppSettings = { closeToTray: boolean; autostart: boolean }
 
-/** 导入失败项：customProvider 标记的那条不是账号，是自定义提供商定义 */
-export type ImportError = { id?: string; message?: string; customProvider?: boolean }
+/**
+ * 导入失败项：`customProvider` / `apiKey` 标记的那条不是账号，
+ * 而是自定义提供商定义或网关 API Key 的处理结果
+ */
+export type ImportError = {
+  id?: string
+  message?: string
+  customProvider?: boolean
+  apiKey?: boolean
+}
 
 /** 导入结果（壳命令 import_accounts） */
 export type ImportResult = {
@@ -35,6 +43,8 @@ export type ImportResult = {
   errors?: ImportError[]
   /** v2 导出文件附带的自定义提供商定义统计 */
   customProviders?: { added?: number; updated?: number }
+  /** v3 导出文件附带的网关 API Key 统计（本机已有的按明文 Key 跳过，不覆盖） */
+  apiKeys?: { added?: number; skipped?: number }
 }
 
 /** 导出结果（壳命令 export_accounts） */
@@ -43,6 +53,8 @@ export type ExportResult = {
   count?: number
   /** v2 导出文件附带的自定义提供商定义条数 */
   customProviders?: number
+  /** v3 导出文件附带的网关 API Key 条数 */
+  apiKeys?: number
   file?: string
 }
 
@@ -554,7 +566,7 @@ export const TIPS = {
   sanitize: '上游用「逐字精确匹配」的方式审核请求体（不是语义审核）：客户端注入的固定模板句、计费头字段名、以及某些裸错误码出现在报文里就会整单拦截，返回 400。开启本项后，网关在每次转发前改写这些指纹 —— 表头键值整段删除，承载语义的模板句只换一个词（如 official CLI for Claude → official CLI tool for Claude），对话内容与语义都不受影响。规则集是内置的，不需要也无法维护词表。关掉本项后客户端模板会原样发往上游，可能重新出现模板句被误拦的报错。',
   prompt: '客户端（Claude Code / Codex 等 CLI）会在 system 提示词里注入几十句固定模板，上游按逐字匹配审核，命中就整单拦截（HTTP 400）。指纹脱敏能改写实测命中过的那几句，但换一个客户端版本就可能冒出新的。这里可以把 system 整段换成网关自己那份：①「透传」= 不动客户端 system（默认，行为与之前完全一致）；②「替换」= 删掉客户端所有 system / developer 消息，换成网关的提示词（客户端项目规范随之消失）；③「追加」= 在开头连续 system 块之后插入一条网关提示词，既有消息逐字不动（客户端规范与网关提示词并用）。那份提示词有两个来源：提示词文件（留空用内置默认），或直接在界面上编辑正文 —— 编辑过就以那份正文为准（优先于文件），清空则回到文件 / 内置默认。另外，透传 / 追加模式下撞了内容拦截（多半是指纹误报）时，网关会自动换一段最小中性提示词重试一次，并把「降级期」开到次日 00:00 —— 期间所有请求直接带中性提示词出门，不再先撞一次 400；这里能看见并提前解除它。上面几项是**默认值**：想给某个提供商单独配，用下面的「按提供商」加一行（带「网关自带」的家默认就列在那里）—— 不同的上游对这些内容的接受程度不一样。',
   debug: '开启后，网关会把每次转发**发给上游的请求**（请求头 + 请求体）与**上游返回的响应**（状态码 + 响应头 + 响应体）完整保存到本地，供请求日志页的「详情」查看。请求头里的 Authorization、Cookie、API Key 等凭据字段一律替换成 [redacted]，不会明文落盘；请求体与响应体按原样保存（可能包含你的对话内容）。报文只保留最近 500 条，超出后丢弃最旧的。这是排障用的临时开关，不需要时建议关闭。',
-  io: '导出会把全部账号与自定义提供商定义写入一个 JSON 文件，可以拷到另一台机器上导入后继续使用。导入采用合并策略：同提供商下按业务身份（UID / userId / apiKey 等）去重 —— 已存在的账号只更新凭证，保留本机原有的优先级顺序；新账号追加到转发顺序末尾，不会抢占当前正在使用的账号；自定义提供商定义按 id 合并，本机缺失时自动补建。',
+  io: '导出会把全部账号、自定义提供商定义与网关 API Key 写入一个 JSON 文件，可以拷到另一台机器上导入后继续使用。导入采用合并策略：同提供商下按业务身份（UID / userId / apiKey 等）去重 —— 已存在的账号只更新凭证，保留本机原有的优先级顺序；新账号追加到转发顺序末尾，不会抢占当前正在使用的账号；自定义提供商定义按 id 合并，本机缺失时自动补建；API Key 按明文 Key 匹配，本机已有的直接跳过、不覆盖本机的名称与可用范围，避免一份旧文件把刚禁用的 Key 重新启用。',
   retention: '三类数据各自独立计时，超出保留天数的部分会被删除：事件日志是登录、账号切换、429 切换这类系统事件；请求日志是网关每次转发到上游的逐条记录；按天聚合供报表页的热力图与按天趋势使用。把某一档改小（例如 30 天改成 7 天）保存后会立即删除超出的历史数据，此操作不可恢复；改大或保持不变不会删除任何数据。三项的可填范围均为 1–3650 天。',
   storage: '全部数据（账号、事件日志、请求记录、调试报文、设置）统一保存在配置目录下的 agent2api.db 这一个 SQLite 数据库里。备份时只需拷贝这个文件；更换保存位置请设置环境变量 AGENT2API_PROXY_HOME 后重启程序。',
 } as const

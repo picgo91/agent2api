@@ -1221,7 +1221,7 @@ function DataPane({ snap }: { snap: SettingsSnapshot }) {
     <>
       <section className='panel'>
         <PanelHead
-          title='账号导入 / 导出'
+          title='数据导入 / 导出'
           tip={TIPS.io}
           actions={
             <>
@@ -1233,7 +1233,7 @@ function DataPane({ snap }: { snap: SettingsSnapshot }) {
                 disabled={io === 'export'}
                 onClick={() => void exportAccounts()}
               >
-                {io === 'export' ? '导出中…' : '导出账号'}
+                {io === 'export' ? '导出中…' : '导出'}
               </Button>
               <Button
                 id='btn-settings-import'
@@ -1241,15 +1241,15 @@ function DataPane({ snap }: { snap: SettingsSnapshot }) {
                 disabled={io === 'import'}
                 onClick={() => void importAccounts()}
               >
-                {io === 'import' ? '导入中…' : '导入账号'}
+                {io === 'import' ? '导入中…' : '导入'}
               </Button>
             </>
           }
         />
         <div className='panel-body'>
           <div className='danger-zone'>
-            <strong>导出文件内含 accessToken / refreshToken / apiKey 等凭证与自定义提供商定义</strong>
-            ，可直接用于登录。请妥善保管，不要外传或上传到公共位置。
+            <strong>导出文件内含 accessToken / refreshToken、网关 API Key 明文与自定义提供商定义</strong>
+            ，可直接用于登录与调用网关。请妥善保管，不要外传或上传到公共位置。
           </div>
           {/* 失败明细（旧实现写 innerHTML 并 display:none 收起空结果，这里条件渲染） */}
           {snap.ioFailure ? (

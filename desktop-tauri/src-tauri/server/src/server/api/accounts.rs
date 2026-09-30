@@ -586,12 +586,19 @@ pub async fn add_account(state: &ServerState, body: &Bytes) -> Response {
 
 pub fn export_accounts(state: &ServerState) -> Response {
     let data = crate::server::core::account_transfer::export_accounts(state.store());
-    let count = data
-        .get("accounts")
-        .and_then(Value::as_array)
-        .map(|items| items.len())
-        .unwrap_or(0);
-    logging::log("[Accounts]", &format!("📤 账号已导出: {count} 个"));
+    // 三段条数逐段取：账号 0 但有 Key（或有定义）是正常配置，日志照实写
+    fn count(data: &Value, key: &str) -> usize {
+        data.get(key).and_then(Value::as_array).map_or(0, Vec::len)
+    }
+    logging::log(
+        "[Accounts]",
+        &format!(
+            "📤 配置已导出: 账号 {} 个、自定义提供商 {} 家、API Key {} 把",
+            count(&data, "accounts"),
+            count(&data, "customProviders"),
+            count(&data, "apiKeys"),
+        ),
+    );
     ok_json(data)
 }
 

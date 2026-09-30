@@ -427,10 +427,15 @@ export async function exportAccounts(): Promise<void> {
     if (result?.canceled) { toast('已取消导出'); return }
     const count = Number(result?.count) || 0
     const providers = Number(result?.customProviders) || 0
-    if (!count && !providers) { toast('没有可导出的账号', 'err'); return }
-    // v2 导出文件附带自定义提供商定义：账号为 0 但有定义时同样值得导
-    const providerNote = providers ? `、${providers} 个自定义提供商` : ''
-    toast(`✅ 已导出 ${count} 个账号${providerNote}${result?.file ? ` 到 ${result.file}` : ''}`)
+    const keys = Number(result?.apiKeys) || 0
+    if (!count && !providers && !keys) { toast('没有可导出的配置', 'err'); return }
+    // 导出文件装三样东西，逐段计数：「零账号但有三把 Key」是完全正常的配置，
+    // 只按账号数判空会让用户以为导出失败了（v2 起同理看 customProviders）
+    const parts: string[] = []
+    if (count) parts.push(`${count} 个账号`)
+    if (providers) parts.push(`${providers} 个自定义提供商`)
+    if (keys) parts.push(`${keys} 把 API Key`)
+    toast(`✅ 已导出 ${parts.join('、')}${result?.file ? ` 到 ${result.file}` : ''}`)
   } catch (error) {
     toast(`操作失败：${errorMessage(error)}`, 'err')
   } finally {
@@ -455,6 +460,9 @@ export async function importAccounts(): Promise<void> {
     const custom = result?.customProviders ?? {}
     const customAdded = Number(custom.added) || 0
     const customUpdated = Number(custom.updated) || 0
+    const keyStats = result?.apiKeys ?? {}
+    const keysAdded = Number(keyStats.added) || 0
+    const keysSkipped = Number(keyStats.skipped) || 0
 
     const extras: string[] = []
     if (skipped) extras.push(`跳过 ${skipped} 个`)
@@ -463,17 +471,25 @@ export async function importAccounts(): Promise<void> {
     const providerNote = (customAdded || customUpdated)
       ? `，自定义提供商新增 ${customAdded} 个、更新 ${customUpdated} 个`
       : ''
-    const summary = `新增 ${added} 个、更新 ${updated} 个${suffix}${providerNote}`
+    // Key 只有「新增」和「已存在跳过」两态（命中即跳过、不覆盖本机的名称与
+    // 白名单），所以不写「更新」—— 让用户以为导入会改本机 Key 的限制就危险了
+    const keyNote = (keysAdded || keysSkipped)
+      ? `，API Key 新增 ${keysAdded} 把、已存在 ${keysSkipped} 把`
+      : ''
+    const summary = `新增 ${added} 个、更新 ${updated} 个${suffix}${providerNote}${keyNote}`
 
     if (failed) {
       toast(`导入完成：${summary}`, 'err')
       // 失败明细只列前 3 条，与账号页批量操作的展示密度保持一致；
-      // 定义警告（customProvider 标记）没有账号语义，展示时注明归属
+      // 定义 / Key 警告（customProvider / apiKey 标记）没有账号语义，
+      // 展示时注明归属
       const detail = errors.slice(0, 3)
         .map(item => {
           const label = item?.customProvider
             ? `自定义提供商 ${item?.id || '(无 id)'}`
-            : (item?.id ?? '未知账号')
+            : item?.apiKey
+              ? `API Key ${item?.id || '(无 id)'}`
+              : (item?.id ?? '未知账号')
           return `${label}（${item?.message ?? '未知原因'}）`
         })
         .join('；')
@@ -483,8 +499,11 @@ export async function importAccounts(): Promise<void> {
     }
 
     // 账号被改动（新增/更新）后让主界面立刻反映：账号列表、导航计数等；
-    // 自定义提供商定义有变化时同样要刷（分组名、模型清单都会变）
-    if (added || updated || customAdded || customUpdated) await shared().wbApp?.refresh?.()
+    // 自定义提供商定义有变化时同样要刷（分组名、模型清单都会变）；
+    // Key 段变了也要刷 —— 网关页的 Key 列表、鉴权状态都是从别处现取的
+    if (added || updated || customAdded || customUpdated || keysAdded) {
+      await shared().wbApp?.refresh?.()
+    }
   } catch (error) {
     toast(`操作失败：${errorMessage(error)}`, 'err')
   } finally {

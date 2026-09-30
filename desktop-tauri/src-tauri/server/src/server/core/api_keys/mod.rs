@@ -36,6 +36,14 @@
 //! 写回时**总是**写出这两个键（空也得是 `[]`）：配置形状稳定，
 //! 用户手改配置时也看得出这两个位置存在。
 
+/// 网关 API Key 的**导入合并**（导出文件里的 `apiKeys` 段）。
+///
+/// `pub(crate)`：调用方是 `account_transfer::import_accounts` —— 与自定义
+/// 提供商定义同一位置（都在进账号锁之前先把 config 侧并完，两把锁不嵌套）。
+/// 除此之外它不该被任何人触碰：Key 的手工增删改走 `add` / `update` /
+/// `remove`，不走导入。
+pub(crate) mod transfer;
+
 use serde_json::{json, Map, Value};
 
 use crate::server::config;
@@ -187,6 +195,19 @@ pub fn entries_from(raw: &Map<String, Value>) -> Vec<ApiKeyEntry> {
 /// 当前全部记录
 pub fn list() -> Vec<ApiKeyEntry> {
     entries_from(config::current().raw())
+}
+
+/// 导出形态：整份列表 → JSON 数组（导出文件的 `apiKeys` 段）。
+///
+/// 用 `to_value` 而不是 `public_json`：后者是**给界面看的**，多一个 `masked`
+/// 派生字段。导出文件要的是能原样导回来的记录，派生字段进去只会在回灌时
+/// 被当成一条来读（`from_value` 忽略未知键，所以不至于出错，但文件里多一份
+/// 冗余、且「掩码」与明文并排容易让人误以为文件里存的是掩码）。
+///
+/// 明文 `key` 是有意带上的：这份文件的用途就是换机器后客户端还能用同一把
+/// Key（与账号段导出 accessToken / refreshToken 同一取向）。
+pub fn export_value_list() -> Vec<Value> {
+    list().iter().map(ApiKeyEntry::to_value).collect()
 }
 
 /// 当前**启用**的明文 Key（鉴权中间件用）；空 = 免鉴权

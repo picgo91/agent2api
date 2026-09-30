@@ -388,34 +388,29 @@ pub fn save_app_settings(app: AppHandle, patch: AppSettings) -> Result<AppSettin
     Ok(saved)
 }
 
-/// 导出账号：拉取导出数据，弹系统保存框落盘。
+/// 导出配置包：拉取导出数据，弹系统保存框落盘。
 ///
-/// 账号与自定义提供商定义**都为 0** 时直接返回，不弹保存框 —— 让用户选完
-/// 路径再被告知「没东西可存」是纯打扰。只有定义没有账号（或反之）仍值得导：
-/// 导出文件现在同时承载两层（v2 起带 `customProviders` 段）。
+/// 三段（账号 / 自定义提供商定义 / 网关 API Key）**都为 0** 时直接返回，
+/// 不弹保存框 —— 让用户选完路径再被告知「没东西可存」是纯打扰。只有
+/// 其中一段有内容仍然值得导：导出文件同时承载这三层（v2 起带
+/// `customProviders`，v3 起带 `apiKeys`），任一段都不能因为另两段为空
+/// 而被漏掉 —— 比如「零账号但有三把 Key」是完全正常的配置。
 #[tauri::command]
 pub async fn export_accounts(app: AppHandle) -> Result<Value, String> {
     let data = gateway::call("GET", "/api/accounts/export", None).await?;
-    let accounts = data
-        .get("accounts")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let custom_providers = data
-        .get("customProviders")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    if accounts.is_empty() && custom_providers.is_empty() {
+    let accounts = section(&data, "accounts");
+    let custom_providers = section(&data, "customProviders");
+    let api_keys = section(&data, "apiKeys");
+    if accounts.is_empty() && custom_providers.is_empty() && api_keys.is_empty() {
         return Ok(json!({ "count": 0 }));
     }
 
     let stamp = timestamp_for_filename();
-    let default_name = format!("workbuddy-accounts-{stamp}.json");
+    let default_name = format!("workbuddy-config-{stamp}.json");
     let file = app
         .dialog()
         .file()
-        .set_title("导出账号")
+        .set_title("导出配置")
         .set_file_name(&default_name)
         .add_filter("JSON", &["json"])
         .add_filter("全部文件", &["*"])
@@ -429,26 +424,33 @@ pub async fn export_accounts(app: AppHandle) -> Result<Value, String> {
         .map_err(|error| format!("保存路径无效: {error}"))?;
     let text = serde_json::to_string_pretty(&data)
         .map_err(|error| format!("导出内容序列化失败: {error}"))?;
-    std::fs::write(&path, text.as_bytes()).map_err(|error| format!("写入账号文件失败: {error}"))?;
+    std::fs::write(&path, text.as_bytes()).map_err(|error| format!("写入导出文件失败: {error}"))?;
     Ok(json!({
         "count": accounts.len(),
         "customProviders": custom_providers.len(),
+        "apiKeys": api_keys.len(),
         "file": path.to_string_lossy(),
     }))
 }
 
-/// 从文件导入账号（merge 语义：按身份匹配，命中更新、未命中追加）。
+/// 导出文件里的一个段 → 数组（缺失 / 类型不对都当作空段）
+fn section(data: &Value, key: &str) -> Vec<Value> {
+    data.get(key).and_then(Value::as_array).cloned().unwrap_or_default()
+}
+
+/// 从文件导入配置包（merge 语义：按身份匹配，命中更新、未命中追加）。
 ///
-/// 兼容两种形态：整体导出文件 `{ version, exportedAt, customProviders, accounts }`
-/// 与直接的账号数组 `[...]`。`customProviders` 段（v2 起的自定义提供商定义）
-/// 原样透传给后端 —— 账号的 provider 字段指向这些定义，丢了它们自定义账号
-/// 就导不回。
+/// 兼容两种形态：整体导出文件
+/// `{ version, exportedAt, customProviders, apiKeys, accounts }` 与直接的
+/// 账号数组 `[...]`。`customProviders`（v2）与 `apiKeys`（v3）两段原样
+/// 透传给后端 —— 前者是账号 provider 字段的外键（丢了自定义账号就导不回），
+/// 后者是客户端手里的 Key（丢了新机器上网关等于没鉴权）。
 #[tauri::command]
 pub async fn import_accounts(app: AppHandle) -> Result<Value, String> {
     let file = app
         .dialog()
         .file()
-        .set_title("导入账号")
+        .set_title("导入配置")
         .add_filter("JSON", &["json"])
         .add_filter("全部文件", &["*"])
         .blocking_pick_file();
@@ -479,8 +481,12 @@ pub async fn import_accounts(app: AppHandle) -> Result<Value, String> {
 
     let mut payload = json!({ "accounts": accounts, "mode": "merge" });
     if let Value::Object(map) = &document {
-        if let Some(definitions) = map.get("customProviders") {
-            payload["customProviders"] = definitions.clone();
+        // 逐段透传而不是整份转发：这两个键是「有就并、没有就当没有」的可选段，
+        // 转发前先确认形状，后端对非数组会整体 400（显式性比宽容好）
+        for key in ["customProviders", "apiKeys"] {
+            if let Some(value) = map.get(key).filter(|value| value.is_array()) {
+                payload[key] = value.clone();
+            }
         }
     }
 

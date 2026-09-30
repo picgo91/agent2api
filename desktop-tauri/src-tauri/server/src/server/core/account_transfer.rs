@@ -1,4 +1,8 @@
-//! 账号导入 / 导出（对照 src/workbuddy-account-transfer.mjs）。
+//! 配置导入 / 导出（对照 src/workbuddy-account-transfer.mjs）。
+//!
+//! 导出文件是一个**配置包**，现在装三样东西：账号、自定义提供商定义、网关
+//! API Key。三者之间有依赖（账号的 provider 字段指向定义），所以合并有
+//! 先后顺序，见下面各节。
 //!
 //! 这里是**纯逻辑模块**：不碰磁盘、不持状态，读盘/落盘/号段分配全部由 store 提供
 //! （`AccountStore` 的 load_locked / save_locked / with_lock）。
@@ -37,7 +41,16 @@
 //! 对应账号逐条失败并说明原因。
 //!
 //! 单条坏数据只记一条 failed / skipped 并继续，不让一条脏数据毁掉整批导入。
-//! 返回 `{ total, added, updated, skipped, failed, errors, customProviders }`。
+//! 返回 `{ total, added, updated, skipped, failed, errors, customProviders,
+//! apiKeys }`。
+//!
+//! ── 网关 API Key（v3 起的 `apiKeys` 段）──────────────────────
+//! Key 列表住在 `config.json` 的 `apiKeys` 字段，与账号文件是两处数据。
+//! 单导账号换机器后，客户端手里那把 Key 在新机器上不存在 —— 网关于是变成
+//! **免鉴权**（一把启用的 Key 都没有就不鉴权，见 `api_keys` 模块头）。
+//! 对只监听 127.0.0.1 的本机场景只是松了限制，对外暴露的网关则是直接敞开。
+//! 合并语义与实现全在 `api_keys::transfer`（按明文 Key 匹配、命中即跳过，
+//! 绝不覆盖本机的启用状态与白名单），这里只取段、转发、把统计并进结果。
 //!
 //! 子模块：identity.rs 身份判定与 id 分配；normalize.rs 字段归一。
 
@@ -60,10 +73,14 @@ use normalize::normalize_imported;
 
 /// 导出文件格式版本（导入端据此兼容后续格式变化）。
 ///
-/// v2：新增 `customProviders` 段（自定义提供商定义）。v1 文件没有这一段，
-/// 导入端按「没有定义可合并」处理 —— 自定义账号在 v1 文件里本就导不回，
-/// 不存在兼容负担。
-pub const EXPORT_VERSION: i64 = 2;
+/// v3：新增 `apiKeys` 段（网关 API Key）。
+/// v2：新增 `customProviders` 段（自定义提供商定义）。
+///
+/// 两个新段都是**可选**的：v1/v2 文件没有对应键时按「没有可合并的东西」
+/// 处理，不报错。理由是各自的缺段后果不同 —— v1 文件没有 `customProviders`
+/// 意味着自定义账号本就导不回（不是导入端能补的）；v1/v2 文件没有
+/// `apiKeys` 只意味着 Key 没跟着过来，而这恰恰是旧文件发布时的状态。
+pub const EXPORT_VERSION: i64 = 3;
 
 /// 单条导入的处理结果
 enum ImportOutcome {
@@ -110,11 +127,14 @@ fn to_export_record(record: &StoredAccount) -> Value {
     Value::Object(item)
 }
 
-/// 导出全部账号（换机器后导入继续用），并附上自定义提供商的定义。
+/// 导出配置包（换机器后导入继续用）：账号 + 自定义提供商定义 + 网关 API Key。
 ///
-/// 定义在账号锁**外**读取：`custom_providers::list()` 走 config 自己的锁，
-/// 两把锁绝不嵌套（与导入端「先并定义、后进账号锁」同一纪律）。
-/// 定义不含任何凭证 —— apiKey 是账号的属性，已随账号记录导出。
+/// 定义与 Key 都在账号锁**外**读取：`custom_providers::list()` 与
+/// `api_keys::export_value_list()` 各走 config 自己的锁，与账号锁是两把
+/// 绝不嵌套的锁（与导入端「先并定义、再进账号锁」同一纪律）。
+///
+/// 两段都不含任何「运行时」数据 —— 账号段剔掉本机的 `rateLimits`，
+/// Key 段原样带明文（用途就是换机器后客户端继续用同一把 Key）。
 pub fn export_accounts(store: &AccountStore) -> Value {
     let accounts = store.with_lock(|guard| {
         let state = store.load_locked(guard);
@@ -124,13 +144,15 @@ pub fn export_accounts(store: &AccountStore) -> Value {
         "version": EXPORT_VERSION,
         "exportedAt": crate::server::logging::now_ms(),
         "customProviders": crate::server::core::custom_providers::list(),
+        "apiKeys": crate::server::core::api_keys::export_value_list(),
         "accounts": accounts,
     })
 }
 
-/// 导入账号（导出文件的回流），merge 语义见文件头。
+/// 导入配置包（导出文件的回流），merge 语义见文件头。
 ///
-/// 返回 `{ total, added, updated, skipped, failed, errors, customProviders }`。
+/// 返回 `{ total, added, updated, skipped, failed, errors, customProviders,
+/// apiKeys }`。
 pub fn import_accounts(store: &AccountStore, payload: &Value) -> Result<Value, AccountStoreError> {
     let Some(root) = payload.as_object() else {
         return Err(AccountStoreError::new("导入内容必须是 JSON 对象", 400));
@@ -166,6 +188,31 @@ pub fn import_accounts(store: &AccountStore, payload: &Value) -> Result<Value, A
         Some(_) => {
             return Err(AccountStoreError::new("customProviders 必须是数组", 400));
         }
+        None => (0, 0),
+    };
+
+    // ── 网关 API Key（v3 段）同样在账号锁外合并 ──
+    // 与定义段一样的纪律：只写 config、不碰账号锁，所以放在 with_lock 之前。
+    // 警告带 `apiKey: true` 标记，前端据此区分「这条不是账号」。
+    let (keys_added, keys_skipped) = match root.get("apiKeys") {
+        Some(Value::Array(items)) => {
+            let report = crate::server::core::api_keys::transfer::merge_imported(items)
+                .map_err(|message| AccountStoreError::new(message, 500))?;
+            definition_warnings.extend(report.warnings.into_iter().map(|warning| {
+                json!({
+                    "id": warning.id,
+                    "message": warning.message,
+                    "apiKey": true,
+                })
+            }));
+            (report.added, report.skipped)
+        }
+        Some(_) => {
+            return Err(AccountStoreError::new("apiKeys 必须是数组", 400));
+        }
+        // 旧导出文件（v1/v2）没有这一段：不是错误，那份文件发布时 Key 确实
+        // 没跟着走。不调 merge_imported 也顺带保证「无新增不写盘」——
+        // 免得一次纯账号导入把 config.json 白改一遍。
         None => (0, 0),
     };
 
@@ -206,8 +253,9 @@ pub fn import_accounts(store: &AccountStore, payload: &Value) -> Result<Value, A
 
         store.save_locked(&state, guard)?;
         let failed = stats.failures.len();
-        // errors 顺序：失败 → 跳过 → 定义警告（跳过项带 skipped 标记、定义警告带
-        // customProvider 标记，前端可区分展示）
+        // errors 顺序：失败 → 跳过 → 定义/Key 警告（跳过项带 skipped 标记，
+        // 定义警告带 customProvider 标记、Key 警告带 apiKey 标记，
+        // 前端可区分展示）
         let mut errors = stats.failures.clone();
         errors.extend(stats.skipped_items.iter().cloned());
         errors.extend(definition_warnings.iter().cloned());
@@ -215,13 +263,15 @@ pub fn import_accounts(store: &AccountStore, payload: &Value) -> Result<Value, A
             "[Accounts]",
             &format!(
                 "📥 账号导入完成: 共 {} 条，新增 {} 个，更新 {} 个，跳过 {} 条，失败 {failed} 条\
-                 （自定义提供商定义：新增 {} 家、更新 {} 家）",
+                 （自定义提供商定义：新增 {} 家、更新 {} 家；API Key：新增 {} 把、跳过 {} 把）",
                 items.len(),
                 stats.added,
                 stats.updated,
                 stats.skipped,
                 providers_added,
                 providers_updated,
+                keys_added,
+                keys_skipped,
             ),
         );
         let result = json!({
@@ -234,6 +284,10 @@ pub fn import_accounts(store: &AccountStore, payload: &Value) -> Result<Value, A
             "customProviders": {
                 "added": providers_added,
                 "updated": providers_updated,
+            },
+            "apiKeys": {
+                "added": keys_added,
+                "skipped": keys_skipped,
             },
         });
         Ok::<_, AccountStoreError>((result, catpaw_invalidations))
