@@ -32,9 +32,12 @@
 //!
 //! ── id 的处理 ──────────────────────────────────────────────
 //! 文件里的 id 只在**本机还没被占用**时沿用（句柄跨机器保持一致，便于
-//! 回灌后继续用同一套自动化脚本按 id 操作）；被别的 Key 占用则换一个
-//! 真正唯一的新 id，**绝不覆盖**。id 不参与匹配，所以换 id 不影响
-//! 「同一把 Key 跳过」的判定。
+//! 回灌后继续用同一套自动化脚本按 id 操作）；被别的 Key 占用、或文件里
+//! 干脆没有 id，则换一个真正唯一的新 id，**绝不覆盖**。id 不参与匹配，
+//! 所以换 id 不影响「同一把 Key 跳过」的判定。
+//!
+//! 缺 id 必须补、不能留空的原因见下面循环里那段注释（空 id 落盘后会在
+//! 下一次读配置时被整条丢掉）。
 //!
 //! `createdAt` / `enabled` 随文件带过来（这是一次**还原**，不是合并）：
 //! 文件里缺失或 ≤ 0 时才回落到本机当前时间，免得界面显示 1970 年。
@@ -88,15 +91,17 @@ pub(crate) fn merge_imported(items: &[Value]) -> Result<MergeReport, String> {
             });
             continue;
         };
-        let label = text(object, "id");
-        let Some(entry) = entry_of(object) else {
+        // 回显用的标识就是文件里的 id（缺失时为空串）。不提前把 entry.id 挪出来
+        // 改成另存一份 —— 那是对 entry 的部分移动，后面 `entry` 还要整体用
+        // （id 冲突时要就地改写），编译器会判「use of partially moved value」。
+        let id = text(object, "id");
+        let Some(mut entry) = entry_of(object) else {
             report.warnings.push(KeyWarning {
-                id: label,
+                id,
                 message: "API Key 记录缺少 key，该条已跳过".to_string(),
             });
             continue;
         };
-        let id = if entry.id.is_empty() { label } else { entry.id };
 
         if existing.contains(&entry.key) {
             report.skipped += 1;
@@ -116,13 +121,16 @@ pub(crate) fn merge_imported(items: &[Value]) -> Result<MergeReport, String> {
             continue;
         }
 
-        let mut entry = entry;
-        if !taken_ids.contains(&entry.id) {
-            taken_ids.insert(entry.id.clone());
-        } else {
+        // id 沿用文件里的值（句柄跨机器一致），但两种情况要另分配：
+        //   - 本机已被别的 Key 占用 → 换一个唯一的新 id，绝不覆盖
+        //   - 文件里根本没有 id   → **必须**补：`ApiKeyEntry::from_value` 读回
+        //     时把空 id 整条丢掉（读侧要求 id 非空），于是带空 id 落盘的 Key
+        //     会在下一次读配置时凭空消失 —— 正是模块头那条「绝不能让已有 Key
+        //     失效」要防的事，不能因为它来自导入文件就放过
+        if entry.id.is_empty() || taken_ids.contains(&entry.id) {
             entry.id = allocate_id(&taken_ids);
-            taken_ids.insert(entry.id.clone());
         }
+        taken_ids.insert(entry.id.clone());
         if entry.created_at <= 0 {
             entry.created_at = logging::now_ms();
         }
