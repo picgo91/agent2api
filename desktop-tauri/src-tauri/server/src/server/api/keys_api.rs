@@ -15,9 +15,9 @@
 //! 两个白名单数组随记录读写，**空数组 = 不限制**（语义与字段说明见
 //! `core::api_keys` 的模块头）。列表响应额外带两个候选表，让界面**不必维护
 //! 第二份事实**：
-//!   · `providers`（注册表摘要）—— 「可用提供商」多选的候选项。项目里明确禁止
-//!     维护第二份 provider 清单（见 `account_store` 模块头那段），前端不该烤一份
-//!     写死的 id 列表；
+//!   · `providers`（注册表摘要 + 自定义提供商）—— 「可用提供商」多选的候选项。
+//!     项目里明确禁止维护第二份 provider 清单（见 `account_store` 模块头那段），
+//!     前端不该烤一份写死的 id 列表；自定义家是运行期数据，同样由后端给全；
 //!   · `modelsByProvider`（每家 → 对外名清单）—— 「可用模型」多选的候选项。
 //!     界面按用户当前勾了哪几家取并集（一家没勾就是空，见 `keys-panel.js`）。
 //!     这张表必须由后端给：模型名是各家清单 + 映射别名的合并结果，前端拿不到
@@ -25,10 +25,11 @@
 //!     按家过滤它会漏掉被别家认领的同名模型（论证见
 //!     `catalog::models_by_provider` 的说明）。
 //!
-//! 写入侧在这一层做校验（`providers::is_known_provider_id` 判 id 认不认识、
-//! 元素必须是字符串），读取侧则一律宽容（理由见 `core::api_keys` 的模块头那条
-//! 硬不变量：升级绝不能让已有 Key 失效）。校验放在写入侧而不是 core：core 是
-//! 「存取 + 判定」，把「哪些值算合法」集中在一处入口更好改。
+//! 写入侧在这一层做校验（`provider_is_acceptable` 判 id 认不认识 —— 内置注册表
+//! ∪ 已注册的自定义家，元素必须是字符串），读取侧则一律宽容（理由见
+//! `core::api_keys` 的模块头那条硬不变量：升级绝不能让已有 Key 失效）。校验放在
+//! 写入侧而不是 core：core 是「存取 + 判定」，把「哪些值算合法」集中在一处入口
+//! 更好改。
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -44,19 +45,40 @@ use crate::server::ServerState;
 
 fn list_json(state: &ServerState) -> Value {
     let keys: Vec<Value> = api_keys::list().iter().map(api_keys::ApiKeyEntry::public_json).collect();
-    // 可用提供商多选的候选：**注册表**（唯一事实来源，加一家 provider 时这里
-    // 自动多一项，前端零改动）。带上 count 让界面能显示「这家有几个账号」——
-    // 用户在这里勾「允许哪几家」时，那几家有没有账号是他最需要知道的信息。
-    //
-    // 计数取自账号快照（一次读盘，与 `/api/session` 的 providers 摘要同源口径）；
-    // 这里只为展示，不做任何判定，所以直接按 provider 字段数一遍即可。
     let accounts = crate::server::core::routing::accounts_of(&state.store().list_accounts());
-    let providers = crate::server::core::providers::summary_json(|id| {
+    // 「可用提供商」的候选 = **内置注册表 + 自定义提供商**。自定义家是运行期数据
+    // （kv 里的 `customProviders`），按约定**不进** `PROVIDERS` / `ProviderKind`
+    // （见 `custom_providers` 模块头），在这里单独追加 —— 与 `modelsByProvider`
+    // 里「先内置后自定义」的拼接顺序一致，前端按数组渲染、零改动。
+    //
+    // 带上 count 让界面能显示「这家有几个账号」—— 用户在这里勾「允许哪几家」时，
+    // 那几家有没有账号是他最需要知道的信息；计数取自账号快照（一次读盘，与
+    // `/api/session` 的 providers 摘要同源口径），这里只为展示、不做任何判定。
+    //
+    // 与内置家同口径：**全量列出**（0 账号的家也照列）—— 用户常常先建 Key 限定
+    // 范围、之后再补账号；按账号数过滤会让「先限制、后配置」的顺序反过来。
+    let count_of = |id: &str| {
         accounts
             .iter()
             .filter(|account| crate::server::core::routing::provider_of(account).eq_ignore_ascii_case(id))
             .count()
-    });
+    };
+    let custom_candidates: Vec<Value> = crate::server::core::custom_providers::list()
+        .into_iter()
+        .filter_map(|item| {
+            let id = item.get("id").and_then(Value::as_str)?.to_string();
+            Some(json!({
+                "id": id.clone(),
+                // label_of 对 custom- 前缀会回落到用户填的名字（见 providers::label_of）
+                "label": crate::server::core::providers::label_of(&id),
+                "count": count_of(&id),
+            }))
+        })
+        .collect();
+    let providers = crate::server::core::providers::summary_json(count_of)
+        .into_iter()
+        .chain(custom_candidates)
+        .collect::<Vec<Value>>();
     json!({
         "keys": keys,
         "authRequired": config::current().api_key_set(),
@@ -78,6 +100,16 @@ fn list_json(state: &ServerState) -> Value {
 ///
 /// 元素校验（未知 provider id / 空串）：认不出就 400，而不是静默丢弃 ——
 /// 用户勾了一个界面上不存在的 id 只可能是数据坏了，静默丢掉会让他以为设置生效了。
+///
+/// 「认识」的口径 = **内置注册表 ∪ 已注册的自定义家**（`custom-` 前缀且在
+/// `customProviders` 里找得到，见 `custom_providers::is_custom_provider_id`）。
+/// 单看前缀会把「手改数据塞进来的陌生 custom-xxx」也放进白名单 —— 那种 id
+/// 没有协议与基址，选路时必然失败，所以在校验侧就挡掉。
+fn provider_is_acceptable(text: &str) -> bool {
+    crate::server::core::providers::is_known_provider_id(text)
+        || crate::server::core::custom_providers::is_custom_provider_id(text)
+}
+
 fn parse_allowlist(
     object: &serde_json::Map<String, Value>,
     key: &str,
@@ -101,7 +133,7 @@ fn parse_allowlist(
         if text.is_empty() {
             continue;
         }
-        if check_provider && !crate::server::core::providers::is_known_provider_id(text) {
+        if check_provider && !provider_is_acceptable(text) {
             return Err(errors::management_error(400, format!("未知的提供商: {text}")));
         }
         if out.iter().any(|known: &String| known.eq_ignore_ascii_case(text)) {

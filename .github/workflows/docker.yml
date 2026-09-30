@@ -1,11 +1,23 @@
 name: docker
 
-# 构建网关镜像（amd64 + arm64）并推送到 Docker Hub。
+# 构建网关镜像（amd64 + arm64）并推送到 **你自己的** Docker Hub。
+#
+# ── 这是分叉自上游 aimod-cc/agent2api 后改过的版本 ────────────
+# 原文件把镜像写死成 aimodcc/agent2api（作者的账号）；这里改成
+# `${{ secrets.DOCKERHUB_USERNAME }}/agent2api`，即推到你自己的账号，
+# 这样你改完代码 push 就能自动构建上架，不必等作者发版。
 #
 # ── 触发方式 ──────────────────────────────────────────────────
-#   · 推送 v* tag（如 v2.7.1）：产出 aimodcc/agent2api:<版本号> 与 :latest
-#   · 手动 workflow_dispatch：产出 :dev（移动测试 tag，不碰正式 tag）
-#   推 v* tag 时与 build.yml 同时触发 —— 一次打 tag，安装包与镜像一起出来
+#   · push 到 main / master：产出 <你>/agent2api:latest
+#   · 手动 workflow_dispatch（Actions 页面点 Run workflow）：同上
+#   · 推送 v* tag：额外产出 <你>/agent2api:<版本号>
+#   每次还会带一个短 SHA tag（如 :sha-1a2b3c4），便于回溯到具体提交。
+#
+# ── 需要配置的 secrets（仓库 Settings → Secrets and variables → Actions）──
+#   DOCKERHUB_USERNAME  你的 Docker Hub 用户名（小写字母/数字）
+#   DOCKERHUB_TOKEN     Docker Hub Access Token，权限选 Read & Write
+#                       生成地址：https://hub.docker.com/settings/security
+#   两者缺一，构建会在「登录 Docker Hub」或生成 tag 时失败。
 #
 # ── 为什么 runner 上不用装 QEMU ───────────────────────────────
 # Dockerfile 的 builder 固定跑在 $BUILDPLATFORM：runner 是 amd64，arm64
@@ -17,24 +29,15 @@ name: docker
 # 首次编完整棵依赖树后落缓存，之后每次构建直接命中，只剩源码层重编。
 #
 # ── action 版本 ──────────────────────────────────────────────
-# 与 build.yml 同一标准：直接钉最新大版本。截至本次编写：
-# setup-buildx v4 / login v4 / metadata v6 / build-push v7，
-# login v4 起已默认 Node 24 运行时，无 Node 20 弃用问题。
-#
-# ── GHCR 双推（可选，暂未启用）────────────────────────────────
-# 想多推一份 ghcr.io/aimod-cc/agent2api 时：
-#   1. 顶层 permissions 加 packages: write
-#   2. login-action 再加一段 ghcr.io（username: ${{ github.actor }}，
-#      password: ${{ github.token }}，无需额外 secret）
-#   3. metadata-action 的 images 多列一行即可
-#   注意：GHCR 新包默认私有，首次推送后需到包设置手动改 Public。
-#
-# ── secrets ──────────────────────────────────────────────────
-#   DOCKERHUB_USERNAME / DOCKERHUB_TOKEN（Read & Write 权限的 Access Token）
+# 与 build.yml 同一标准：直接钉最新大版本（checkout v7 / setup-buildx v4 /
+# login v4 / metadata v6 / build-push v7）。
 
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+      - master
     tags:
       - 'v*'
 
@@ -42,7 +45,7 @@ permissions:
   contents: read
 
 env:
-  IMAGE: aimodcc/agent2api
+  IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/agent2api
 
 jobs:
   image:
@@ -59,16 +62,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # tag 推送：v2.7.1 → 2.7.1 + latest；手动触发：只出 dev
+      # latest 恒定产出；v* tag 额外产出版本号；每次都带一个短 SHA
       - name: 生成镜像 tag
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           tags: |
+            type=raw,value=latest
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=dev,enable=${{ !startsWith(github.ref, 'refs/tags/v') }}
+            type=sha,format=short
 
       - name: 构建并推送
         uses: docker/build-push-action@v7
