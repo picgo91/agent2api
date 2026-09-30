@@ -118,7 +118,7 @@ services:
 | `AGENT2API_PANEL_PORT` | 面板分端口：设后面板（界面 + `/api/*`）单独监听该端口，公网只映射主端口即可把管理面留在内网（面板端口绑回环，写 `127.0.0.1:3066:3066`） |
 | `AGENT2API_HOST` / `AGENT2API_PROXY_PORT` | 监听地址（默认 `0.0.0.0`）/ 端口（默认 `3065`） |
 | `AGENT2API_ALLOW_NO_KEY` | 置 `1` 关闭 fail-closed（未配 Key 也放行 `/v1`，仅限纯内网） |
-| `AGENT2API_CAPTCHA_ENABLED` | 登录页人机验证组件环境变量：默认为 `1` 开启，`0` 为关闭 |
+| `AGENT2API_CAPTCHA_ENABLED` | 登录页人机验证组件环境变量：默认为 `0` 关闭，`1` 为开启 |
 
 从源码构建：克隆本仓库后 `docker compose up -d --build`（镜像里只有网关与面板，不含 Rust 工具链）。
 

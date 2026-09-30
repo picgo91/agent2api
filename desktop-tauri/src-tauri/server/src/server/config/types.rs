@@ -89,14 +89,17 @@ pub const KEY_SANITIZE_FINGERPRINTS: &str = "sanitizeBlacklistFingerprints";
 
 /// 机器人校验开关的键（config.json 键，ALTCHA proof-of-work，见 `server::altcha`）。
 ///
-/// **默认开启**：登录 / 注册是公开的认证边界，脚本可以无限打（暴破密码、
-/// 抢注管理员）；ALTCHA 让每个请求先花一次算力，配合失败锁定把批量攻击
-/// 打得没性价比。对真人无感 —— 登录页在后台把题算完才允许提交。
+/// **默认关闭**：登录 / 注册虽是公开的认证边界，但面板前的人机验证对
+/// 已经套了反向代理 / WAF / 限流、或走内网只对可信网段开放的部署来说只是
+/// 多一次点击，所以**不设即关**（原先是默认开启）。需要开就显式设
+/// `AGENT2API_CAPTCHA_ENABLED=1`，或在设置页打开开关。
+/// 一旦开启，它是有价值的：ALTCHA 让每个请求先花一次算力，配合失败锁定把
+/// 批量攻击打得没性价比（对真人无感 —— 登录页在后台把题算完才允许提交）。
 /// 只影响面板的 login / setup 两个端点，与 `/v1/*` 的 API Key 鉴权无关。
 ///
 /// 部署级兜底：配置里没有这个键时读环境变量 `AGENT2API_CAPTCHA_ENABLED`
-/// （登录页人机验证组件环境变量，默认为1开启，0为关闭，见
-/// `parse::env_captcha_enabled`）—— Docker 想从第一次启动就关掉校验的，
+/// （登录页人机验证组件环境变量，默认为0关闭，1为开启，见
+/// `parse::env_captcha_enabled`）—— Docker 想从第一次启动就改变校验的，
 /// 在 compose / `.env` 里设它即可；设置页改过一次之后以库里的值为准
 /// （优先级「配置里的值 > 环境变量」）。
 pub const KEY_CAPTCHA_ENABLED: &str = "captchaEnabled";

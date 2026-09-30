@@ -54,15 +54,23 @@ pub(super) fn env_text(name: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-/// 登录页人机验证组件环境变量，默认为1开启，0为关闭。
+/// 登录页人机验证组件环境变量，默认为0关闭，1为开启。
 ///
 /// 只有配置里**没有** `captchaEnabled`（设置页从未改过）时才兜底 —— 优先级
-/// 「配置里的值 > 环境变量 > 内置默认」见模块头。除字面 `0` 之外一律按开启
-/// 处理：它是登录 / 注册的防爆破开关，写坏了宁可多一道校验。
+/// 「配置里的值 > 环境变量 > 内置默认」见模块头。
+///
+/// **内置默认是关闭**：变量没设时按关闭处理。原先是开启（`unwrap_or(true)`），
+/// 现在改成 `unwrap_or(false)` —— 部署到已有反向代理 / WAF / 限流、或走内网
+/// 只对可信网段开放时，让人再去 compose 里加一行才能关掉校验是不合理的，
+/// 而面板前的人机验证对这类部署本来就只是多一次点击。
+///
+/// 但**显式给了值**时仍沿用旧口径「除字面 `0` 外一律开启」：已经按
+/// `AGENT2API_CAPTCHA_ENABLED=true` 之类写过的部署不会因为这次改默认值
+/// 而突然失去校验。要显式关掉就写 `0`，写 `1` 明确开，其余非 `0` 值也开。
 pub(super) fn env_captcha_enabled() -> bool {
     std::env::var("AGENT2API_CAPTCHA_ENABLED")
         .map(|value| value.trim() != "0")
-        .unwrap_or(true)
+        .unwrap_or(false)
 }
 
 /// 从原始 JSON 里取非空字符串字段
