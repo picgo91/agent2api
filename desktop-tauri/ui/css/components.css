@@ -100,7 +100,7 @@ button.icon.sm { width: 26px; }
 
 .field {
   min-width: 0;
-  padding: 12px 13px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--surface-inset);
@@ -337,7 +337,7 @@ input[type="number"] { max-width: 130px; }
   align-items: center;
   gap: 10px 12px;
   flex-wrap: wrap;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
 }
 

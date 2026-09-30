@@ -159,7 +159,7 @@
 }
 
 :root {
-  --ui-radius: 1rem;
+  --ui-radius: 0.5rem;
   /* 字体栈首位的 Public Sans 与设计稿一致，但项目尚未引入字体文件
      （@fontsource-variable/public-sans），当前实际落在系统字体上 —— 与
      既有界面同款。装上字体包即自动切换，无需改这里。 */
@@ -256,8 +256,8 @@
   --ui-skeleton-highlight: oklch(0.985 0 0);
 
   --ui-shadow-1: 0 1px 2px oklch(0.145 0 0 / 5%);
-  --ui-shadow-2: 0 1px 3px oklch(0.145 0 0 / 6%), 0 10px 26px -16px oklch(0.145 0 0 / 20%);
-  --ui-shadow-3: 0 2px 8px oklch(0.145 0 0 / 7%), 0 22px 54px -22px oklch(0.145 0 0 / 26%);
+  --ui-shadow-2: 0 1px 2px oklch(0.145 0 0 / 5%), 0 4px 12px -8px oklch(0.145 0 0 / 14%);
+  --ui-shadow-3: 0 2px 6px oklch(0.145 0 0 / 6%), 0 14px 32px -18px oklch(0.145 0 0 / 18%);
   --ui-glow: 0 1px 2px oklch(0.145 0 0 / 6%),
     0 10px 22px -12px color-mix(in srgb, var(--ui-primary) 45%, transparent);
   /* 焦点环是整条 box-shadow，不是颜色 —— 组件里用 shadow-focus 工具类引用 */
@@ -350,8 +350,8 @@
   --ui-skeleton-highlight: oklch(0.44 0 0);
 
   --ui-shadow-1: 0 1px 2px oklch(0 0 0 / 40%);
-  --ui-shadow-2: 0 1px 2px oklch(0 0 0 / 40%), 0 12px 28px -18px oklch(0 0 0 / 80%);
-  --ui-shadow-3: 0 2px 10px oklch(0 0 0 / 45%), 0 26px 60px -24px oklch(0 0 0 / 85%);
+  --ui-shadow-2: 0 1px 2px oklch(0 0 0 / 40%), 0 4px 12px -8px oklch(0 0 0 / 55%);
+  --ui-shadow-3: 0 2px 6px oklch(0 0 0 / 45%), 0 14px 32px -18px oklch(0 0 0 / 60%);
   --ui-glow: 0 1px 2px oklch(0 0 0 / 40%), 0 10px 22px -14px oklch(0.623 0.206 255.3 / 50%);
   --ui-focus-ring: 0 0 0 3px oklch(0.623 0.206 255.3 / 30%);
 }
