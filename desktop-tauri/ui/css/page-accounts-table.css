@@ -95,7 +95,10 @@
   top: 0;
   z-index: 2;
   padding: 7px 8px;
-  border-bottom: 1px solid var(--border);
+  /* 结构线用 --border-strong，行分隔用 --hairline：--border 在扁平化里被
+     压到 7% 是给细分隔用的，表头这条要担起「列名 / 数据」的分界，
+     跟着一起淡掉就分不清表头到哪结束了。 */
+  border-bottom: 1px solid var(--border-strong);
   background: var(--table-head-bg);
   color: var(--text-3);
   font-size: 10.5px;

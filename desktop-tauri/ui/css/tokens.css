@@ -53,10 +53,14 @@
   --sidebar-muted: oklch(0.51200 0.02088 261.29);
   --nav-hover: oklch(0.145 0 0 / 5%);
   /* 选中项不用填充块 + 描边（那是一「药丸」按钮的观感），改为极淡中性底
-     + 主色文字，选中状态由左侧主色条承担（见 layout.css 的 .nav-item.active::before）。 */
+     + 主色文字，选中状态由左侧主色条承担（见 layout.css 的 .nav-item.active）。
+     文字取 --primary-fg 而不是 --primary：--primary 在浅色主题下明度 0.60，
+     配 0.92 的侧栏底只有约 3.4:1，达不到正文 4.5:1；--primary-fg（明度 0.48）
+     约 5.4:1。饱和的 --primary 留给左侧那根 2px 色条 —— 色条不需要读文字，
+     用高饱和色反而更醒目。 */
   --nav-selected-bg: oklch(0.145 0 0 / 4%);
   --nav-selected-border: transparent;
-  --nav-selected-fg: var(--primary);
+  --nav-selected-fg: var(--primary-fg);
   --nav-count-bg: oklch(0.84405 0.05294 251.09);
 
   /* 文本三档 */
@@ -166,7 +170,7 @@
   --nav-hover: oklch(1 0 0 / 6%);
   --nav-selected-bg: oklch(1 0 0 / 7%);
   --nav-selected-border: transparent;
-  --nav-selected-fg: var(--primary);
+  --nav-selected-fg: var(--primary-fg);
   --nav-count-bg: oklch(0.43273 0.06483 250.27);
 
   --text: oklch(0.965 0 0);
@@ -238,7 +242,7 @@
     --nav-hover: oklch(1 0 0 / 6%);
     --nav-selected-bg: oklch(1 0 0 / 7%);
     --nav-selected-border: transparent;
-    --nav-selected-fg: var(--primary);
+    --nav-selected-fg: var(--primary-fg);
     --nav-count-bg: oklch(0.43273 0.06483 250.27);
 
     --text: oklch(0.965 0 0);

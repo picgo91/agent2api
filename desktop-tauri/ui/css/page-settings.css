@@ -94,10 +94,15 @@
    一并声明 .active:hover，让悬停选中项时仍保持选中态。 */
 .settings-nav-item.active,
 .settings-nav-item.active:hover {
-  background: var(--primary-soft);
+  background: var(--nav-selected-bg);
   border-color: transparent;
   color: var(--primary-fg);
   font-weight: 600;
+  /* 与主侧栏同一套选中语言：主色文字 + 左侧 2px 主色条。
+     原来这里铺的是 --primary-soft 整块底色，而主侧栏已改成色条 ——
+     两者是同一层级的「我在哪」指示，两处形态不一致会让设置页看着像另一个产品。
+     取色统一走 --nav-selected-* / --primary，令牌改了这里跟着走。 */
+  box-shadow: inset 2px 0 0 var(--primary);
 }
 
 /* ─── 右栏：分类内容 ───

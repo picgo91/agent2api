@@ -114,7 +114,11 @@
   top: 0;
   z-index: 2;
   padding: 8px;
-  border-bottom: 1px solid var(--border);
+  /* 表头与表体之间那条线是**结构线**（不是行分隔线）：它要一眼说清
+     「上面是列名、下面是数据」。--border 在扁平化里被压到 7% 是给
+     行间细分隔用的，拿来当结构线会跟着一起淡掉，所以这里取
+     --border-strong。行内的分隔仍然是 --hairline（5%），主次分明。 */
+  border-bottom: 1px solid var(--border-strong);
   background: var(--table-head-bg);
   color: var(--text-3);
   font-size: 10.5px;

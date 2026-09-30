@@ -54,7 +54,9 @@
   z-index: 1;
   padding-top: 8px;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
+  /* 结构线取 --border-strong（与 .acct-table / .models-table 的表头同一档）：
+     行分隔用 5% 的 --hairline，表头这条要担起「列名 / 数据」的分界。 */
+  border-bottom: 1px solid var(--border-strong);
   background: var(--table-head-bg);
   color: var(--text-3);
   font-size: 11px;
