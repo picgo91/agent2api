@@ -167,21 +167,35 @@
     system-ui, sans-serif;
   --ui-font-mono: Consolas, 'Cascadia Mono', 'Courier New', monospace;
 
-  --ui-background: oklch(1 0 0);
+  /* ── 现代扁平重写（这一组才是页面正文的全部观感）────────────────
+     之前只改了 ui/css/*.css（外壳与旧原生控件），没动这里的取值，于是
+     十个页面的正文看起来原封不动 —— 页面由 ui-kit 组件渲染，而组件吃的是
+     这一组 --ui-* 令牌。规则：
+       · 层级靠**底色差**表达，不靠阴影。三档表面（surface / surface-2 /
+         surface-3）之间只差 2~3% 明度，眼睛读得出「上面一层」但看不到
+         「浮起来」。所有非浮层元件的 shadow-* 一律降为 none。
+       · 描边分两档：--ui-hairline（行间细分隔，5%）与 --ui-border-strong
+         （表头、卡片外沿，10%）。控件自身的描边走 --ui-control-border，
+         比两者略重一点 —— 控件是「可点的东西」，要一眼能和只读区域分开。
+       · 选中态不用整块主色底（那会和按钮抢），用中性底 + 左侧色条
+         （--color-primary-fg 负责文字，色条本身不承载文字所以不需要
+         对比度）。 */
+  --ui-background: oklch(0.988 0.002 286);
   --ui-foreground: oklch(0.145 0 0);
+  /* 卡片比页面底更亮：反向一层，边界靠 --ui-border-strong 而不是投影 */
   --ui-card: oklch(1 0 0);
   --ui-card-foreground: oklch(0.145 0 0);
   --ui-popover: oklch(1 0 0);
   --ui-popover-foreground: oklch(0.145 0 0);
   --ui-primary: oklch(0.603 0.218 257.3);
   --ui-primary-foreground: oklch(1 0 0);
-  --ui-secondary: oklch(0.95 0 0);
+  --ui-secondary: oklch(0.965 0 0);
   --ui-secondary-foreground: oklch(0.42 0.16 250);
-  --ui-muted: oklch(0.97 0 0);
+  --ui-muted: oklch(0.965 0 0);
   --ui-muted-foreground: oklch(0.49 0 0);
-  /* 高亮/选中底 = 主蓝 10% 的 sRGB 淡影（#e5f2ff）；
+  /* 高亮/选中底 = 主蓝 6% 的 sRGB 淡影（#f0f6ff）；
      oklch color-mix 蓝+白会 hue 跑偏成粉，禁用。 */
-  --ui-accent: color-mix(in srgb, var(--ui-primary) 10%, white);
+  --ui-accent: color-mix(in srgb, var(--ui-primary) 6%, white);
   --ui-accent-foreground: oklch(0.145 0 0);
   --ui-destructive: oklch(0.577 0.245 27.325);
   --ui-destructive-foreground: oklch(0.985 0 0);
@@ -193,51 +207,55 @@
   --ui-info-foreground: oklch(0.985 0 0);
   --ui-neutral: oklch(0.708 0 0);
   --ui-neutral-foreground: oklch(0.145 0 0);
-  --ui-border: oklch(0.145 0 0 / 8%);
-  --ui-input: oklch(0.93 0 0);
+  /* 5%：行与行之间的细分隔。这个值再往下调，表格就会散成一片读不下去 */
+  --ui-border: oklch(0.145 0 0 / 7%);
+  --ui-input: oklch(1 0 0);
   --ui-ring: oklch(0.708 0.16 249.003);
 
-  --ui-primary-soft: color-mix(in srgb, var(--ui-primary) 10%, white);
+  --ui-primary-soft: color-mix(in srgb, var(--ui-primary) 6%, white);
   --ui-primary-fg: oklch(0.48 0.2 257.3);
-  --ui-primary-bd: color-mix(in srgb, var(--ui-primary) 28%, white);
+  --ui-primary-bd: color-mix(in srgb, var(--ui-primary) 22%, white);
   --ui-primary-tint: color-mix(in srgb, var(--ui-primary) 16%, transparent);
   --ui-primary-hover: oklch(0.543 0.218 257.3);
   --ui-primary-on: color-mix(in srgb, var(--ui-surface) 8%, white);
   --ui-surface: oklch(1 0 0);
-  --ui-surface-2: oklch(0.9767 0.00265 286.35);
-  --ui-surface-inset: oklch(0.93517 0.00535 286.3);
+  --ui-surface-2: oklch(0.976 0.003 286);
+  --ui-surface-inset: oklch(0.955 0.004 286);
   --ui-raised: oklch(1 0 0);
-  --ui-border-strong: oklch(0.145 0 0 / 14%);
-  --ui-hairline: oklch(0.145 0 0 / 8%);
+  /* 10%：承担「这里是块区域」的结构线（表头下沿、卡片外沿） */
+  --ui-border-strong: oklch(0.145 0 0 / 10%);
+  --ui-hairline: oklch(0.145 0 0 / 5%);
   --ui-mask: color-mix(in srgb, black 46%, transparent);
-  --ui-destructive-soft: color-mix(in srgb, var(--ui-destructive) 10%, white);
-  --ui-destructive-bd: color-mix(in srgb, var(--ui-destructive) 28%, white);
-  --ui-destructive-hover: color-mix(in srgb, var(--ui-destructive) 22%, var(--ui-surface));
-  --ui-success-soft: color-mix(in srgb, var(--ui-success) 10%, white);
-  --ui-success-bd: color-mix(in srgb, var(--ui-success) 28%, white);
+  --ui-destructive-soft: color-mix(in srgb, var(--ui-destructive) 8%, white);
+  --ui-destructive-bd: color-mix(in srgb, var(--ui-destructive) 24%, white);
+  --ui-destructive-hover: color-mix(in srgb, var(--ui-destructive) 18%, var(--ui-surface));
+  --ui-success-soft: color-mix(in srgb, var(--ui-success) 8%, white);
+  --ui-success-bd: color-mix(in srgb, var(--ui-success) 24%, white);
   --ui-warning-soft: color-mix(in srgb, var(--ui-warning) 10%, white);
-  --ui-warning-bd: color-mix(in srgb, var(--ui-warning) 28%, white);
-  --ui-info-soft: color-mix(in srgb, var(--ui-info) 10%, white);
-  --ui-info-bd: color-mix(in srgb, var(--ui-info) 28%, white);
+  --ui-warning-bd: color-mix(in srgb, var(--ui-warning) 26%, white);
+  --ui-info-soft: color-mix(in srgb, var(--ui-info) 8%, white);
+  --ui-info-bd: color-mix(in srgb, var(--ui-info) 24%, white);
   --ui-cn: oklch(0.577 0.245 27.325);
-  --ui-cn-soft: color-mix(in srgb, var(--ui-cn) 10%, white);
-  --ui-cn-bd: color-mix(in srgb, var(--ui-cn) 28%, white);
+  --ui-cn-soft: color-mix(in srgb, var(--ui-cn) 8%, white);
+  --ui-cn-bd: color-mix(in srgb, var(--ui-cn) 24%, white);
   --ui-intl: oklch(0.52 0.16 268);
-  --ui-intl-soft: color-mix(in srgb, var(--ui-intl) 10%, white);
-  --ui-intl-bd: color-mix(in srgb, var(--ui-intl) 28%, white);
+  --ui-intl-soft: color-mix(in srgb, var(--ui-intl) 8%, white);
+  --ui-intl-bd: color-mix(in srgb, var(--ui-intl) 24%, white);
   /* 敏感词命中标签的紫：它是**第三类**状态，不能借用 cn（红，读起来像失败）或
      intl（靛蓝，与「国际版」语义绑着）。取值与 ui/css/page-requests.css 里
      那套手写紫逐字一致 —— 迁移期间两处并存，改一处必须改另一处。 */
   --ui-sensitive: oklch(0.45 0.18 305);
-  --ui-sensitive-soft: oklch(0.55 0.18 305 / 14%);
-  --ui-sensitive-bd: oklch(0.55 0.18 305 / 32%);
-  --ui-control-bg: oklch(0.95815 0 0);
-  --ui-control-hover: oklch(0.93214 0.00536 286.3);
-  --ui-control-border: oklch(0.145 0 0 / 14%);
-  --ui-control-border-hover: oklch(0.145 0 0 / 24%);
-  --ui-surface-3: oklch(0.95 0 0);
+  --ui-sensitive-soft: oklch(0.55 0.18 305 / 12%);
+  --ui-sensitive-bd: oklch(0.55 0.18 305 / 28%);
+  /* 控件底与页面底同白：靠描边而不是靠填充区分「可点」，
+     填色留给 hover 与选中（那时底色才升一档） */
+  --ui-control-bg: oklch(1 0 0);
+  --ui-control-hover: oklch(0.976 0.003 286);
+  --ui-control-border: oklch(0.145 0 0 / 12%);
+  --ui-control-border-hover: oklch(0.145 0 0 / 22%);
+  --ui-surface-3: oklch(0.955 0 0);
   --ui-text-2: oklch(0.37 0 0);
-  --ui-nav-hover: oklch(0.145 0 0 / 5%);
+  --ui-nav-hover: oklch(0.145 0 0 / 4%);
 
   --ui-chart-1: oklch(0.72 0.18 250);
   --ui-chart-2: oklch(0.65 0.15 200);
@@ -248,34 +266,41 @@
   --ui-sidebar-foreground: oklch(0.145 0 0);
   --ui-sidebar-primary: oklch(0.64 0.197 253.892);
   --ui-sidebar-primary-foreground: oklch(1 0 0);
-  --ui-sidebar-accent: color-mix(in srgb, var(--ui-primary) 10%, white);
+  --ui-sidebar-accent: color-mix(in srgb, var(--ui-primary) 6%, white);
   --ui-sidebar-accent-foreground: oklch(0.579 0.196 255.909);
-  --ui-sidebar-border: oklch(0.93 0 0);
+  --ui-sidebar-border: oklch(0.145 0 0 / 7%);
   --ui-sidebar-ring: oklch(0.58 0.2 250);
-  --ui-skeleton-base: oklch(0.97 0 0);
+  --ui-skeleton-base: oklch(0.965 0 0);
   --ui-skeleton-highlight: oklch(0.985 0 0);
 
-  --ui-shadow-1: 0 1px 1px oklch(0.145 0 0 / 3%);
-  --ui-shadow-2: 0 4px 12px -4px oklch(0.145 0 0 / 12%);
-  --ui-shadow-3: 0 12px 32px -12px oklch(0.145 0 0 / 18%);
-  --ui-glow: 0 1px 2px oklch(0.145 0 0 / 6%),
-    0 10px 22px -12px color-mix(in srgb, var(--ui-primary) 45%, transparent);
-  /* 焦点环是整条 box-shadow，不是颜色 —— 组件里用 shadow-focus 工具类引用 */
+  /* 扁平化：shadow-1 / shadow-2 是给「卡片 / 面板」用的，现在一律 none ——
+     层级改由底色差 + 描边承担（见本节开头的规则）。仍引用这两个令牌的
+     组件会拿到 `none`，正是我们要的；真要浮起来的东西（浮层、抽屉、
+     焦点环）走 shadow-3 / glow，不受影响。 */
+  --ui-shadow-1: none;
+  --ui-shadow-2: none;
+  /* shadow-3 保留：菜单、对话框、抽屉这类真浮层仍需要它把「离开页面」讲清楚 */
+  --ui-shadow-3: 0 12px 32px -12px oklch(0.145 0 0 / 16%);
+  --ui-glow: none;
+  /* 焦点环是整条 box-shadow，不是颜色 —— 组件里用 shadow-focus 工具类引用。
+     这是**无障碍设施**，任何情况下都不能跟着扁平化一起去掉 */
   --ui-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ui-primary) 25%, transparent);
 }
 
 :root[data-theme='dark'] {
-  --ui-background: oklch(0.235 0 0);
+  /* 与上面 :root 那一组**逐条对应**（只是深色取值）—— 少改一条就会出现
+     「某档底色没跟着翻」的不对称，比整体偏色更难看出。 */
+  --ui-background: oklch(0.176 0 0);
   --ui-foreground: oklch(0.965 0 0);
-  --ui-card: oklch(0.285 0 0);
+  --ui-card: oklch(0.222 0 0);
   --ui-card-foreground: oklch(0.965 0 0);
-  --ui-popover: oklch(0.305 0 0);
+  --ui-popover: oklch(0.252 0 0);
   --ui-popover-foreground: oklch(0.965 0 0);
   --ui-primary: oklch(0.623 0.206 255.3);
   --ui-primary-foreground: oklch(1 0 0);
-  --ui-secondary: oklch(0.335 0 0);
+  --ui-secondary: oklch(0.29 0 0);
   --ui-secondary-foreground: oklch(0.9 0.05 250);
-  --ui-muted: oklch(0.305 0 0);
+  --ui-muted: oklch(0.262 0 0);
   --ui-muted-foreground: oklch(0.78 0 0);
   /* 深色高亮 = 主色实底（苹果菜单/控件做法），配白字 */
   --ui-accent: var(--ui-primary);
@@ -286,73 +311,73 @@
   --ui-success-foreground: oklch(0.145 0 0);
   --ui-warning: oklch(0.769 0.188 70.08);
   --ui-warning-foreground: oklch(0.145 0 0);
-  --ui-info: oklch(0.613 0.14 239.919);
+  --ui-info: oklch(0.613 0.14 239.916);
   --ui-info-foreground: oklch(0.145 0 0);
   --ui-neutral: oklch(0.76 0 0);
   --ui-neutral-foreground: oklch(0.155 0 0);
-  --ui-border: oklch(1 0 0 / 8%);
-  --ui-input: oklch(1 0 0 / 17%);
+  --ui-border: oklch(1 0 0 / 9%);
+  --ui-input: oklch(1 0 0 / 12%);
   --ui-ring: oklch(0.554 0.148 250.726);
 
   --ui-primary-soft: oklch(0.623 0.206 255.3 / 15%);
   --ui-primary-fg: oklch(0.75 0.12 255.3);
-  --ui-primary-bd: oklch(0.623 0.206 255.3 / 38%);
+  --ui-primary-bd: oklch(0.623 0.206 255.3 / 32%);
   --ui-primary-tint: color-mix(in srgb, var(--ui-primary) 16%, transparent);
   --ui-primary-hover: oklch(0.68 0.206 255.3);
   --ui-primary-on: color-mix(in srgb, var(--ui-surface) 8%, white);
-  --ui-surface: oklch(0.19212 0.00399 286.02);
-  --ui-surface-2: oklch(0.28254 0.00726 285.93);
-  --ui-surface-inset: oklch(0.215 0.005 286);
-  --ui-raised: oklch(0.3 0.005 286);
-  --ui-border-strong: oklch(1 0 0 / 15%);
-  --ui-hairline: oklch(1 0 0 / 9%);
+  --ui-surface: oklch(0.222 0 0);
+  --ui-surface-2: oklch(0.262 0 0);
+  --ui-surface-inset: oklch(0.196 0 0);
+  --ui-raised: oklch(0.252 0 0);
+  --ui-border-strong: oklch(1 0 0 / 13%);
+  --ui-hairline: oklch(1 0 0 / 7%);
   --ui-mask: color-mix(in srgb, black 46%, transparent);
-  --ui-destructive-soft: oklch(0.704 0.191 22.216 / 14%);
-  --ui-destructive-bd: oklch(0.704 0.191 22.216 / 32%);
-  --ui-destructive-hover: color-mix(in srgb, var(--ui-destructive) 22%, var(--ui-surface));
-  --ui-success-soft: oklch(0.696 0.17 162.48 / 14%);
-  --ui-success-bd: oklch(0.696 0.17 162.48 / 32%);
-  --ui-warning-soft: oklch(0.769 0.188 70.08 / 14%);
-  --ui-warning-bd: oklch(0.769 0.188 70.08 / 32%);
-  --ui-info-soft: oklch(0.613 0.14 239.919 / 14%);
-  --ui-info-bd: oklch(0.613 0.14 239.919 / 32%);
+  --ui-destructive-soft: oklch(0.704 0.191 22.216 / 12%);
+  --ui-destructive-bd: oklch(0.704 0.191 22.216 / 28%);
+  --ui-destructive-hover: color-mix(in srgb, var(--ui-destructive) 18%, var(--ui-surface));
+  --ui-success-soft: oklch(0.696 0.17 162.48 / 12%);
+  --ui-success-bd: oklch(0.696 0.17 162.48 / 28%);
+  --ui-warning-soft: oklch(0.769 0.188 70.08 / 12%);
+  --ui-warning-bd: oklch(0.769 0.188 70.08 / 28%);
+  --ui-info-soft: oklch(0.613 0.14 239.916 / 12%);
+  --ui-info-bd: oklch(0.613 0.14 239.916 / 28%);
   --ui-cn: oklch(0.704 0.191 22.216);
-  --ui-cn-soft: oklch(0.704 0.191 22.216 / 14%);
-  --ui-cn-bd: oklch(0.704 0.191 22.216 / 32%);
+  --ui-cn-soft: oklch(0.704 0.191 22.216 / 12%);
+  --ui-cn-bd: oklch(0.704 0.191 22.216 / 28%);
   --ui-intl: oklch(0.68 0.14 268);
-  --ui-intl-soft: oklch(0.68 0.14 268 / 14%);
-  --ui-intl-bd: oklch(0.68 0.14 268 / 32%);
+  --ui-intl-soft: oklch(0.68 0.14 268 / 12%);
+  --ui-intl-bd: oklch(0.68 0.14 268 / 28%);
   --ui-sensitive: oklch(0.82 0.12 305);
-  --ui-sensitive-soft: oklch(0.7 0.16 305 / 16%);
-  --ui-sensitive-bd: oklch(0.7 0.16 305 / 34%);
-  --ui-control-bg: oklch(0.36572 0.0085 285.97);
-  --ui-control-hover: oklch(0.40758 0.00993 285.95);
-  --ui-control-border: oklch(1 0 0 / 15%);
-  --ui-control-border-hover: oklch(1 0 0 / 25%);
-  --ui-surface-3: oklch(0.32737 0.0105 285.81);
+  --ui-sensitive-soft: oklch(0.7 0.16 305 / 14%);
+  --ui-sensitive-bd: oklch(0.7 0.16 305 / 30%);
+  --ui-control-bg: oklch(0.262 0 0);
+  --ui-control-hover: oklch(0.305 0 0);
+  --ui-control-border: oklch(1 0 0 / 13%);
+  --ui-control-border-hover: oklch(1 0 0 / 24%);
+  --ui-surface-3: oklch(0.305 0 0);
   --ui-text-2: oklch(0.85 0 0);
-  --ui-nav-hover: oklch(1 0 0 / 6%);
+  --ui-nav-hover: oklch(1 0 0 / 5%);
 
   --ui-chart-1: oklch(0.76 0.14 250);
   --ui-chart-2: oklch(0.76 0.13 200);
   --ui-chart-3: oklch(0.76 0.13 285);
   --ui-chart-4: oklch(0.75 0.16 325);
   --ui-chart-5: oklch(0.76 0.14 155);
-  --ui-sidebar: oklch(0.225 0 0);
+  --ui-sidebar: oklch(0.196 0 0);
   --ui-sidebar-foreground: oklch(0.95 0 0);
   --ui-sidebar-primary: oklch(0.588 0.123 246.488);
   --ui-sidebar-primary-foreground: oklch(1 0 0);
   --ui-sidebar-accent: oklch(1 0 0 / 9%);
   --ui-sidebar-accent-foreground: var(--ui-primary);
-  --ui-sidebar-border: oklch(1 0 0 / 11%);
+  --ui-sidebar-border: oklch(1 0 0 / 9%);
   --ui-sidebar-ring: oklch(0.7 0.17 250);
-  --ui-skeleton-base: oklch(0.335 0 0);
-  --ui-skeleton-highlight: oklch(0.44 0 0);
+  --ui-skeleton-base: oklch(0.262 0 0);
+  --ui-skeleton-highlight: oklch(0.335 0 0);
 
-  --ui-shadow-1: 0 1px 1px oklch(0 0 0 / 30%);
-  --ui-shadow-2: 0 4px 12px -4px oklch(0 0 0 / 55%);
-  --ui-shadow-3: 0 12px 32px -12px oklch(0 0 0 / 65%);
-  --ui-glow: 0 1px 2px oklch(0 0 0 / 40%), 0 10px 22px -14px oklch(0.623 0.206 255.3 / 50%);
+  --ui-shadow-1: none;
+  --ui-shadow-2: none;
+  --ui-shadow-3: 0 12px 32px -12px oklch(0 0 0 / 60%);
+  --ui-glow: none;
   --ui-focus-ring: 0 0 0 3px oklch(0.623 0.206 255.3 / 30%);
 }
 
@@ -366,18 +391,21 @@
    在白底上几乎看不见 —— 改这里时请整块对照，别只补单个变量。 */
 @media (prefers-color-scheme: dark) {
   :root[data-theme='system'] {
-    --ui-background: oklch(0.235 0 0);
+    /* 与上面 :root 那一组**逐条对应**（只是深色取值）—— 少改一条就会出现
+       「某档底色没跟着翻」的不对称，比整体偏色更难看出。 */
+    --ui-background: oklch(0.176 0 0);
     --ui-foreground: oklch(0.965 0 0);
-    --ui-card: oklch(0.285 0 0);
+    --ui-card: oklch(0.222 0 0);
     --ui-card-foreground: oklch(0.965 0 0);
-    --ui-popover: oklch(0.305 0 0);
+    --ui-popover: oklch(0.252 0 0);
     --ui-popover-foreground: oklch(0.965 0 0);
     --ui-primary: oklch(0.623 0.206 255.3);
     --ui-primary-foreground: oklch(1 0 0);
-    --ui-secondary: oklch(0.335 0 0);
+    --ui-secondary: oklch(0.29 0 0);
     --ui-secondary-foreground: oklch(0.9 0.05 250);
-    --ui-muted: oklch(0.305 0 0);
+    --ui-muted: oklch(0.262 0 0);
     --ui-muted-foreground: oklch(0.78 0 0);
+    /* 深色高亮 = 主色实底（苹果菜单/控件做法），配白字 */
     --ui-accent: var(--ui-primary);
     --ui-accent-foreground: oklch(1 0 0);
     --ui-destructive: oklch(0.704 0.191 22.216);
@@ -386,73 +414,74 @@
     --ui-success-foreground: oklch(0.145 0 0);
     --ui-warning: oklch(0.769 0.188 70.08);
     --ui-warning-foreground: oklch(0.145 0 0);
-    --ui-info: oklch(0.613 0.14 239.919);
+    --ui-info: oklch(0.613 0.14 239.916);
     --ui-info-foreground: oklch(0.145 0 0);
     --ui-neutral: oklch(0.76 0 0);
     --ui-neutral-foreground: oklch(0.155 0 0);
-    --ui-border: oklch(1 0 0 / 8%);
-    --ui-input: oklch(1 0 0 / 17%);
+    --ui-border: oklch(1 0 0 / 9%);
+    --ui-input: oklch(1 0 0 / 12%);
     --ui-ring: oklch(0.554 0.148 250.726);
 
     --ui-primary-soft: oklch(0.623 0.206 255.3 / 15%);
     --ui-primary-fg: oklch(0.75 0.12 255.3);
-    --ui-primary-bd: oklch(0.623 0.206 255.3 / 38%);
+    --ui-primary-bd: oklch(0.623 0.206 255.3 / 32%);
     --ui-primary-tint: color-mix(in srgb, var(--ui-primary) 16%, transparent);
     --ui-primary-hover: oklch(0.68 0.206 255.3);
     --ui-primary-on: color-mix(in srgb, var(--ui-surface) 8%, white);
-    --ui-surface: oklch(0.19212 0.00399 286.02);
-    --ui-surface-2: oklch(0.28254 0.00726 285.93);
-    --ui-surface-inset: oklch(0.215 0.005 286);
-    --ui-raised: oklch(0.3 0.005 286);
-    --ui-border-strong: oklch(1 0 0 / 15%);
-    --ui-hairline: oklch(1 0 0 / 9%);
+    --ui-surface: oklch(0.222 0 0);
+    --ui-surface-2: oklch(0.262 0 0);
+    --ui-surface-inset: oklch(0.196 0 0);
+    --ui-raised: oklch(0.252 0 0);
+    --ui-border-strong: oklch(1 0 0 / 13%);
+    --ui-hairline: oklch(1 0 0 / 7%);
     --ui-mask: color-mix(in srgb, black 46%, transparent);
-    --ui-destructive-soft: oklch(0.704 0.191 22.216 / 14%);
-    --ui-destructive-bd: oklch(0.704 0.191 22.216 / 32%);
-    --ui-destructive-hover: color-mix(in srgb, var(--ui-destructive) 22%, var(--ui-surface));
-    --ui-success-soft: oklch(0.696 0.17 162.48 / 14%);
-    --ui-success-bd: oklch(0.696 0.17 162.48 / 32%);
-    --ui-warning-soft: oklch(0.769 0.188 70.08 / 14%);
-    --ui-warning-bd: oklch(0.769 0.188 70.08 / 32%);
-    --ui-info-soft: oklch(0.613 0.14 239.919 / 14%);
-    --ui-info-bd: oklch(0.613 0.14 239.919 / 32%);
+    --ui-destructive-soft: oklch(0.704 0.191 22.216 / 12%);
+    --ui-destructive-bd: oklch(0.704 0.191 22.216 / 28%);
+    --ui-destructive-hover: color-mix(in srgb, var(--ui-destructive) 18%, var(--ui-surface));
+    --ui-success-soft: oklch(0.696 0.17 162.48 / 12%);
+    --ui-success-bd: oklch(0.696 0.17 162.48 / 28%);
+    --ui-warning-soft: oklch(0.769 0.188 70.08 / 12%);
+    --ui-warning-bd: oklch(0.769 0.188 70.08 / 28%);
+    --ui-info-soft: oklch(0.613 0.14 239.916 / 12%);
+    --ui-info-bd: oklch(0.613 0.14 239.916 / 28%);
     --ui-cn: oklch(0.704 0.191 22.216);
-    --ui-cn-soft: oklch(0.704 0.191 22.216 / 14%);
-    --ui-cn-bd: oklch(0.704 0.191 22.216 / 32%);
+    --ui-cn-soft: oklch(0.704 0.191 22.216 / 12%);
+    --ui-cn-bd: oklch(0.704 0.191 22.216 / 28%);
     --ui-intl: oklch(0.68 0.14 268);
-    --ui-intl-soft: oklch(0.68 0.14 268 / 14%);
-    --ui-intl-bd: oklch(0.68 0.14 268 / 32%);
+    --ui-intl-soft: oklch(0.68 0.14 268 / 12%);
+    --ui-intl-bd: oklch(0.68 0.14 268 / 28%);
     --ui-sensitive: oklch(0.82 0.12 305);
-    --ui-sensitive-soft: oklch(0.7 0.16 305 / 16%);
-    --ui-sensitive-bd: oklch(0.7 0.16 305 / 34%);
-    --ui-control-bg: oklch(0.36572 0.0085 285.97);
-    --ui-control-hover: oklch(0.40758 0.00993 285.95);
-    --ui-control-border: oklch(1 0 0 / 15%);
-    --ui-control-border-hover: oklch(1 0 0 / 25%);
-    --ui-surface-3: oklch(0.32737 0.0105 285.81);
+    --ui-sensitive-soft: oklch(0.7 0.16 305 / 14%);
+    --ui-sensitive-bd: oklch(0.7 0.16 305 / 30%);
+    --ui-control-bg: oklch(0.262 0 0);
+    --ui-control-hover: oklch(0.305 0 0);
+    --ui-control-border: oklch(1 0 0 / 13%);
+    --ui-control-border-hover: oklch(1 0 0 / 24%);
+    --ui-surface-3: oklch(0.305 0 0);
     --ui-text-2: oklch(0.85 0 0);
-    --ui-nav-hover: oklch(1 0 0 / 6%);
+    --ui-nav-hover: oklch(1 0 0 / 5%);
 
     --ui-chart-1: oklch(0.76 0.14 250);
     --ui-chart-2: oklch(0.76 0.13 200);
     --ui-chart-3: oklch(0.76 0.13 285);
     --ui-chart-4: oklch(0.75 0.16 325);
     --ui-chart-5: oklch(0.76 0.14 155);
-    --ui-sidebar: oklch(0.225 0 0);
+    --ui-sidebar: oklch(0.196 0 0);
     --ui-sidebar-foreground: oklch(0.95 0 0);
     --ui-sidebar-primary: oklch(0.588 0.123 246.488);
     --ui-sidebar-primary-foreground: oklch(1 0 0);
     --ui-sidebar-accent: oklch(1 0 0 / 9%);
     --ui-sidebar-accent-foreground: var(--ui-primary);
-    --ui-sidebar-border: oklch(1 0 0 / 11%);
+    --ui-sidebar-border: oklch(1 0 0 / 9%);
     --ui-sidebar-ring: oklch(0.7 0.17 250);
-    --ui-skeleton-base: oklch(0.335 0 0);
-    --ui-skeleton-highlight: oklch(0.44 0 0);
+    --ui-skeleton-base: oklch(0.262 0 0);
+    --ui-skeleton-highlight: oklch(0.335 0 0);
 
-    --ui-shadow-1: 0 1px 1px oklch(0 0 0 / 30%);
-    --ui-shadow-2: 0 4px 12px -4px oklch(0 0 0 / 55%);
-    --ui-shadow-3: 0 12px 32px -12px oklch(0 0 0 / 65%);
-    --ui-glow: 0 1px 2px oklch(0 0 0 / 40%), 0 10px 22px -14px oklch(0.623 0.206 255.3 / 50%);
+    --ui-shadow-1: none;
+    --ui-shadow-2: none;
+    --ui-shadow-3: 0 12px 32px -12px oklch(0 0 0 / 60%);
+    --ui-glow: none;
     --ui-focus-ring: 0 0 0 3px oklch(0.623 0.206 255.3 / 30%);
+
   }
 }
