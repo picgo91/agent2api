@@ -56,15 +56,19 @@ const altchaWidget = React.createElement('altcha-widget', {
 function LoginPage() {
   return (
     <div className='w-[min(400px,100%)] rounded-lg border border-border bg-card p-[36px_34px_30px] shadow-3'>
-      {/* 品牌标与桌面端 / 面板侧栏同一造型（icons.js 的 brand 项），底色是品牌色常量而非主题令牌 */}
+      {/* 品牌标与桌面端 / 面板侧栏同一造型（icons.js 的 brand 项）。
+          底色写死 #2563eb 而不取 var(--ui-primary)：本页 html 固定 data-theme="dark"
+          （login.html:2），跟主题走会拿到深色档 #60a5fa，白箭头对比度只有 2.54 ——
+          实底色块不随主题翻转，取浅色档 #2563eb（5.17，达AA）。理由同 icons.js 的
+          brand 项，那边还要额外与应用图标保持一致。 */}
       <div className='mb-[26px] flex flex-col items-center gap-3 text-center'>
         <svg
           viewBox='0 0 24 24'
           role='img'
           aria-label='Agent2API'
-          className='size-[52px] rounded-[12px] shadow-[0_6px_18px_rgba(0,122,255,0.35)]'
+          className='size-[52px] rounded-[12px] shadow-[0_6px_18px_rgba(37,99,235,0.35)]'
         >
-          <rect width='24' height='24' rx='5.4' fill='#007AFF' />
+          <rect width='24' height='24' rx='5.4' fill='#2563eb' />
           <g fill='none' stroke='#fff' strokeWidth='2.2' strokeLinecap='round' strokeLinejoin='round'>
             <path d='M5.23 9.24h10.71' />
             <path d='M15.94 6.72 18.77 9.24 15.94 11.76' />

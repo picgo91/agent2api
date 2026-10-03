@@ -27,7 +27,9 @@ if (!pattern) {
 }
 const limit = Number(limitArg) || 20
 
-const DEFAULT_EXT = /\.(tsx?|css|html|json|md|rs|yml|yaml|js)$/i
+// `.mjs` / `.cjs` 必须显式列出：`js$` 前面要求一个**字面点号**，
+// 而 "make-icon.mjs" 的 "js" 前面是 "m"，不写进去整个 build/ 目录就是隐形的
+const DEFAULT_EXT = /\.(tsx?|mjs|cjs|cts|mts|css|html|json|md|rs|yml|yaml|js)$/i
 const SKIP_DIR = /(^|[\\/])(node_modules|target|dist|\.git)([\\/]|$)/
 /** 构建产物：搜源码时默认排除。
  *  **显式传了子目录就不排除** —— 否则 `find.mjs "x" 5 ui/islands` 会扫到 0 个文件，

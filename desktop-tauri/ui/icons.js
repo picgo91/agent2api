@@ -146,11 +146,17 @@
      * 换算到 24 画布，两处形状严格一致（换算：x24 = (x归一化 - 0.5) × 24 + 12）：
      *   横杆粗细 2×0.046×24 ≈ 2.2，箭头张开的半高 0.105×24 ≈ 2.5。
      *
-     * 颜色不用 currentColor 而写死 #007AFF：这枚标要与 .ico/.png 应用图标
-     * 一模一样，而主题里的 --primary 在深浅两套下取值不同（深色主题会偏亮），
+     * 颜色不用 currentColor 而写死 #2563eb：这枚标要与登录页的品牌块
+     * （ui-islands/src/islands/login-page.tsx）一模一样，而主题里的 --primary
+     * 在深浅两套下取值不同（深色档 #60a5fa 白箭头对比度只有 2.54、不可用），
      * 跟着它走就不再是同一枚图标了。箭头同理写死纯白。
+     *
+     * #2563eb = 令牌 --ui-primary 的浅色档（oklch(0.5461 0.2152 262.88)）落成的
+     * sRGB，即令牌层注释里说的「实底取渐变深端以保证白字对比度」，白字 5.17 达 AA。
+     * 注意 build/make-icon.mjs 画的 .ico/.png 应用图标仍是旧的苹果蓝 #007AFF：
+     * 那条链路是构建时生成二进制、不在本仓库提交，本次只统一网页内的两处。
      */
-    brand: '<rect width="24" height="24" rx="5.4" fill="#007AFF"/>'
+    brand: '<rect width="24" height="24" rx="5.4" fill="#2563eb"/>'
       + '<g fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
       + '<path d="M5.23 9.24h10.71"/>'
       + '<path d="M15.94 6.72 18.77 9.24 15.94 11.76"/>'

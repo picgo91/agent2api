@@ -247,12 +247,18 @@ function renderCheckResult(): void {
   } else if (info.hasUpdate === false) {
     setBadge('已是最新', 'ok')
     setState(`当前已是最新版本（${info.currentVersion}）。${at}`)
-  } else {
-    // hasUpdate 为 null：版本号无法比较（本地是开发版或 tag 非语义化）
+  } else if (info.latestVersion) {
+    // 真的有 release、但两边版本号至少一边解析不出来 —— 这才是「无法比较」。
+    // 典型：本地是开发版（0.0.0 之类）或 tag 不是 vX.Y.Z。
     setBadge('无法比较', 'warn')
-    setState(info.latestVersion
-      ? `最新发布版本为 ${info.latestVersion}，但当前版本号「${info.currentVersion || '未知'}」无法解析，未做新旧判断。${at}`
-      : `仓库暂无发布版本。${at}`)
+    setState(`最新发布版本为 ${info.latestVersion}，但当前版本号「${info.currentVersion || '未知'}」无法解析，未做新旧判断。${at}`)
+  } else {
+    // 上游一个 Release 都还没有。这是「没有可比的东西」，不是「比较失败」——
+    // 仓库刚建、还没发第一版时就是这个状态。挂 warn 会让人以为检查坏了，
+    // 而后端把 404 按「无更新」处理本来就是有意为之（见 check.rs 的 fetch_release）。
+    // 所以用中性语气（''），跟「未检查」一致。
+    setBadge('暂无发布版本')
+    setState(`仓库暂无发布版本，当前版本 ${info.currentVersion || '未知'}。${at}`)
   }
 }
 
