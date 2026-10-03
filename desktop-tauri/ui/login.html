@@ -30,13 +30,21 @@
       box-sizing: border-box;
       min-height: 100vh;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      /* 居中交给卡片自己的 margin: auto（见 .login-card），这里不用 align-items: center。
+         卡片连 altcha 约 480px 高，视口比它矮时（矮窗口 / 手机横屏）align-items: center
+         会把顶部溢出裁掉且滚不出来 —— flexbox 居中的经典问题。auto 边距在放不下时
+         自动退回 flex-start，顶部始终可达。 */
       padding: 24px;
       font: 14px/1.6 var(--ui-font-sans, system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif);
       color: var(--ui-foreground);
       background: var(--page-backdrop);
-      overflow: hidden;
+      /* 只裁横向，用 clip 而不是 hidden —— hidden 会把纵向滚动也一起关掉：
+         卡片连 altcha 在内约 480px 高，视口比它矮时（矮窗口 / 手机横屏）内容
+         被裁掉且滚不出来。这是照搬参考页带进来的实际缺陷，不是它的设计意图。
+         横向确实要挡：卡片那圈 0 32px 80px 的大投影在窄屏会溢出视口约 48px。
+         选 clip 而非 hidden 是因为 clip 不创建滚动容器，position: fixed 的氛围层
+         仍相对视口定位，行为与原先一致。 */
+      overflow-x: clip;
     }
 
     /* ── 氛围层三件（都 fixed + pointer-events:none，不吃点击、不参与布局）────
@@ -95,6 +103,10 @@
        卡片一旦全不透明，下面的 backdrop-blur 就没东西可 blur，毛玻璃整个失效。
        这里用原生 color-mix 绕过；其余卡片属性仍由岛里的工具类给。 */
     .login-card {
+      /* 双轴 auto 边距居中：放得下就居中，放不下退回 flex-start（顶部不会被裁）。
+         顺带说明 auto 边距在交叉轴上会抑制 flex 的默认 align-items: stretch，
+         所以删掉 body 的 align-items 之后卡片高度不会被拉满。 */
+      margin: auto;
       background: color-mix(in srgb, var(--ui-card) 95%, transparent);
     }
 
@@ -167,9 +179,11 @@
     altcha-widget .altcha-label label { margin: 0; font-size: 13px; color: inherit; }
     altcha-widget div:has(> .altcha-logo) { display: none; }
 
-    /* 窄屏：参考页在 480px 断点收窄卡片内边距与图标尺寸。 */
+    /* 窄屏：参考页在 480px 断点收窄留白。原来的 align-items: flex-start + padding-top:10vh
+       已随「居中改用 auto 边距」一起去掉 —— 居中现在由 .login-card 的 margin:auto 统一
+       负责，各断点行为一致，不必再按宽度改写居中方式。 */
     @media (max-width: 480px) {
-      body { padding: 16px; align-items: flex-start; padding-top: 10vh; }
+      body { padding: 16px; }
     }
     /* 动效降级：装饰层与入场动画都无信息量，关掉不影响任何操作。 */
     @media (prefers-reduced-motion: reduce) {
