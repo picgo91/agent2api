@@ -507,6 +507,5 @@
     --ui-shadow-lift: 0 12px 30px -18px oklch(0 0 0 / 60%);
     --ui-glow: 0 6px 16px -8px oklch(0.7137 0.1434 254.62 / 45%);
     --ui-focus-ring: 0 0 0 4px oklch(0.7137 0.1434 254.62 / 35%);
-
   }
 }
