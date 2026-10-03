@@ -1,15 +1,26 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Agent2API · 登录</title>
-  <!-- 组件库产物（ui-kit + Tailwind，由 ui-islands 构建）：与主面板同一份。
-       页面外壳的取值也改走它的 --ui-* 令牌，不再自己硬编码一套深色变量。 -->
+  <!-- data-theme 由 dark 改成 light：改成参考页那种「深底 + 白卡」之后，卡片上的文字
+       必须走浅色档令牌 —— 深色档 --ui-muted-foreground 是 oklch(0.7107 0.0351 256.79)
+       ≈ #94a3b8，印在白卡上对比度只有 2.56（实测），会看不清。
+       整页底色仍是深色，但那由 body 自己显式给值（见 style 里的 --page-backdrop），
+       不经令牌，所以「页底深 / 卡片浅」不冲突。组件库产物与主面板同一份。 -->
   <link rel="stylesheet" href="islands/ui.css">
   <style>
-    /* 样式表里只留 html/body 与第三方 widget 的样式：卡片、品牌区、表单都由 React 岛
-       （ui-islands/src/islands/login-page.tsx）用组件库的工具类渲染。 */
+    /* 页面级样式：整页底色与三个装饰层（参考 admin.aook.eu.org/login 的氛围层）。
+       卡片、品牌区、表单仍由 React 岛用组件库工具类渲染，不在这里写。 */
+
+    /* 整页底色。**刻意不走令牌**：这一页的 data-theme 是 light（卡片要白底浅色档文字），
+       --ui-background 取到的是浅色档 ≈ #f9fafb，拿不到深底。
+       这里写字面量而不是留令牌空缺，是因为实测参考页的 #0f172a 与本项目**深色档**
+       --ui-background（oklch(0.2077 0.0398 265.75)）转出来逐位相同、两者对比度 1.000，
+       所以这个值就是「深色档底色」，只是本页的令牌档位被卡片需求占用后才显式写出。 */
+    :root { --page-backdrop: #0f172a; }
+
     body {
       /* margin: 0 与 box-sizing 是原先那条 `* { margin:0; padding:0; box-sizing:border-box }`
          全局重置的遗留：组件库的产物刻意不含 preflight（见 index.html 里 ui.css 那条注释），
@@ -24,15 +35,116 @@
       padding: 24px;
       font: 14px/1.6 var(--ui-font-sans, system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif);
       color: var(--ui-foreground);
-      /* 顶部主色光晕 + 页面底色：原独立页那层深蓝渐变的等价物，取值改走令牌 */
-      background: radial-gradient(1200px 600px at 50% -10%,
-        color-mix(in srgb, var(--ui-primary) 26%, var(--ui-background)) 0%,
-        var(--ui-background) 55%);
+      background: var(--page-backdrop);
+      overflow: hidden;
     }
+
+    /* ── 氛围层三件（都 fixed + pointer-events:none，不吃点击、不参与布局）────
+       色相按本项目品牌蓝重映射，未照抄参考页的靛/紫：参考页 ambient 是
+       indigo→violet，落在蓝 500 的卡片后面会带出紫色偏色，与全站蓝色主色打架。
+       这里保留它的结构（四团径向渐变 + 网格 + 三个漂浮光球），
+       色相换成品牌蓝族，透明度沿用参考页的量级。 */
+    .bg-animated {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse at 20% 50%, rgba(37,99,235,0.25) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(99,102,241,0.20) 0%, transparent 50%),
+        radial-gradient(ellipse at 60% 80%, rgba(59,130,246,0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 40% 10%, rgba(14,165,233,0.10) 0%, transparent 40%);
+      animation: bgShift 12s ease-in-out infinite alternate;
+    }
+    @keyframes bgShift {
+      0%   { background-position: 0% 0%, 100% 0%, 50% 100%, 0% 0%; }
+      100% { background-position: 100% 100%, 0% 100%, 100% 0%, 100% 100%; }
+    }
+
+    .grid-overlay {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.03;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    .orb {
+      position: fixed; z-index: 0; pointer-events: none;
+      border-radius: 50%; filter: blur(60px);
+    }
+    .orb-1 { width: 300px; height: 300px; background: rgba(37,99,235,0.30); top: 10%; left: -5%; animation: float1 8s ease-in-out infinite; }
+    .orb-2 { width: 250px; height: 250px; background: rgba(99,102,241,0.25); bottom: 15%; right: -5%; animation: float2 10s ease-in-out infinite; }
+    .orb-3 { width: 200px; height: 200px; background: rgba(59,130,246,0.20); top: 60%; left: 40%; animation: float3 9s ease-in-out infinite; }
+    @keyframes float1 {
+      0%,100% { transform: translate(0,0) scale(1); }
+      33%     { transform: translate(30px,-20px) scale(1.1); }
+      66%     { transform: translate(-20px,10px) scale(0.9); }
+    }
+    @keyframes float2 {
+      0%,100% { transform: translate(0,0) scale(1); }
+      50%     { transform: translate(-30px,-30px) scale(1.15); }
+    }
+    @keyframes float3 {
+      0%,100% { transform: translate(0,0); }
+      50%     { transform: translate(25px,15px); }
+    }
+
+    /* 卡片底色。**必须走普通 CSS，不能用 Tailwind 的 `bg-card/95` 或
+       `bg-[color-mix(in_srgb,var(--ui-card)_95%,transparent)]`** ——
+       两种写法构建后都被压成 `background-color:var(--ui-card)`（本轮实测，
+       alpha 那一段被丢掉）：@theme inline 映射的 --color-card 直接指向
+       var(--ui-card)、没有 <alpha-value> 占位，Tailwind 压根加不上透明度。
+       卡片一旦全不透明，下面的 backdrop-blur 就没东西可 blur，毛玻璃整个失效。
+       这里用原生 color-mix 绕过；其余卡片属性仍由岛里的工具类给。 */
+    .login-card {
+      background: color-mix(in srgb, var(--ui-card) 95%, transparent);
+    }
+
+    /* 卡片入场。参考页是 .login-container 上的 cardIn（淡入 + 上移 + 轻微放大），
+       挂在容器上而不是卡片本身 —— 岛渲染出的根节点就是卡片，挂它即可。 */
+    #login-app > * { animation: cardIn 0.7s ease; }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(30px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* 错误行抖动。**只在有文案时触发**：#error 由底部脚本填 textContent，
+       空节点也要占位（min-h-5 在岛里给），所以用 :not(:empty) 挂动画 ——
+       脚本一填文案就抖一次，重复提交失败会重新抖。 */
+    #error:not(:empty) { animation: shake 0.5s ease-in-out; }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      25%     { transform: translateX(-8px); }
+      75%     { transform: translateX(8px); }
+    }
+
     /* 挂载点自身不生成盒子：卡片直接作为 body 的 flex 子项参与居中（与主面板的 .island
        同一手法）—— 中间多一层 div 的话，卡片的 min(400px,100%) 会按那一层的收缩宽度
        计算，窄窗口下就偏了 */
     #login-app { display: contents; }
+
+    /* 品牌标的光环与脉冲：参考页把这两圈效果画在 .icon-ring / .icon-circle 上，
+       形状随尺寸变（inset -6px / border-radius 22px），这里跟登录页实际的 52px 标对齐。 */
+    .brand-mark { position: relative; display: inline-flex; }
+    .brand-mark::before {
+      content: ""; position: absolute; inset: -6px;
+      border-radius: 18px; border: 2px solid rgba(37,99,235,0.20);
+      animation: ringSpin 4s linear infinite; pointer-events: none;
+    }
+    @keyframes ringSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .brand-mark::after {
+      content: ""; position: absolute; inset: 0;
+      border-radius: 12px; animation: markPulse 3s ease-in-out infinite; pointer-events: none;
+    }
+    @keyframes markPulse {
+      0%,100% { box-shadow: 0 6px 18px rgba(37,99,235,0.35); }
+      50%     { box-shadow: 0 6px 34px rgba(37,99,235,0.55); }
+    }
+
+    /* 输入框聚焦时左侧图标跟着变主色。参考页是 .form-group:focus-within > i，
+       这里岛里用 InputGroup（有 data-slot="input-group"）承载，规则挂在该属性上。 */
+    [data-slot='input-group']:focus-within [data-slot='input-group-addon'] {
+      color: var(--ui-primary);
+    }
+
     /* 第三方 widget 的内部 DOM 沿用旧页那条 `* { box-sizing; margin: 0; padding: 0 }`
        重置：全局那条已随本次改写删掉（组件库的工具类是分层 + !important 的，未分层的
        全局重置将来会和它打架），这里按 widget 子树重新圈定范围，观感与迁移前逐字一致。
@@ -43,7 +155,9 @@
        ② label 钉住度量：这条原本是为了盖过登录页那条全局 label 规则（margin
           14px 0 5px 与灰色会把「我不是机器人」压下去、变灰），全局规则已随本次
           改写删掉，保留本行只为让这一块的观感与迁移前逐字一致；
-       ③ 隐藏品牌 footer（altcha.org 外链，与 OmniProxy 的取用方式一致）。 */
+       ③ 隐藏品牌 footer（altcha.org 外链，与 OmniProxy 的取用方式一致）。
+       color: inherit 现在继承的是白卡上的深色文字（原先是深卡上的浅色），
+       「我不是机器人」这行标签的可读性反而更接近官方默认形态。 */
     /* 组件只在开启校验时占位：校验关闭后它被隐藏，margin 会随 display:none
        一起消失，与按钮之间的间距改由 #submit 自己的 margin-top 撑住
        （两侧各 20px，开关前后视觉一致） */
@@ -52,9 +166,28 @@
     altcha-widget .altcha { width: fit-content; max-width: 100%; margin: 0 auto; box-sizing: border-box; }
     altcha-widget .altcha-label label { margin: 0; font-size: 13px; color: inherit; }
     altcha-widget div:has(> .altcha-logo) { display: none; }
+
+    /* 窄屏：参考页在 480px 断点收窄卡片内边距与图标尺寸。 */
+    @media (max-width: 480px) {
+      body { padding: 16px; align-items: flex-start; padding-top: 10vh; }
+    }
+    /* 动效降级：装饰层与入场动画都无信息量，关掉不影响任何操作。 */
+    @media (prefers-reduced-motion: reduce) {
+      .bg-animated, .orb, #login-app > *, #error:not(:empty), .brand-mark::before, .brand-mark::after {
+        animation: none;
+      }
+    }
   </style>
 </head>
 <body>
+  <!-- 氛围层：固定定位 + pointer-events:none，只画背景不吃点击。
+       aria-hidden 是因为三者在纯装饰，读屏软件不必念。 -->
+  <div class='bg-animated' aria-hidden='true'></div>
+  <div class='grid-overlay' aria-hidden='true'></div>
+  <div class='orb orb-1' aria-hidden='true'></div>
+  <div class='orb orb-2' aria-hidden='true'></div>
+  <div class='orb orb-3' aria-hidden='true'></div>
+
   <!-- 整页界面由 React 岛渲染（ui-islands/src/islands/login-page.tsx，随 islands/ui.js
        一起加载；岛直接渲染卡片本身，不在这里写静态骨架）。
        这个 <script> 必须排在 #login-app 之后、且不能加 defer/async：下面那段登录脚本
