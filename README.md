@@ -91,7 +91,7 @@ print(resp.choices[0].message.content)
 ```bash
 docker run -d --name agent2api --restart unless-stopped \
   -p 3065:3065 -v ./data:/data \
-  picgo91/agent2api:latest
+  anwang520/agent2api:latest
 ```
 
 浏览器打开 `http://<主机>:3065`，首次进入会引导**注册管理员账号**（后续登录用它）；登录后在「网关 Key」页创建一把 API Key 给客户端用 —— `http://<主机>:3065/v1` 即 OpenAI 兼容端点，未建 Key 前拒绝转发，建第一把后自动恢复。所有状态（SQLite 库 / 配置 / 日志）都落在 `./data` 一个卷里。
@@ -101,7 +101,7 @@ compose 用户（`docker-compose.yml` 全文就这么多；amd64 / arm64 都有�
 ```yaml
 services:
   agent2api:
-    image: picgo91/agent2api:latest
+    image: anwang520/agent2api:latest
     container_name: agent2api
     restart: unless-stopped
     ports:

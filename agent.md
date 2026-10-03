@@ -45,7 +45,14 @@ git push origin vX.Y.Z
 | 工作流 | 产出 | 说明 |
 |---|---|---|
 | `build.yml`（build） | Windows NSIS 安装包 + macOS universal dmg | `macos` / `windows` 两个 job 构建并上传 artifact（macOS 包**只能在 CI 构建**，无法从 Windows 交叉编译）；安装包只挂 artifact，GitHub Release 由本地脚本挂载（见第 4 节） |
-| `docker.yml`（docker） | Docker Hub `picgo91/agent2api:<版本>` + `:latest`（amd64 / arm64 双架构） | 手动 `workflow_dispatch` 触发时只出 `:dev` 测试 tag，不碰正式 tag |
+| `docker.yml`（docker） | Docker Hub `anwang520/agent2api:<版本>` + `:latest`（amd64 / arm64 双架构） | 手动 `workflow_dispatch` 触发时只出 `:dev` 测试 tag，不碰正式 tag |
+
+> **Docker Hub 账号 ≠ GitHub org。** 本项目 GitHub 在 `picgo91/agent2api`，但镜像推在
+> `anwang520/agent2api`（`docker.yml` 的 `IMAGE` 取 `${{ secrets.DOCKERHUB_USERNAME }}`，
+> 分叉时从上游写死的 `picgo91/agent2api` 改过来的）。两者都长得像 `owner/repo`，
+> 按 GitHub org 名去改文档就会写出一个**根本不存在**的镜像地址 —— `docker pull` 直接失败。
+> 改这类地址前先查一次真实存在性：`curl -s -o /dev/null -w '%{http_code}'
+> https://hub.docker.com/v2/repositories/<ns>/agent2api/tags`，404 就是不存在。
 
 跟踪进度（手动跑 gh 前要先设代理，见第 6 节）：
 
@@ -71,7 +78,7 @@ bash scripts/release.sh vX.Y.Z <run-id>   # 或显式指定 run
 ## 5. 验收清单（三处核对）
 
 - [ ] GitHub Release：`gh release view vX.Y.Z`（手动跑 gh 前先设代理，见第 6 节）—— 正文日志齐全，exe / dmg 两个附件都在；
-- [ ] Docker Hub：`picgo91/agent2api` 的 Tags 页出现 `<版本>` 与 `latest`，Pushed 时间一致；
+- [ ] Docker Hub：`anwang520/agent2api` 的 Tags 页出现 `<版本>` 与 `latest`，Pushed 时间一致；
 - [ ] 安装包「关于」页版本号与 tag 一致。
 
 ## 6. 已知坑与排查

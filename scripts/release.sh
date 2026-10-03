@@ -87,5 +87,5 @@ fi
 echo
 echo "发版收尾完成。核对："
 echo "  [1] GitHub Release:  gh release view $TAG"
-echo "  [2] Docker Hub:      https://hub.docker.com/r/aimodcc/agent2api/tags （$TAG 版本号 + latest）"
+echo "  [2] Docker Hub:      https://hub.docker.com/r/anwang520/agent2api/tags （$TAG 版本号 + latest）"
 echo "  [3] 安装包「关于」页版本号与 $TAG 一致"
