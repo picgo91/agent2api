@@ -1,6 +1,6 @@
 [package]
 name = "workbuddy-proxy-desktop"
-version = "2.9.5"
+version = "2.9.6"
 description = "AIapi 桌面端 — 多提供商本地网关与会话管理"
 authors = ["picgo91"]
 edition = "2021"
