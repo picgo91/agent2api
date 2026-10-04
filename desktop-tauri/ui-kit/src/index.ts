@@ -1,5 +1,5 @@
 /**
- * @agent2api/ui —— 项目私有组件库。
+ * @aiapi/ui —— 项目私有组件库。
  *
  * 源码随仓库维护（不走 npm 发布），消费方是 desktop-tauri/ui-islands；
  * 样式入口见 styles/globals.css，消费方必须配 @source 扫描本目录。

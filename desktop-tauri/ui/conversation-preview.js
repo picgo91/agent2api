@@ -1,4 +1,4 @@
-/* Agent2API · 「预览对话」的纯渲染（请求 / 响应原文 → 对话气泡 HTML） */
+/* AIapi · 「预览对话」的纯渲染（请求 / 响应原文 → 对话气泡 HTML） */
 /* global wbApp, wbMarkdown */
 
 /**

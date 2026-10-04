@@ -99,7 +99,7 @@ pub async fn ensure_ready(app: &AppHandle) -> Result<(), StartupFailure> {
     // Err（防御性校验，见那边的注释）—— 继续下去会把新配置目录建出来，
     // 让迁移永远无法重试，所以这里必须中断而不是带着错误往下走。
     // 桌面形态永远只听本机回环：管理 API 不出 127.0.0.1（headless 形态
-    // 由 agent2api-server 二进制按 AGENT2API_HOST 自行决定监听地址）。
+    // 由 aiapi-server 二进制按 AIAPI_HOST 自行决定监听地址）。
     let state = server::ServerState::bootstrap(port, std::net::IpAddr::from([127, 0, 0, 1]))
         .map_err(StartupFailure::other)?;
 

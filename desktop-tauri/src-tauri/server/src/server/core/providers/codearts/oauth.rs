@@ -804,7 +804,7 @@ mod tests {
     ///
     /// 默认不跑（`#[ignore]`），要手工开：
     /// ```bash
-    /// cargo test -p agent2api-server codearts -- --ignored --nocapture
+    /// cargo test -p aiapi-server codearts -- --ignored --nocapture
     /// ```
     ///
     /// 期望结论（2026-09-26 实测）：**HTTP 400 `STS5.1806` `invalid refresh token:

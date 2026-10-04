@@ -251,7 +251,7 @@ pub fn safe_file_name(name: &str) -> String {
     if cleaned.is_empty() {
         // 兜底名也要带本平台的后缀：下游 `verify_installer` 会校验后缀，
         // 给一个错后缀的兜底名等于把「资产名异常」变成「装不了」
-        format!("agent2api-update.{}", installer_suffix())
+        format!("aiapi-update.{}", installer_suffix())
     } else {
         cleaned.to_string()
     }

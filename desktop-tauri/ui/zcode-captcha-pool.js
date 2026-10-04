@@ -1,4 +1,4 @@
-/* Agent2API · ZCode 活动套餐通道的**验证码令牌池守卫**
+/* AIapi · ZCode 活动套餐通道的**验证码令牌池守卫**
 
    ── 它解决的是什么（一句话）───────────────────────────────────
    ZCode 的「活动套餐」额度只从 `POST /api/v1/zcode-plan/anthropic/v1/messages`

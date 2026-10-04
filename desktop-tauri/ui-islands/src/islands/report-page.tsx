@@ -13,7 +13,7 @@ import {
 } from './report-charts'
 
 /**
- * Agent2API · 报表页（时间范围 / 统计概览 / 两张排行 / 两张环形图 / 热力图 / 缓存命中率 /
+ * AIapi · 报表页（时间范围 / 统计概览 / 两张排行 / 两张环形图 / 热力图 / 缓存命中率 /
  * 两条趋势）—— React 岛，替换 ui/report.js。
  *
  * 对外接口与原实现**完全一致**（见文件末尾）：`window.wbReport = { load, render,

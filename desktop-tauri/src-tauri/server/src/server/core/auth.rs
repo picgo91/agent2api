@@ -660,7 +660,7 @@ impl AuthService {
 /// 把路径分隔符统一成 Windows 形态（`C:/a/b` → `C:\a\b`）。
 ///
 /// `PathBuf::to_string_lossy` 在 Windows 上给的是 `C:\a\b`，但 config_dir 可能是
-/// 从环境变量（AGENT2API_PROXY_HOME，旧名 WORKBUDDY_PROXY_HOME 仍可读）拼出来的
+/// 从环境变量（AIAPI_PROXY_HOME，旧名 WORKBUDDY_PROXY_HOME 仍可读）拼出来的
 /// 正斜杠形式。这个串会显示给用户、也会被壳侧用来打开目录，统一成 Node 的
 /// `path.join` 输出形态最不容易出错。
 fn normalize_display_path(path: &str) -> String {

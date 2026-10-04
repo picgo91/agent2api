@@ -78,7 +78,7 @@ pub fn file_path() -> PathBuf {
 
 /// 旧设置文件的路径（迁移项与回落读路径共用）。
 pub(crate) fn legacy_file_path() -> PathBuf {
-    agent2api_server::paths::legacy_desktop_settings_file()
+    aiapi_server::paths::legacy_desktop_settings_file()
 }
 
 /// 应用设置。
@@ -158,6 +158,6 @@ pub fn save(settings: &AppSettings) -> Result<(), String> {
 }
 
 // 注：旧文件迁移用的三个辅助（读原文 / 解析校验 / 写库）已随网关本体迁到
-// 独立 crate（`agent2api_server::server::db::migrate::settings` 本地实现），
+// 独立 crate（`aiapi_server::server::db::migrate::settings` 本地实现），
 // 其中解析校验用的 `LegacyAppSettings` 是 `AppSettings` 的镜像 —— **本结构
 // 增删字段时必须同步那边**，两边注释互相指向。

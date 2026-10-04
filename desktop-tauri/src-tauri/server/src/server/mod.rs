@@ -176,17 +176,17 @@ use crate::server::request_stats::{RequestStats, Retention};
 /// 这样 handler 拿到状态就能直接用，也不必关心怎么加锁。
 #[derive(Clone)]
 pub struct ServerState {
-    /// 监听端口（默认 3065，可用 AGENT2API_PROXY_PORT 覆盖；旧名 WORKBUDDY_PROXY_PORT 仍可读）
+    /// 监听端口（默认 3065，可用 AIAPI_PROXY_PORT 覆盖；旧名 WORKBUDDY_PROXY_PORT 仍可读）
     pub port: u16,
-    /// 管理面板的独立监听端口（headless 设 `AGENT2API_PANEL_PORT` 开启）。
+    /// 管理面板的独立监听端口（headless 设 `AIAPI_PANEL_PORT` 开启）。
     /// `None` = 面板与网关同端口（默认形态与桌面壳）；`Some(p)` = 主端口只挂
     /// `/v1/*` 网关，静态界面与 `/api/*` 挂到 `p` —— 面板端口可以不暴露公网，
     /// 管理面整体留在内网。桌面壳不设置它。
     pub panel_port: Option<u16>,
     /// 监听地址。桌面壳固定 127.0.0.1（单机安全边界）；headless 二进制按
-    /// `AGENT2API_HOST` 解析（默认 0.0.0.0，供容器端口映射）。
+    /// `AIAPI_HOST` 解析（默认 0.0.0.0，供容器端口映射）。
     pub host: IpAddr,
-    /// 配置目录（`~/.agent2api`），与壳侧 gateway::config_dir() 同源
+    /// 配置目录（`~/.aiapi`），与壳侧 gateway::config_dir() 同源
     pub config_dir: PathBuf,
     /// headless 下托管管理界面（`ui/` 静态目录）的根；`None` = 不托管
     /// （桌面形态由 Tauri 壳的 custom-protocol 出界面，网关只出 API）。
@@ -264,7 +264,7 @@ impl ServerState {
     /// ①→② 的调整**没有**破坏这条：配置依然在 `logging::init_store` 之前就位
     /// （只是它的来源从文件换成了库 + 文件回落）。
     ///
-    /// ── 一次性目录迁移（`~/.workbuddy-proxy` → `~/.agent2api`）不在这里 ──
+    /// ── 一次性目录迁移（`~/.workbuddy-proxy` → `~/.aiapi`）不在这里 ──
     /// 它必须早于**任何**会写配置目录的动作，而 `bootstrap` 已经是「桌面设置
     /// 已读过、窗口已建好、日志库即将装」的阶段 —— 放在这里就晚了：迁移失败
     /// 后只要有人写一次盘（settings::save / config::save_raw / 日志库），
@@ -292,10 +292,10 @@ impl ServerState {
         // 所以端口要在发起登录之前就写在进程级常量里（见该模块 `set_loopback_port`）。
         crate::server::core::providers::codearts::oauth::set_loopback_port(port);
         let config_dir = config::config_dir();
-        // 与 Node 版一致：verbose 由环境变量 AGENT2API_VERBOSE=1 打开
+        // 与 Node 版一致：verbose 由环境变量 AIAPI_VERBOSE=1 打开
         // （旧名 WORKBUDDY_VERBOSE 仍可读，新名优先），
         // 决定 debug 级别日志要不要入库（默认只有 info 以上入库，避免刷屏）
-        let verbose = env_flag(&["AGENT2API_VERBOSE", "WORKBUDDY_VERBOSE"]);
+        let verbose = env_flag(&["AIAPI_VERBOSE", "AGENT2API_VERBOSE", "WORKBUDDY_VERBOSE"]);
         // ── 数据库 ──────────────────────────────────────────────
         // 位置是刻意的：在 `config::init()` **之前**、`logging::init_store(...)`
         // **之前**。
@@ -509,7 +509,7 @@ impl ServerState {
             db,
             upgrade_pending: Arc::new(AtomicBool::new(upgrade_pending)),
         };
-        logging::log("[Server]", "Agent2API 多提供商本地网关（Rust 进程内服务）启动中…");
+        logging::log("[Server]", "AIapi 多提供商本地网关（Rust 进程内服务）启动中…");
         logging::log("[Config]", &format!("API 端口: {}", port));
         logging::log("[Config]", &format!("API 监听地址: {}", host));
         logging::log(
@@ -804,7 +804,7 @@ pub fn start(state: &ServerState) -> Result<oneshot::Sender<()>, PortConflict> {
     // ── 路由按形态拆分 ─────────────────────────────────────────
     // 默认（panel_port = None，桌面壳 / 未设 PANEL_PORT 的 headless）：单端口
     // 挂完整路由（面板 + 网关合并），行为与拆分前逐字一致。分端口形态
-    // （headless 设 AGENT2API_PANEL_PORT）：主端口只挂网关（/v1/* + /health），
+    // （headless 设 AIAPI_PANEL_PORT）：主端口只挂网关（/v1/* + /health），
     // 面板（静态界面 + /api/*）单独监听 panel_port —— 把面板端口留在内网，
     // 公网只暴露网关端口。（panel_port == port 视为没配，兜底走合并。）
     let panel_port = match state.panel_port {

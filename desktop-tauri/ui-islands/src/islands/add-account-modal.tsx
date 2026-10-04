@@ -1,5 +1,5 @@
 /**
- * Agent2API · 「登录 / 添加账号」弹窗（React 岛，命令式弹窗形态）。
+ * AIapi · 「登录 / 添加账号」弹窗（React 岛，命令式弹窗形态）。
  *
  * 替换旧的四份脚本：ui/add-account.js（弹窗外壳 + WorkBuddy 那段）、
  * ui/add-provider-forms.js（两步结构 + 各家表单块 + 分段交互）、

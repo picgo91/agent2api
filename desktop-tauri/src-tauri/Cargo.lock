@@ -44,8 +44,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "agent2api-server"
-version = "2.9.3"
+name = "aiapi-server"
+version = "2.9.4"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5948,11 +5948,11 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "workbuddy-proxy-desktop"
-version = "2.9.3"
+version = "2.9.4"
 dependencies = [
  "aes",
  "aes-gcm",
- "agent2api-server",
+ "aiapi-server",
  "axum",
  "base64 0.22.1",
  "bytes",

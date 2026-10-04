@@ -14,7 +14,7 @@ import {
 } from './table-shell'
 
 /**
- * Agent2API · 系统事件日志面板（筛选 / 分页 / 导出 / 清空）—— React 岛。
+ * AIapi · 系统事件日志面板（筛选 / 分页 / 导出 / 清空）—— React 岛。
  *
  * 替换 ui/logs-panel.js（那份自持筛选、页码与轮询，用 innerHTML 拼 .log-row 那套老类名）。对外
  * 接口与原实现**完全一致**（见文件末尾），调用点一行都不用改：app.js:122 load() / app.js:254
@@ -157,7 +157,7 @@ const FILTERS_KEY = 'workbuddy-desktop-logs-filters'
 /** 关键词输入的防抖：避免每敲一个字就打一次接口 */
 const KEYWORD_DEBOUNCE_MS = 300
 /** 页脚那句默认路径：后端没给 file 时保持页面上原来的文案 */
-const DEFAULT_FILE = '~/.agent2api/logs.jsonl'
+const DEFAULT_FILE = '~/.aiapi/logs.jsonl'
 
 /**
  * 合法的时间档位，与后端 /api/stats/summary 的白名单同字面量（报表页也是这一组）。默认

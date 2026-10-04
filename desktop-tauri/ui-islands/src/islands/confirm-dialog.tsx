@@ -12,7 +12,7 @@ import {
 } from '@ui'
 
 /**
- * Agent2API · 通用确认弹窗（替代原生 confirm）。
+ * AIapi · 通用确认弹窗（替代原生 confirm）。
  *
  * 替换 ui/confirm-dialog.js —— 那份用 innerHTML 拼 .modal-mask / .modal 那套老类名，
  * 结构还写死在 index.html 的 #confirm-modal 里。对外接口与原实现**完全一致**：

@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { Button, Popover, PopoverContent, SegmentedControl, Switch, cn } from '@ui'
 
 /**
- * Agent2API · 表格列设置（列的显示 / 隐藏 · 顺序 · 对齐）—— React 岛。
+ * AIapi · 表格列设置（列的显示 / 隐藏 · 顺序 · 对齐）—— React 岛。
  *
  * 替换 ui/table-col-settings.js。那个模块有两层，本次只换第二层：
  *
@@ -61,8 +61,10 @@ import { Button, Popover, PopoverContent, SegmentedControl, Switch, cn } from '@
 
 /* ─── 常量与类型 ─────────────────────────────── */
 
-/** 本地配置的键名前缀：与旧实现逐字一致，用户已存过的列配置不因这次迁移丢失 */
-const STORE_PREFIX = 'agent2api-col-config:'
+/** 本地配置的键名前缀。产品改名后键名也随之换新（原 `agent2api-col-config:`）：
+ *  代价只是用户已存过的列宽/顺序回落一次默认，重新拖过即可；刻意不保留旧键，
+ *  免得两套键名并存后谁生效说不清。 */
+const STORE_PREFIX = 'aiapi-col-config:'
 
 /** 对齐三档；值直接写进 class 后缀（ta-left / ta-center / ta-right） */
 type Align = 'left' | 'center' | 'right'

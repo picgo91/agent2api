@@ -100,7 +100,7 @@ export function priorityOf(account: { priority?: number } | null | undefined): n
 
 /* ─── 列宽 ─────────────────────────────────── */
 
-const STORE_KEY = 'agent2api-accounts-col-widths'
+const STORE_KEY = 'aiapi-accounts-col-widths'
 
 /**
  * 默认列宽（px）：与 page-accounts-table.css 的 `.cell-*` 一一对应。

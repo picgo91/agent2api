@@ -109,7 +109,7 @@ import {
 } from './settings-prompt-editor'
 
 /**
- * Agent2API · 设置页（React 岛）。
+ * AIapi · 设置页（React 岛）。
  *
  * 替换 ui/settings-panel.js（那份自持状态、按 id 读写 DOM、用 innerHTML 拼导入失败明细的
  * 老实现）。对外接口与原实现**逐字一致**（见文件末尾）：调用点一行都不用改 ——

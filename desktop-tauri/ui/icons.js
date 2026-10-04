@@ -1,4 +1,4 @@
-/* Agent2API · 内联 SVG 图标集 */
+/* AIapi · 内联 SVG 图标集 */
 /* global wbIcons */
 
 /**

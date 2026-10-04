@@ -54,7 +54,7 @@ import {
  * 底部的 Generate token 即可。
  */
 const GITHUB_TOKENS_URL = 'https://github.com/settings/tokens/new?description='
-  + encodeURIComponent('Agent2API 更新检查')
+  + encodeURIComponent('AIapi 更新检查')
 
 /** 令牌一栏的状态徽章 + 一句说明（完整原因放徽章的悬停提示里，不占版面） */
 function tokenStatus(token: UpdateTokenStatus | null): { badge: React.ReactNode; hint: string } {

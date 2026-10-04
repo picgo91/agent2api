@@ -1,4 +1,4 @@
-# Agent2API · Multi-Provider Local Gateway
+# AIapi · Multi-Provider Local Gateway
 
 [简体中文](./README.md) | **English**
 
@@ -8,7 +8,7 @@ Wraps the login state of several AI desktop clients into a local **OpenAI-compat
 OpenAI client / any SDK
         │  POST /v1/chat/completions   (OpenAI-compatible, SSE)
         ▼
-  Agent2API gateway (in-process Rust service)   ← local 127.0.0.1:3065
+  AIapi gateway (in-process Rust service)   ← local 127.0.0.1:3065
   model mapping · account candidate chain (global priority) · 429 fallback · egress proxy · content redaction
         │  HTTPS (the model name decides which provider is called)
         ├──▶ workbuddy  copilot.tencent.com (China) / www.workbuddy.ai (Global)
@@ -43,7 +43,7 @@ OpenAI client / any SDK
 
 ## Quick Start
 
-Download the installer from Releases (NSIS, Simplified Chinese, installs to `C:\Program Files\Agent2API` by default, and needs administrator approval during setup), then launch it — **no Node or any other runtime required**.
+Download the installer from Releases (NSIS, Simplified Chinese, installs to `C:\Program Files\AIapi` by default, and needs administrator approval during setup), then launch it — **no Node or any other runtime required**.
 
 1. First launch starts the local gateway (port 3065) inside the app process and opens the main window. If an older version's data directory or data files are found, a dialog walks you through the migration.
 2. Click "Add account" on the Accounts page, pick a provider (WorkBuddy / Raccoon / CatPaw / AutoClaw domestic / AutoClaw international / Qoder / Cline / Accio international / Accio domestic / CodeArts / Trae), then sign in or fill in credentials using whatever that vendor supports: web login, SMS code, pasting credentials, or importing this machine's desktop login state (importing stores no token — the gateway follows once the desktop client signs in again; CodeArts and Trae only offer web login and pasted credentials).
@@ -84,7 +84,7 @@ print(resp.choices[0].message.content)
 ## Docker Deployment
 
 ```bash
-docker run -d --name agent2api --restart unless-stopped \
+docker run -d --name aiapi --restart unless-stopped \
   -p 3065:3065 -v ./data:/data \
   anwang520/agent2api:latest
 ```
@@ -95,9 +95,9 @@ Compose users (this is the whole `docker-compose.yml`; images are published for 
 
 ```yaml
 services:
-  agent2api:
+  aiapi:
     image: anwang520/agent2api:latest
-    container_name: agent2api
+    container_name: aiapi
     restart: unless-stopped
     ports:
       - "3065:3065"
@@ -109,11 +109,11 @@ Environment variables (all optional — nothing needs to be preset):
 
 | Variable | Description |
 | --- | --- |
-| `AGENT2API_ADMIN_USER` + `AGENT2API_ADMIN_PASSWORD` | Preset the admin account & password (password in plain text, hashed automatically at startup). Leave unset to register in the panel |
-| `AGENT2API_PANEL_PORT` | Serve the panel (UI + `/api/*`) on its own port; map only the main port publicly to keep the management plane internal (bind the panel port as `127.0.0.1:3066:3066`) |
-| `AGENT2API_HOST` / `AGENT2API_PROXY_PORT` | Listen address (default `0.0.0.0`) / port (default `3065`) |
-| `AGENT2API_ALLOW_NO_KEY` | Set to `1` to serve `/v1` without any key — private networks only |
-| `AGENT2API_CAPTCHA_ENABLED` | Login-page human verification widget: `1` enabled, `0` disabled (default) |
+| `AIAPI_ADMIN_USER` + `AIAPI_ADMIN_PASSWORD` | Preset the admin account & password (password in plain text, hashed automatically at startup). Leave unset to register in the panel |
+| `AIAPI_PANEL_PORT` | Serve the panel (UI + `/api/*`) on its own port; map only the main port publicly to keep the management plane internal (bind the panel port as `127.0.0.1:3066:3066`) |
+| `AIAPI_HOST` / `AIAPI_PROXY_PORT` | Listen address (default `0.0.0.0`) / port (default `3065`) |
+| `AIAPI_ALLOW_NO_KEY` | Set to `1` to serve `/v1` without any key — private networks only |
+| `AIAPI_CAPTCHA_ENABLED` | Login-page human verification widget: `1` enabled, `0` disabled (default) |
 
 Build from source: clone the repo and run `docker compose up -d --build` (the image contains only the gateway and the panel, no Rust toolchain).
 
@@ -145,7 +145,7 @@ Further down are the trends: the last 24 hours of **cache hit rate** (left axis,
 
 ### Scheduled Tasks
 
-Background tasks are managed on one page: toggle, interval, last result and next fire time all live here, and you can also run one immediately without waiting out the interval. The task list itself is stored in the `scheduledTasks` field of `~/.agent2api/config.json`, and edits take effect immediately — no restart needed.
+Background tasks are managed on one page: toggle, interval, last result and next fire time all live here, and you can also run one immediately without waiting out the interval. The task list itself is stored in the `scheduledTasks` field of `~/.aiapi/config.json`, and edits take effect immediately — no restart needed.
 
 ![Scheduled tasks page: toggles and intervals for check-in, credential maintenance, model catalog refresh and more](./assets/screenshots/scheduled-tasks.png)
 
@@ -159,13 +159,13 @@ Both the gateway and the desktop app live under `desktop-tauri/`: the backend is
 agent2api/
 ├─ desktop-tauri/
 │  ├─ src-tauri/
-│  │  ├─ server/                 Gateway crate (agent2api-server, built independently:
+│  │  ├─ server/                 Gateway crate (aiapi-server, built independently:
 │  │  │                          shared by the desktop app and the headless binary;
-│  │  │                          src/server/ and bin/agent2api-server.rs have no GUI deps)
+│  │  │                          src/server/ and bin/aiapi-server.rs have no GUI deps)
 │  │  │  ├─ mod.rs               Service assembly: ServerState, startup, shutdown, startup migration
 │  │  │  ├─ http.rs              Route table, CORS, API Key middleware, body limit, headless static hosting
 │  │  │  ├─ config.rs / logging.rs / logs_store.rs / errors.rs
-│  │  │  ├─ config_migration.rs  1.x config directory migration (~/.workbuddy-proxy → ~/.agent2api, first startup step)
+│  │  │  ├─ config_migration.rs  One-time migration of legacy config dirs (~/.workbuddy-proxy / ~/.agent2api → ~/.aiapi, first startup step)
 │  │  │  ├─ request_stats.rs + request_stats/   Statistics time windows, writes, aggregation and trimming
 │  │  │  ├─ core/
 │  │  │  │  ├─ providers/        ★ Multi-provider layer (the heart of this work)
@@ -275,7 +275,7 @@ npm run tauri:build        # Build the desktop installer
 npm run build:icon         # Generate the icon source image (run after changing the icon design, then run tauri icon)
 ```
 
-The root project has no runtime dependencies; `package.json` only provides the shortcut script entry points above. The build artifact is `target/release/bundle/nsis/Agent2API_<version>_x64-setup.exe` (currently about 3.0 MB; `src-tauri/.cargo/config.toml` points cargo's `target-dir` at the project root's `target/`).
+The root project has no runtime dependencies; `package.json` only provides the shortcut script entry points above. The build artifact is `target/release/bundle/nsis/AIapi_<version>_x64-setup.exe` (currently about 3.0 MB; `src-tauri/.cargo/config.toml` points cargo's `target-dir` at the project root's `target/`).
 
 ---
 
@@ -295,7 +295,7 @@ Do not use this project for any commercial purpose, for redistributing it for pr
 
 ### Credentials and data risk
 
-This project stores account credentials (`accessToken` / `refreshToken`, etc.) as **plain text** in the local configuration directory (by default `~/.agent2api/`), and files produced by the export feature contain plain-text credentials as well. Keep them safe: never commit them to a public repository, upload them to cloud storage or share them with others. Losses caused by leaked credentials are borne by the user.
+This project stores account credentials (`accessToken` / `refreshToken`, etc.) as **plain text** in the local configuration directory (by default `~/.aiapi/`), and files produced by the export feature contain plain-text credentials as well. Keep them safe: never commit them to a public repository, upload them to cloud storage or share them with others. Losses caused by leaked credentials are borne by the user.
 
 ### No warranty and rights notice
 

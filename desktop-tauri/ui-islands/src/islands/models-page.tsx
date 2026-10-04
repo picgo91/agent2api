@@ -1,5 +1,5 @@
 /**
- * Agent2API · 模型管理页（左栏提供商导航 + 模型表 + 三个弹窗）—— React 岛。
+ * AIapi · 模型管理页（左栏提供商导航 + 模型表 + 三个弹窗）—— React 岛。
  *
  * 替换 ui/models-panel.js + ui/models-reasoning.js + ui/models-custom-source.js 三个文件。
  * 对外接口与原实现**完全一致**（见 models-panel-state.ts 末尾的 window.wbModelsPanel）：

@@ -1,5 +1,5 @@
 /**
- * Agent2API · 登录 / 首次注册页（ui/login.html）—— React 岛。
+ * AIapi · 登录 / 首次注册页（ui/login.html）—— React 岛。
  *
  * 这一页独立于主面板（没有 index.html 那套骨架，也不属于任何 .page），界面整块由
  * 本岛渲染。但**登录逻辑仍归页面底部那段内联脚本**：它按 id 直接读写
@@ -104,7 +104,7 @@ function LoginPage() {
           --ui-primary-hover ≈ #1d4ed8（6.70）。原先写死的 #2563eb 实底由此变成渐变。 */}
       <div className='mb-[28px] flex flex-col items-center gap-3.5 text-center'>
         <span className='brand-mark'>
-          <svg viewBox='0 0 24 24' role='img' aria-label='Agent2API' className='size-[52px]'>
+          <svg viewBox='0 0 24 24' role='img' aria-label='AIapi' className='size-[52px]'>
             <defs>
               <linearGradient id={MARK_GRADIENT_ID} x1='0' y1='0' x2='1' y2='1'>
                 <stop offset='0' stopColor='var(--ui-primary)' />
@@ -121,7 +121,7 @@ function LoginPage() {
           </svg>
         </span>
         <div>
-          <h1 className='m-0 text-[22px] font-extrabold tracking-[-0.4px]'>Agent2API</h1>
+          <h1 className='m-0 text-[22px] font-extrabold tracking-[-0.4px]'>AIapi</h1>
           <div className='text-[13.5px] text-muted-foreground'>OpenAI 兼容网关 · 管理面板</div>
         </div>
       </div>

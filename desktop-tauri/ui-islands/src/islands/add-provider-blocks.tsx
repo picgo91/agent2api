@@ -1,5 +1,5 @@
 /**
- * Agent2API · 「登录 / 添加账号」弹窗：内置家的表单块（视图 + 三个登录引擎的接线）。
+ * AIapi · 「登录 / 添加账号」弹窗：内置家的表单块（视图 + 三个登录引擎的接线）。
  *
  * 替换旧实现里 add-provider-forms.js 的 buildProviderBlock / mountWebLogin /
  * mountSmsLogin / mountOauthLogin / addProviderManual / addProviderDesktop 与

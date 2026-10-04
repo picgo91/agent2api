@@ -1,8 +1,8 @@
 /* ─────────────────────────────────────────────
-   Agent2API · 组件库样式入口
+   AIapi · 组件库样式入口
 
    消费方式（见 desktop-tauri/ui-islands/src/styles/islands.css）：
-     @import '@agent2api/ui/styles/globals.css';
+      @import '@aiapi/ui/styles/globals.css';
      @source '<组件库 src 的相对路径>';
      @source '<消费方自己的源码目录>';
    消费方必须补 @source —— 本文件已用 source(none) 关掉自动检测，

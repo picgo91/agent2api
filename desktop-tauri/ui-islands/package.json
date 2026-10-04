@@ -1,9 +1,9 @@
 {
-  "name": "agent2api-ui-islands",
+  "name": "aiapi-ui-islands",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Agent2API 桌面端 React 岛 —— 消费 ui-kit 私有组件库（Base UI + Tailwind v4），产物落 ui/islands/",
+  "description": "AIapi 桌面端 React 岛 —— 消费 ui-kit 私有组件库（Base UI + Tailwind v4），产物落 ui/islands/",
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "watch": "vite build --watch",

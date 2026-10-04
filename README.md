@@ -1,4 +1,4 @@
-# Agent2API · 多提供商本地网关
+# AIapi · 多提供商本地网关
 
 **简体中文** | [English](./README.en.md)
 
@@ -8,7 +8,7 @@
 OpenAI 客户端 / 任意 SDK
         │  POST /v1/chat/completions   （OpenAI 兼容，SSE）
         ▼
-  Agent2API 网关（Rust 进程内服务）              ← 本机 127.0.0.1:3065
+  AIapi 网关（Rust 进程内服务）              ← 本机 127.0.0.1:3065
   模型映射 · 账号候选链（全局优先级）· 429 降级 · 出网代理 · 出站指纹脱敏
         │  HTTPS（按模型名决定去谁家）
         ├──▶ workbuddy  copilot.tencent.com（国内版）/ www.workbuddy.ai（国际版）
@@ -48,7 +48,7 @@ OpenAI 客户端 / 任意 SDK
 
 ## 快速开始
 
-从 Releases 下载安装包（NSIS，简体中文，默认装到 `C:\Program Files\Agent2API`，安装时需要管理员授权），安装后启动即可，**无需安装 Node 或任何其它运行时**。
+从 Releases 下载安装包（NSIS，简体中文，默认装到 `C:\Program Files\AIapi`，安装时需要管理员授权），安装后启动即可，**无需安装 Node 或任何其它运行时**。
 
 1. 首次启动即在应用进程内启动本机网关（端口 3065）并打开主窗口；若检测到旧版本的数据目录或数据文件，会弹窗提示迁移，按指引操作即可。
 2. 点「账号」页的「添加账号」，选提供商（WorkBuddy / 小浣熊 / CatPaw / AutoClaw 国内版 / AutoClaw 国际版 / Qoder / Cline / Accio 国际版 / Accio 国内版 / CodeArts / Trae），再按该家支持的方式完成登录或填写凭证：网页登录、手机验证码、粘贴凭证，或导入本机桌面端登录态（导入不落 token，客户端重新登录后网关自动跟上；CodeArts 与 Trae 只有网页登录与粘贴凭证两种）。
@@ -89,7 +89,7 @@ print(resp.choices[0].message.content)
 ## Docker 部署
 
 ```bash
-docker run -d --name agent2api --restart unless-stopped \
+docker run -d --name aiapi --restart unless-stopped \
   -p 3065:3065 -v ./data:/data \
   anwang520/agent2api:latest
 ```
@@ -100,9 +100,9 @@ compose 用户（`docker-compose.yml` 全文就这么多；amd64 / arm64 都有�
 
 ```yaml
 services:
-  agent2api:
+  aiapi:
     image: anwang520/agent2api:latest
-    container_name: agent2api
+    container_name: aiapi
     restart: unless-stopped
     ports:
       - "3065:3065"
@@ -114,11 +114,11 @@ services:
 
 | 变量 | 说明 |
 | --- | --- |
-| `AGENT2API_ADMIN_USER` + `AGENT2API_ADMIN_PASSWORD` | 预置管理员账号密码（密码明文填，启动时自动转哈希）；不填走面板注册 |
-| `AGENT2API_PANEL_PORT` | 面板分端口：设后面板（界面 + `/api/*`）单独监听该端口，公网只映射主端口即可把管理面留在内网（面板端口绑回环，写 `127.0.0.1:3066:3066`） |
-| `AGENT2API_HOST` / `AGENT2API_PROXY_PORT` | 监听地址（默认 `0.0.0.0`）/ 端口（默认 `3065`） |
-| `AGENT2API_ALLOW_NO_KEY` | 置 `1` 关闭 fail-closed（未配 Key 也放行 `/v1`，仅限纯内网） |
-| `AGENT2API_CAPTCHA_ENABLED` | 登录页人机验证组件环境变量：默认为 `0` 关闭，`1` 为开启 |
+| `AIAPI_ADMIN_USER` + `AIAPI_ADMIN_PASSWORD` | 预置管理员账号密码（密码明文填，启动时自动转哈希）；不填走面板注册 |
+| `AIAPI_PANEL_PORT` | 面板分端口：设后面板（界面 + `/api/*`）单独监听该端口，公网只映射主端口即可把管理面留在内网（面板端口绑回环，写 `127.0.0.1:3066:3066`） |
+| `AIAPI_HOST` / `AIAPI_PROXY_PORT` | 监听地址（默认 `0.0.0.0`）/ 端口（默认 `3065`） |
+| `AIAPI_ALLOW_NO_KEY` | 置 `1` 关闭 fail-closed（未配 Key 也放行 `/v1`，仅限纯内网） |
+| `AIAPI_CAPTCHA_ENABLED` | 登录页人机验证组件环境变量：默认为 `0` 关闭，`1` 为开启 |
 
 从源码构建：克隆本仓库后 `docker compose up -d --build`（镜像里只有网关与面板，不含 Rust 工具链）。
 
@@ -152,7 +152,7 @@ services:
 
 ### 定时任务
 
-后台任务在「定时任务」页统一管理：开关、执行间隔、上次执行结果与下次触发时间都在这里，也可以绕过间隔手动「立即执行」一次。任务清单本身保存在 `~/.agent2api/config.json` 的 `scheduledTasks` 字段，改动立即生效，不需要重启程序。
+后台任务在「定时任务」页统一管理：开关、执行间隔、上次执行结果与下次触发时间都在这里，也可以绕过间隔手动「立即执行」一次。任务清单本身保存在 `~/.aiapi/config.json` 的 `scheduledTasks` 字段，改动立即生效，不需要重启程序。
 
 ![定时任务页：自动签到、凭证维护、模型目录刷新等后台任务的开关与间隔](./assets/screenshots/scheduled-tasks.png)
 
@@ -166,13 +166,13 @@ services:
 agent2api/
 ├─ desktop-tauri/
 │  ├─ src-tauri/
-│  │  ├─ server/                 网关本体 crate（agent2api-server，独立编译：
+│  │  ├─ server/                 网关本体 crate（aiapi-server，独立编译：
 │  │  │                          桌面端与 headless 二进制共用；src/server/ 下
-│  │  │                          的实现与 bin/agent2api-server.rs 无 GUI 依赖）
+│  │  │                          的实现与 bin/aiapi-server.rs 无 GUI 依赖）
 │  │  │  ├─ mod.rs               服务组装：ServerState、启动、停机、启动迁移
 │  │  │  ├─ http.rs              路由表、CORS、API Key 中间件、body 限制、headless 静态托管
 │  │  │  ├─ config.rs / logging.rs / logs_store.rs / errors.rs
-│  │  │  ├─ config_migration.rs  1.x 配置目录迁移（~/.workbuddy-proxy → ~/.agent2api，启动第一步）
+│  │  │  ├─ config_migration.rs  旧版配置目录一次性迁移（~/.workbuddy-proxy / ~/.agent2api → ~/.aiapi，启动第一步）
 │  │  │  ├─ request_stats.rs + request_stats/   统计的时钟窗口、写入、聚合与裁剪
 │  │  │  ├─ core/
 │  │  │  │  ├─ providers/        ★ 多提供商层（本改造的核心）
@@ -282,7 +282,7 @@ npm run tauri:build        # 构建桌面端安装包
 npm run build:icon         # 生成图标源图（改图标设计后执行，再跑 tauri icon）
 ```
 
-根项目本身没有运行期依赖，`package.json` 只提供上面这些快捷脚本入口。打包产物为 `target/release/bundle/nsis/Agent2API_<版本>_x64-setup.exe`（当前约 3.0 MB；`src-tauri/.cargo/config.toml` 把 cargo 的 `target-dir` 指到了项目根的 `target/`）。
+根项目本身没有运行期依赖，`package.json` 只提供上面这些快捷脚本入口。打包产物为 `target/release/bundle/nsis/AIapi_<版本>_x64-setup.exe`（当前约 3.0 MB；`src-tauri/.cargo/config.toml` 把 cargo 的 `target-dir` 指到了项目根的 `target/`）。
 
 ---
 
@@ -302,7 +302,7 @@ npm run build:icon         # 生成图标源图（改图标设计后执行，再
 
 ### 凭证与数据风险
 
-本项目会把账号凭证（`accessToken` / `refreshToken` 等）以**明文**形式保存在本机配置目录（默认 `~/.agent2api/`）中，导出功能生成的文件同样包含明文凭证。请自行妥善保管，切勿提交到公开仓库、上传到网盘或分享给他人。因凭证泄露造成的损失由使用者自行承担。
+本项目会把账号凭证（`accessToken` / `refreshToken` 等）以**明文**形式保存在本机配置目录（默认 `~/.aiapi/`）中，导出功能生成的文件同样包含明文凭证。请自行妥善保管，切勿提交到公开仓库、上传到网盘或分享给他人。因凭证泄露造成的损失由使用者自行承担。
 
 ### 无担保与权利通知
 

@@ -5,7 +5,7 @@
 //! 用户根本没有机会换账号。因此每次登录都新建一个随机目录，窗口销毁后再删掉。
 //!
 //! 目录建在系统临时目录下（不是配置目录）：它是一次性的，删不掉时也该由系统
-//! 回收，不该混进 `~/.agent2api` 的持久化数据里。
+//! 回收，不该混进 `~/.aiapi` 的持久化数据里。
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -24,7 +24,7 @@ impl LoginProfile {
         getrandom::getrandom(&mut random)
             .map_err(|_| "生成独立登录环境标识失败".to_string())?;
         let suffix: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
-        let path = std::env::temp_dir().join(format!("agent2api-login-{suffix}"));
+        let path = std::env::temp_dir().join(format!("aiapi-login-{suffix}"));
         std::fs::create_dir_all(&path)
             .map_err(|error| format!("创建独立登录环境失败: {error}"))?;
         Ok(Self { path })

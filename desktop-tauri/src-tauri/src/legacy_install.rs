@@ -55,16 +55,22 @@ mod imp {
 
     /// 本产品用过的产品名。NSIS 在 currentUser 模式下把这些名字同时用作
     /// 安装目录名（`%LOCALAPPDATA%\<产品名>`）、卸载键名与快捷方式名。
-    const PRODUCT_NAMES: [&str; 2] = ["Agent2API", "WorkBuddy 本地代理"];
+    ///
+    /// 改名（Agent2API → AIapi）是**往数组里加**而不是替换：`Agent2API` 要留给
+    /// 2.9.3 及更早版本，不加就清不掉那批旧安装 —— 卸载键与目录还留在
+    /// `%LOCALAPPDATA%\Agent2API`，新版装完会出现两套痕迹。
+    const PRODUCT_NAMES: [&str; 3] = ["AIapi", "Agent2API", "WorkBuddy 本地代理"];
 
     /// 旧安装目录里可能出现的主程序文件名。
     ///
     /// `workbuddy-proxy-desktop.exe` 是实际产物名：Cargo.toml 的 package name 是
     /// `workbuddy-proxy-desktop`，而 tauri.conf.json 没有设 mainBinaryName，所以
     /// NSIS 的 MAINBINARYNAME 与磁盘上的 exe 都是它（已按构建出的 installer.nsi
-    /// 与真实安装目录核对）。另一个候选是防御性的：产品已改名为 Agent2API，
-    /// 将来若把二进制一起改名，旧目录里就会是这个文件名，判定链不该因此失效。
-    const BINARY_NAMES: [&str; 2] = ["workbuddy-proxy-desktop.exe", "agent2api.exe"];
+    /// 与真实安装目录核对）。另外两个是改名各阶段的产物名：`agent2api.exe` 对应
+    /// 产品名改成 Agent2API 那阵，`AIapi.exe` 对应当前的 productName（AIapi，
+    /// 2.9.4 起）—— 三个候选都要认，判定链才不会因产品改名而漏掉旧安装。
+    const BINARY_NAMES: [&str; 3] =
+        ["workbuddy-proxy-desktop.exe", "agent2api.exe", "AIapi.exe"];
 
     /// 当前用户级安装的卸载信息（NSIS 的 currentUser 模式写这里）
     const UNINSTALL_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";

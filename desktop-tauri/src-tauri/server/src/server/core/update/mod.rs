@@ -47,7 +47,7 @@ pub use version::{
 pub use token::{set_token, status_json};
 
 /// 请求 GitHub 的 UA（Node 版字面量，随项目改名同步）
-const USER_AGENT: &str = "agent2api-local-proxy";
+const USER_AGENT: &str = "aiapi-local-proxy";
 
 /// 本应用的当前版本号（编译期取自 Cargo.toml，发布流程与 tauri.conf.json
 /// 同步更新）。壳的 `checkUpdate` 命令用的是运行时 package_info —— 两者常态

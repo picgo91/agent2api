@@ -14,7 +14,7 @@ import {
 } from '@ui'
 
 /**
- * Agent2API · 端口状态面板（React 岛）。
+ * AIapi · 端口状态面板（React 岛）。
  *
  * 替换 ui/port-panel.js。对外接口与原实现**完全一致**：
  *   `window.wbPortPanel = { render, sync, portLabel, isReady }`

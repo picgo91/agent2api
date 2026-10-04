@@ -1,5 +1,5 @@
 /**
- * Agent2API · 「添加账号」弹窗：自定义提供商（新建 / 加入已有）。
+ * AIapi · 「添加账号」弹窗：自定义提供商（新建 / 加入已有）。
  *
  * 替换旧 ui/add-custom-provider.js。自定义提供商（custom- 前缀，运行期数据）的
  * 添加方式有两种：新建提供商 + 首个账号（POST /api/custom-providers）、往已有

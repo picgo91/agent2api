@@ -638,7 +638,7 @@ mod tests {
     /// 默认不跑，手工开：
     /// ```bash
     /// CODEARTS_AK=… CODEARTS_SK=… CODEARTS_STS=… CODEARTS_DOMAIN=… \
-    ///   cargo test -p agent2api-server codearts -- --ignored --nocapture
+    ///   cargo test -p aiapi-server codearts -- --ignored --nocapture
     /// ```
     #[tokio::test]
     #[ignore]
@@ -697,7 +697,7 @@ mod tests {
     /// ```bash
     /// CODEARTS_CREDENTIAL_FILE=/path/to/parked.json \
     /// CODEARTS_SAVE_TO=/path/to/parked.json \
-    ///   cargo test -p agent2api-server codearts -- --ignored --nocapture
+    ///   cargo test -p aiapi-server codearts -- --ignored --nocapture
     /// ```
     ///
     /// **`CODEARTS_SAVE_TO` 不是可选项**：刷新会轮换 refresh_token，旧串用一次
@@ -1029,7 +1029,7 @@ mod catalog_fixtures {
     //! 供 `models.rs` 的解析与合并逻辑离线测试。手工跑：
     //! ```bash
     //! CODEARTS_CREDENTIAL_FILE=<停用的auth文件> CODEARTS_FIXTURES_OUT=<目录> \
-    //!   cargo test -p agent2api-server codearts -- --ignored --nocapture
+    //!   cargo test -p aiapi-server codearts -- --ignored --nocapture
     //! ```
     use super::*;
     use crate::server::core::providers::codearts::oauth::signer_credential;

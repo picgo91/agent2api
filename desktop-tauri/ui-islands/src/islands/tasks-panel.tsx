@@ -895,7 +895,7 @@ function TasksPanel() {
       </div>
       <div className='panel-foot'>
         <span>
-          任务配置保存在 <code>~/.agent2api/config.json</code> 的 <code>scheduledTasks</code> 字段
+          任务配置保存在 <code>~/.aiapi/config.json</code> 的 <code>scheduledTasks</code> 字段
         </span>
         <span>改动立即生效，不需要重启程序</span>
       </div>

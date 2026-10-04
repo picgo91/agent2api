@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 
 /**
- * Agent2API · 请求日志「重试 / 敏感词」两枚标签的悬停面板（React 岛）。
+ * AIapi · 请求日志「重试 / 敏感词」两枚标签的悬停面板（React 岛）。
  *
  * 替换 ui/request-hover.js（旧文件由迁移负责人删除）。对外接口与原实现**完全一致**：
  *   window.wbRequestHover = { bind, close, hasProcessFacts, beforeListRedraw, afterListRedraw }

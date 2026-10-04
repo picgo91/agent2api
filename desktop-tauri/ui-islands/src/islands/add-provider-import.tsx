@@ -1,5 +1,5 @@
 /**
- * Agent2API · 「添加账号」弹窗 → 「导入」分段：从其他工具批量导入供应商。
+ * AIapi · 「添加账号」弹窗 → 「导入」分段：从其他工具批量导入供应商。
  *
  * 替换旧 ui/add-provider-import.js。当前来源只有 **cc-switch**（后端
  * `GET /api/import/cc-switch` 扫描本机 SQLite，见 core::import_ccswitch），

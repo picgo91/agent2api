@@ -1,4 +1,4 @@
-/* Agent2API · 「手机验证码登录」交互引擎（当前只有 AutoClaw 国内版用）
+/* AIapi · 「手机验证码登录」交互引擎（当前只有 AutoClaw 国内版用）
 
    与小浣熊 / Qoder 的网页登录（web-login.js）是**两套东西**，不要合并：
 

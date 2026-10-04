@@ -10,7 +10,7 @@ import { showUpdateModal } from './update-modal'
 import { UpdateSettingsDialog } from './update-settings'
 
 /**
- * Agent2API · 设置页「软件更新」面板（React 岛）。
+ * AIapi · 设置页「软件更新」面板（React 岛）。
  *
  * 替换 ui/update-panel.js。对外接口与原实现**完全一致**：
  *   `window.wbUpdatePanel = { load, check, syncFromCache, openAndDownload }`

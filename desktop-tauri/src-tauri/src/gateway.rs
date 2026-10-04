@@ -61,8 +61,9 @@ pub fn proxy_port() -> u16 {
 
 /// 按优先级解析端口并缓存进 `ACTIVE_PORT`（只在首次调用时真正解析）。
 fn resolve_port() -> u16 {
-    let port = env_port("AGENT2API_PROXY_PORT")
-        .or_else(|| env_port("WORKBUDDY_PROXY_PORT")) // 旧名兼容读（1.x 起沿用）
+    let port = env_port("AIAPI_PROXY_PORT")
+        .or_else(|| env_port("AGENT2API_PROXY_PORT")) // 改名前的旧名，兼容读
+        .or_else(|| env_port("WORKBUDDY_PROXY_PORT")) // 1.x 起沿用的更旧名
         .or_else(|| configured_port())
         .unwrap_or(default_port());
     ACTIVE_PORT.store(port, Ordering::Relaxed);
@@ -98,7 +99,9 @@ fn configured_port() -> Option<u16> {
 /// 环境变量是否显式指定了端口（显式指定时界面不该再提供「更换端口」——
 /// 改了设置也不会生效，只会让用户白忙一场）
 pub fn port_from_env() -> Option<u16> {
-    env_port("AGENT2API_PROXY_PORT").or_else(|| env_port("WORKBUDDY_PROXY_PORT"))
+    env_port("AIAPI_PROXY_PORT")
+        .or_else(|| env_port("AGENT2API_PROXY_PORT"))
+        .or_else(|| env_port("WORKBUDDY_PROXY_PORT"))
 }
 
 /// 读环境变量里的端口：未设置 / 非数字 / 0 一律当未设置（回落到下一级）
@@ -157,16 +160,16 @@ fn describe_error(value: &Value) -> String {
     value.to_string()
 }
 
-/// 配置目录：与后端共用 `~/.agent2api`（可用环境变量覆盖）。
+/// 配置目录：与后端共用 `~/.aiapi`（可用环境变量覆盖）。
 ///
-/// 实现已随网关本体迁到独立 crate（`agent2api_server::paths::config_dir`，
+/// 实现已随网关本体迁到独立 crate（`aiapi_server::paths::config_dir`，
 /// 唯一实现），本函数保留为转发 —— 壳侧调用点不必感知 crate 边界，
 /// 「壳读 key」与「服务端读写数据」仍永远指向同一个目录。
 ///
-/// 环境变量：`AGENT2API_PROXY_HOME` 优先，旧名 `WORKBUDDY_PROXY_HOME` 兼容读
-/// （1.x 的启动脚本/快捷方式里可能还留着旧名）。
+/// 环境变量：`AIAPI_PROXY_HOME` 优先，改名前的 `AGENT2API_PROXY_HOME` 与
+/// 更早的 `WORKBUDDY_PROXY_HOME` 兼容读（旧启动脚本/快捷方式可能还留着）。
 pub fn config_dir() -> PathBuf {
-    agent2api_server::paths::config_dir()
+    aiapi_server::paths::config_dir()
 }
 
 /// 读取本地 API Key。仅在本机内存里取；未配置时返回 None。

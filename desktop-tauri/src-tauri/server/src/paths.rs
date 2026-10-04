@@ -6,16 +6,18 @@
 //! 反过来转发本模块 —— 「两条路径、一个实现」的约定不变，只是方向反了。
 //!
 //! ── 环境变量 ────────────────────────────────────────────────
-//! `AGENT2API_PROXY_HOME` 优先，旧名 `WORKBUDDY_PROXY_HOME` 兼容读（1.x 的
-//! 启动脚本/快捷方式里可能还留着旧名）。Docker 部署把它指到挂载卷
-//! （compose 示例：`AGENT2API_PROXY_HOME=/data`），数据即可留在容器外。
+//! `AIAPI_PROXY_HOME` 优先，改名前的 `AGENT2API_PROXY_HOME` 与更早的
+//! `WORKBUDDY_PROXY_HOME` 兼容读（1.x 的启动脚本/快捷方式里可能还留着旧名）。
+//! Docker 部署把它指到挂载卷（compose 示例：`AIAPI_PROXY_HOME=/data`），
+//! 数据即可留在容器外。
 
 use std::path::PathBuf;
 
-/// 配置目录：默认 `{用户主目录}/.agent2api`，可被环境变量整体覆盖。
+/// 配置目录：默认 `{用户主目录}/.aiapi`，可被环境变量整体覆盖。
 pub fn config_dir() -> PathBuf {
-    env_path("AGENT2API_PROXY_HOME")
-        .or_else(|| env_path("WORKBUDDY_PROXY_HOME")) // 旧名兼容读
+    env_path("AIAPI_PROXY_HOME")
+        .or_else(|| env_path("AGENT2API_PROXY_HOME")) // 改名前的旧名，兼容读
+        .or_else(|| env_path("WORKBUDDY_PROXY_HOME")) // 1.x 起沿用的更旧名
         .unwrap_or_else(default_config_dir)
 }
 
@@ -30,12 +32,17 @@ fn env_path(name: &str) -> Option<PathBuf> {
     }
 }
 
-/// 默认配置目录：`{用户主目录}/.agent2api`
+/// 默认配置目录：`{用户主目录}/.aiapi`
+///
+/// 目录名从 `.agent2api` 改成 `.aiapi`（产品改名 AIapi）。旧目录**不就地改名**，
+/// 而是由 `config_migration::migrate_config_dir` 在启动第一步整体拷贝过来
+/// （旧目录原样保留，用户可随时回退旧版）—— 所以这里只管「新家在哪」，
+/// 「旧家在哪」的事实来源在 `config::legacy_config_dir`。
 fn default_config_dir() -> PathBuf {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".agent2api")
+    PathBuf::from(home).join(".aiapi")
 }
 
 /// 旧桌面设置文件的路径（`{config_dir}/desktop-settings.json`）。

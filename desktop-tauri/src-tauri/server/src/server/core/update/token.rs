@@ -36,7 +36,7 @@ use base64::Engine as _;
 use crate::server::config;
 use crate::server::logging;
 
-/// 密钥文件名（落在 `~/.agent2api`，与库同目录、库之外）
+/// 密钥文件名（落在 `~/.aiapi`，与库同目录、库之外）
 const KEY_FILE: &str = "update-token.key";
 
 /// 密文信封的版本前缀（见模块头「密文形态」）

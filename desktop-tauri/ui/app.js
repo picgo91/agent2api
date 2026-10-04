@@ -1,4 +1,4 @@
-/* Agent2API · 桌面端渲染层 */
+/* AIapi · 桌面端渲染层 */
 /* global workbuddyDesktop */
 
 const api = window.workbuddyDesktop;
@@ -803,7 +803,10 @@ function paintIcons() {
   if (!icon) return;
   document.querySelectorAll('.nav-item[data-icon] .ico').forEach(slot => {
     const name = slot.closest('.nav-item').dataset.icon;
-    slot.innerHTML = icon(name, 17);
+    // 18 与 layout.css 里 .ico 的 24px 容器配套：图形 18、容器 24，
+    // 差出来的 6px 就是选中态主色底的呼吸边（.nav-item.active .ico）。
+    // 两个数一起改 —— 只改一处会让底色要么贴死图形、要么空出一大圈。
+    slot.innerHTML = icon(name, 18);
   });
   document.querySelectorAll('.brand-logo').forEach(slot => {
     slot.innerHTML = icon('brand', 32);
@@ -817,13 +820,17 @@ paintIcons();
 // 完全按这个 class 表达，不再用 @media 写第二套侧栏布局 —— 于是「窗口变窄」与
 // 「用户手动收起」不会互相覆盖，改尺寸也只需改一处。
 //
-// 三种来源的优先级：用户手动选择 > 窄窗自动折叠 > 默认展开。
-// 手动选择写进 localStorage，所以「我收起了侧栏」这件事跨重启保留。
+// 默认是**收起**（图标条）：一级菜单图标优先，文字只在需要时才出现。收起态并不
+// 牺牲可读性 —— 侧栏悬停会展开成浮层（layout.css 的「悬停展开的浮层」），
+// 而常驻的 60px 轨道给内容区省下的宽度，是每天都在兑现的。
+//
+// 两种来源的优先级：用户手动选择 > 默认收起。手动选择写进 localStorage，
+// 所以「我把侧栏展开了」跨重启保留；从没手动选过就一直是收起态。
+// （原先还有第三档「窄窗自动折叠 + 默认展开」。默认改成收起后那一档变得多余：
+//   收起态下窗口再窄也还是收起，唯一的分支只剩「用户手动展开了」，而手动选择
+//   本就优先于它 —— 连同 NAV_AUTO_BREAKPOINT 和 resize 监听一起删掉。）
 
 const NAV_COLLAPSE_KEY = 'workbuddy-nav-collapsed';
-
-/** 窗口窄到这个宽度以下就折叠侧栏：图标条 56px + 内容的最小可读宽度。 */
-const NAV_AUTO_BREAKPOINT = 1100;
 
 function applyNavCollapse(collapsed, { persist = false } = {}) {
   document.body.classList.toggle('nav-collapsed', collapsed);
@@ -850,27 +857,15 @@ $('nav-toggle')?.addEventListener('click', () => {
   applyNavCollapse(!document.body.classList.contains('nav-collapsed'), { persist: true });
 });
 
-/** 窄窗自动折叠：只在用户没手动选过时生效，手动选择优先于它。 */
+/** 初始化折叠态：手动选过（'0' 展开 / '1' 收起）就照它，否则默认收起。 */
 function syncNavAutoCollapse() {
   let manual = null;
   try { manual = localStorage.getItem(NAV_COLLAPSE_KEY); } catch { /* 忽略 */ }
-  if (manual === '1' || manual === '0') {
-    applyNavCollapse(manual === '1');
-    return;
-  }
-  applyNavCollapse(window.innerWidth < NAV_AUTO_BREAKPOINT);
+  // 只有 '0'（手动展开）是例外，'1' 与「从没选过」都走默认收起
+  applyNavCollapse(manual !== '0');
 }
 
 syncNavAutoCollapse();
-window.addEventListener('resize', () => {
-  // resize 频繁，只在跨越断点时真正改 class，避免每次拖窗口都重排侧栏
-  const want = window.innerWidth < NAV_AUTO_BREAKPOINT;
-  if (want !== document.body.classList.contains('nav-collapsed')) {
-    let manual = null;
-    try { manual = localStorage.getItem(NAV_COLLAPSE_KEY); } catch { /* 忽略 */ }
-    if (manual !== '1' && manual !== '0') applyNavCollapse(want);
-  }
-});
 
 // ─── 端口状态与冲突处置 ───────────────────────
 //

@@ -1,4 +1,7 @@
-//! 一次性配置目录迁移：`~/.workbuddy-proxy` → `~/.agent2api`（只拷贝，不删源）。
+//! 一次性配置目录迁移：`~/.agent2api`（更早是 `~/.workbuddy-proxy`）→ `~/.aiapi`
+//! （只拷贝，不删源）。源目录由 `config::legacy_config_dir()` 按序取第一个
+//! 真实存在的候选决定 —— 见那里的注释：跑过 2.x 的迁 `.agent2api`，
+//! 从 1.x 直升的迁 `.workbuddy-proxy`，一次到位到 `.aiapi`。
 //!
 //! ── 语义（架构文档 §3.1）────────────────────────────────────
 //!   - 新目录不存在、旧目录存在 → 把旧目录**整体拷贝**为新目录，旧目录保留不动
@@ -7,7 +10,7 @@
 //!     合并会让「哪些数据以哪边为准」变得不可预测）。已存在的新目录一律当作
 //!     用户/前一次运行的真实数据，**不猜测**它是历史失败产物、更不覆写；
 //!   - 都不存在 → 什么都不做（后续初始化自己会建空目录）；
-//!   - 有环境变量覆盖（`AGENT2API_PROXY_HOME` / 旧名）→ 什么都不做：用户显式
+//!   - 有环境变量覆盖（`AIAPI_PROXY_HOME` 或两个旧名之一）→ 什么都不做：用户显式
 //!     指定了目录，这时去动默认路径只会制造困惑，也可能把数据拷到错误的盘上。
 //!
 //! ── 为什么是拷贝而不是改名 ───────────────────────────────────
@@ -53,7 +56,11 @@ const STAGING_SUFFIX: &str = ".migrating";
 
 /// 暂存目录的所有权标记文件：只有带它的暂存目录才被认为是本程序创建的。
 /// 名字取得足够特别，避免与用户自己的文件重名后被误判。
-const STAGING_MARKER: &str = ".agent2api.migrating.marker";
+///
+/// 产品改名后这里也换成新名（`.aiapi.migrating.marker`）：旧版崩溃残留的
+/// 暂存目录里放的是旧标记文件，新版识别不到 → 按「只提示不动手」留垃圾。
+/// 这是刻意的：宁可留垃圾，也不误判别人创建的目录。
+const STAGING_MARKER: &str = ".aiapi.migrating.marker";
 
 /// 迁移结果（成功时的分支；调用方据此决定要不要提示用户）
 #[derive(Debug)]
@@ -392,12 +399,16 @@ fn is_link_like(metadata: &std::fs::Metadata) -> bool {
     false
 }
 
-/// 是否设置了配置目录的环境变量覆盖（`AGENT2API_PROXY_HOME` 或旧名）。
+/// 是否设置了配置目录的环境变量覆盖（`AIAPI_PROXY_HOME` 或两个旧名之一）。
 ///
 /// 只判断「有没有设」，不重复解析路径 —— 解析口径的唯一事实来源是
 /// `paths::config_dir()`；覆盖生效时迁移整体不适用。
 fn env_dir_override_set() -> bool {
-    ["AGENT2API_PROXY_HOME", "WORKBUDDY_PROXY_HOME"]
+    [
+        "AIAPI_PROXY_HOME",
+        "AGENT2API_PROXY_HOME",
+        "WORKBUDDY_PROXY_HOME",
+    ]
         .iter()
         .any(|name| {
             std::env::var(name)

@@ -14,9 +14,9 @@
 //! ── 管理员的两种来路 ─────────────────────────────────────────
 //!   · 面板首次注册（推荐）：全新部署时登录页出现「创建管理员账号」，
 //!     写入 `kv` 表的 `panelAdmin` 键 —— 不需要预先在部署配置里放密码；
-//!   · 环境变量预置（`AGENT2API_ADMIN_USER` + 密码，跳过注册流程，
-//!     无人值守 / IaC 部署用）：密码填 `AGENT2API_ADMIN_PASSWORD`（明文，
-//!     内存里现场转成 bcrypt 哈希）或 `AGENT2API_ADMIN_PASSWORD_HASH`
+//!   · 环境变量预置（`AIAPI_ADMIN_USER` + 密码，跳过注册流程，
+//!     无人值守 / IaC 部署用）：密码填 `AIAPI_ADMIN_PASSWORD`（明文，
+//!     内存里现场转成 bcrypt 哈希）或 `AIAPI_ADMIN_PASSWORD_HASH`
 //!     （已是 bcrypt 哈希，优先于明文）。启动时把哈希同步进库 ——
 //!     **任何落盘形态都只有哈希**，明文只出现在部署配置里。
 //!
@@ -35,9 +35,9 @@ use axum::http::HeaderMap;
 use crate::server::db::Db;
 
 /// 会话 cookie 名（access，面板登录后由浏览器自动携带；登出清 cookie 用同一名字）
-pub const ACCESS_COOKIE: &str = "agent2api-panel";
+pub const ACCESS_COOKIE: &str = "aiapi-panel";
 /// 刷新 cookie 名（path 限定在 /api/panel，缩小暴露面 —— 照 OmniProxy 的做法）
-pub const REFRESH_COOKIE: &str = "agent2api-panel-rt";
+pub const REFRESH_COOKIE: &str = "aiapi-panel-rt";
 
 /// access token 有效期（短效）
 const ACCESS_TTL: Duration = Duration::from_secs(2 * 3600);
@@ -89,11 +89,13 @@ fn env_admin() -> Option<&'static (String, String)> {
     // 密码有两个变量：HASH（已是 bcrypt 哈希）优先；PASSWORD（明文）则
     // 现场 bcrypt::hash 一次 —— 内存与落库从此都只有哈希形态。
     ENV_ADMIN.get_or_init(|| {
-        let user = std::env::var("AGENT2API_ADMIN_USER")
+        let user = std::env::var("AIAPI_ADMIN_USER")
+            .or_else(|_| std::env::var("AGENT2API_ADMIN_USER")) // 改名前的旧名，兼容读
             .ok()
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
-        let from_hash = std::env::var("AGENT2API_ADMIN_PASSWORD_HASH")
+        let from_hash = std::env::var("AIAPI_ADMIN_PASSWORD_HASH")
+            .or_else(|_| std::env::var("AGENT2API_ADMIN_PASSWORD_HASH")) // 改名前的旧名
             .ok()
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
@@ -106,7 +108,8 @@ fn env_admin() -> Option<&'static (String, String)> {
             });
         let hash = match from_hash {
             Some(hash) => Some(hash),
-            None => std::env::var("AGENT2API_ADMIN_PASSWORD")
+            None => std::env::var("AIAPI_ADMIN_PASSWORD")
+                .or_else(|_| std::env::var("AGENT2API_ADMIN_PASSWORD")) // 改名前的旧名
                 .ok()
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
@@ -115,7 +118,7 @@ fn env_admin() -> Option<&'static (String, String)> {
                     // bcrypt 拒绝的密码（如超过 72 字节）：报出来，别静默
                     // 失效让部署者以为账号已预置成功
                     Err(error) => {
-                        eprintln!("❌ AGENT2API_ADMIN_PASSWORD 无法转成哈希: {error}");
+                        eprintln!("❌ AIAPI_ADMIN_PASSWORD 无法转成哈希: {error}");
                         None
                     }
                 }),

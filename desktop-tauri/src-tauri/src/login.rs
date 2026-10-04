@@ -353,7 +353,7 @@ fn autoclaw_callback_forward(url: &url::Url) -> Option<String> {
     if port == crate::gateway::proxy_port() {
         return None;
     }
-    if !agent2api_server::server::core::providers::autoclaw::callback_server::REGISTERED_CALLBACK_PORTS
+    if !aiapi_server::server::core::providers::autoclaw::callback_server::REGISTERED_CALLBACK_PORTS
         .contains(&port)
     {
         return None;

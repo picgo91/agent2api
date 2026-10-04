@@ -781,7 +781,7 @@ pub async fn login_oauth_captcha_config(body: Bytes) -> Response {
 /// 判据与回落顺序都在那边（见其 `callback_endpoint`）。
 ///
 /// `local_browser` 的判据是**监听地址是不是 loopback**：桌面壳固定绑
-/// 127.0.0.1；容器 / 远程部署按 `AGENT2API_HOST`（默认 0.0.0.0）—— 那种形态
+/// 127.0.0.1；容器 / 远程部署按 `AIAPI_HOST`（默认 0.0.0.0）—— 那种形态
 /// 下浏览器解析的 `localhost` 是它自己那台机器，占登记端口没有意义。
 pub async fn login_oauth_start(State(state): State<ServerState>, body: Bytes) -> Response {
     let payload = parse_body(&body).unwrap_or(Value::Null);
@@ -796,7 +796,7 @@ pub async fn login_oauth_start(State(state): State<ServerState>, body: Bytes) ->
         .unwrap_or("");
     // ── 浏览器要访问的地址按「回调路由挂在哪个端口」拼 ─────────────
     // 回调路由在**管理面**那套路由里（见 http.rs 的 `panel_router`）：同端口
-    // 形态（桌面壳、未设 AGENT2API_PANEL_PORT 的 headless）就是 `state.port`；
+    // 形态（桌面壳、未设 AIAPI_PANEL_PORT 的 headless）就是 `state.port`；
     // 分端口形态它在 `panel_port` 上 —— 那时浏览器必须打到那个端口，否则
     // 回调（以及监听器的 302 转发目标）会落进主端口的 404。
     let api_port = state

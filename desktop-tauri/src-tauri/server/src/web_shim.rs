@@ -44,7 +44,7 @@ pub fn shim_js() -> &'static str {
   'use strict';
 
   // ── API Key 的存取 ────────────────────────────────────────
-  var KEY_STORAGE = 'agent2api.webKey';
+  var KEY_STORAGE = 'aiapi.webKey';
   function readStoredKey() {
     try { return localStorage.getItem(KEY_STORAGE) || ''; } catch (e) { return ''; }
   }
@@ -306,10 +306,10 @@ pub fn shim_js() -> &'static str {
       return Promise.resolve({ url: (args && args.url) || '' });
     },
     export_accounts: function () {
-      return downloadFile('GET', '/api/accounts/export', 'agent2api-config.json');
+      return downloadFile('GET', '/api/accounts/export', 'aiapi-config.json');
     },
     export_logs: function () {
-      return downloadFile('GET', '/api/logs/download', 'agent2api-logs.txt');
+      return downloadFile('GET', '/api/logs/download', 'aiapi-logs.txt');
     },
   };
 
@@ -730,10 +730,10 @@ pub fn shim_js() -> &'static str {
     getPortOccupant: function () { return invokeShell('port_occupant'); },
     endPortOccupant: function () { return Promise.reject(new Error(SHELL_UNAVAILABLE)); },
     checkPort: function () {
-      return Promise.reject(new Error('网页端不探测端口：端口由 AGENT2API_PORT 环境变量决定'));
+      return Promise.reject(new Error('网页端不探测端口：端口由 AIAPI_PROXY_PORT 环境变量决定'));
     },
     changePort: function () {
-      return Promise.reject(new Error('网页端不支持改端口：请设置环境变量 AGENT2API_PORT 后重启容器'));
+      return Promise.reject(new Error('网页端不支持改端口：请设置环境变量 AIAPI_PROXY_PORT 后重启容器'));
     },
     restartApp: function () {
       return Promise.reject(new Error('网页端不支持重启：请重启容器（docker compose restart）'));

@@ -1,9 +1,9 @@
-//! headless 服务器入口：Agent2API 网关的**无图形**运行形态。
+//! headless 服务器入口：AIapi 网关的**无图形**运行形态。
 //!
 //! ── 与桌面端的关系 ──────────────────────────────────────────
-//! 两者链接同一个网关 lib（`agent2api_server`），HTTP 契约、数据目录、
+//! 两者链接同一个网关 lib（`aiapi_server`），HTTP 契约、数据目录、
 //! 迁移逻辑完全一致。差异只有三件：
-//!   · 监听地址：本二进制按 `AGENT2API_HOST` 解析（默认 0.0.0.0，
+//!   · 监听地址：本二进制按 `AIAPI_HOST` 解析（默认 0.0.0.0，
 //!     供容器端口映射）；桌面壳固定 127.0.0.1。
 //!   · 界面：桌面由 Tauri 壳的 custom-protocol 出面板；本形态由网关
 //!     自己托管 `ui/` 静态目录（`set_ui_dir`），并注入网页端 bridge
@@ -11,62 +11,70 @@
 //!   · 安全闸门：本形态面向网络部署，两层的最低保护 ——
 //!     管理面要「管理员账号或 API Key」（都没有则拒绝启动）；
 //!     转发面（/v1/*）没配 Key 时 fail-closed（登录面板自建第一把即恢复；
-//!     桌面默认只听回环，同一风险不存在；确要裸跑见 `AGENT2API_ALLOW_NO_KEY`）。
+//!     桌面默认只听回环，同一风险不存在；确要裸跑见 `AIAPI_ALLOW_NO_KEY`）。
 //!
 //! ── 环境变量 ────────────────────────────────────────────────
-//!   AGENT2API_PROXY_HOME        配置/数据目录（旧名 WORKBUDDY_PROXY_HOME 兼容读）
-//!   AGENT2API_HOST              监听地址，默认 0.0.0.0
-//!   AGENT2API_PROXY_PORT        监听端口（旧名 WORKBUDDY_PROXY_PORT），默认 3065
-//!   AGENT2API_PANEL_PORT        可选：面板分端口 —— 设置后管理面（界面 + /api/*）
+//! 下面列的是新名（`AIAPI_*`）。产品改名前的同名 `AGENT2API_*`、以及更早的
+//! `WORKBUDDY_*` 仍可读，取值优先级：AIAPI_* > AGENT2API_* > WORKBUDDY_* ——
+//! 已有部署（启动脚本、compose、IaC）里写的旧名不必改。
+//!
+//!   AIAPI_PROXY_HOME        配置/数据目录，默认 `~/.aiapi`
+//!   AIAPI_HOST              监听地址，默认 0.0.0.0
+//!   AIAPI_PROXY_PORT        监听端口，默认 3065
+//!   AIAPI_PANEL_PORT        可选：面板分端口 —— 设置后管理面（界面 + /api/*）
 //!                               单独监听该端口，主端口只保留 /v1/* 网关；
 //!                               公网部署只映射主端口，即可把面板留在内网
-//!   AGENT2API_UI_DIR            管理界面静态目录，默认 `ui/`（相对可执行文件）
-//!   AGENT2API_ADMIN_USER        面板管理员账号（与下面的密码变量之一同时设置）
-//!   AGENT2API_ADMIN_PASSWORD    面板管理员密码（明文，启动时自动转 bcrypt 哈希）
-//!   AGENT2API_ADMIN_PASSWORD_HASH 面板管理员密码的 bcrypt 哈希（优先于明文；
+//!   AIAPI_UI_DIR            管理界面静态目录，默认 `ui/`（相对可执行文件）
+//!   AIAPI_ADMIN_USER        面板管理员账号（与下面的密码变量之一同时设置）
+//!   AIAPI_ADMIN_PASSWORD    面板管理员密码（明文，启动时自动转 bcrypt 哈希）
+//!   AIAPI_ADMIN_PASSWORD_HASH 面板管理员密码的 bcrypt 哈希（优先于明文；
 //!                               htpasswd -nBC 10 user 的输出整行可粘）
-//!   AGENT2API_ALLOW_NO_KEY      置 `1` 关闭全部闸门（未配 Key 也放行，纯内网用）
-//!   AGENT2API_CAPTCHA_ENABLED   登录页人机验证组件环境变量，默认为0关闭，1为开启
-//!   AGENT2API_VERBOSE           置 `1` 打开 debug 级日志（与桌面一致）
+//!   AIAPI_ALLOW_NO_KEY      置 `1` 关闭全部闸门（未配 Key 也放行，纯内网用）
+//!   AIAPI_CAPTCHA_ENABLED   登录页人机验证组件环境变量，默认为0关闭，1为开启
+//!   AIAPI_VERBOSE           置 `1` 打开 debug 级日志（与桌面一致）
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use agent2api_server::server::{config, logging, start, ServerState};
+use aiapi_server::server::{config, logging, start, ServerState};
 
 fn main() -> ExitCode {
-    // 端口口径与桌面壳一致：新名 > 旧名 > 默认（非法值当未设置）
-    let port = env_port("AGENT2API_PROXY_PORT")
+    // 端口口径与桌面壳一致：新名 > 改名前 > 1.x 旧名 > 默认（非法值当未设置）
+    let port = env_port("AIAPI_PROXY_PORT")
+        .or_else(|| env_port("AGENT2API_PROXY_PORT"))
         .or_else(|| env_port("WORKBUDDY_PROXY_PORT"))
         .unwrap_or(3065);
-    let host: IpAddr = match std::env::var("AGENT2API_HOST") {
-        Ok(value) if !value.trim().is_empty() => match value.trim().parse() {
-            Ok(host) => host,
-            Err(_) => {
-                eprintln!("❌ AGENT2API_HOST 不是合法的 IP 地址: {value}");
-                return ExitCode::FAILURE;
-            }
-        },
-        // headless 形态默认 0.0.0.0：它的宿主通常是容器 / 服务器，
-        // 绑回环会让端口映射与外部访问全部失效。对外暴露的安全由
-        // 「未配 Key 拒绝启动」闸门 + API Key 认证兜底。
-        _ => IpAddr::from(Ipv4Addr::UNSPECIFIED),
-    };
+    let host: IpAddr =
+        match std::env::var("AIAPI_HOST").or_else(|_| std::env::var("AGENT2API_HOST")) {
+            Ok(value) if !value.trim().is_empty() => match value.trim().parse() {
+                Ok(host) => host,
+                Err(_) => {
+                    eprintln!("❌ AIAPI_HOST 不是合法的 IP 地址: {value}");
+                    return ExitCode::FAILURE;
+                }
+            },
+            // headless 形态默认 0.0.0.0：它的宿主通常是容器 / 服务器，
+            // 绑回环会让端口映射与外部访问全部失效。对外暴露的安全由
+            // 「未配 Key 拒绝启动」闸门 + API Key 认证兜底。
+            _ => IpAddr::from(Ipv4Addr::UNSPECIFIED),
+        };
     let ui_dir = resolve_ui_dir();
 
     // 面板分端口（可选）：设了就把管理面（静态界面 + /api/*）挪到独立端口，
     // 主端口只留 /v1/* 网关 —— 想收敛暴露面时，公网只映射主端口即可。
     // 与主端口相同没有意义（等于没分），直接报错不让部署带着歧义上线。
-    let panel_port = match std::env::var("AGENT2API_PANEL_PORT") {
+    let panel_port = match std::env::var("AIAPI_PANEL_PORT")
+        .or_else(|_| std::env::var("AGENT2API_PANEL_PORT"))
+    {
         Ok(value) if !value.trim().is_empty() => match value.trim().parse::<u16>() {
             Ok(p) if p == port => {
-                eprintln!("❌ AGENT2API_PANEL_PORT 与网关端口相同（{p}）：分端口部署要求两者不同");
+                eprintln!("❌ AIAPI_PANEL_PORT 与网关端口相同（{p}）：分端口部署要求两者不同");
                 return ExitCode::FAILURE;
             }
             Ok(p) => Some(p),
             Err(_) => {
-                eprintln!("❌ AGENT2API_PANEL_PORT 不是合法端口: {value}");
+                eprintln!("❌ AIAPI_PANEL_PORT 不是合法端口: {value}");
                 return ExitCode::FAILURE;
             }
         },
@@ -86,9 +94,9 @@ fn main() -> ExitCode {
     state.panel_port = panel_port;
     // headless 面板闸门：未注册时 /api/* 只放行注册相关端点与 API Key（强制
     // 先注册，见 access::panel_gate 与 http::require_api_key 的注释）。
-    // 唯一的关闭口在下面的安全闸门里：AGENT2API_ALLOW_NO_KEY=1 是「我自己
+    // 唯一的关闭口在下面的安全闸门里：AIAPI_ALLOW_NO_KEY=1 是「我自己
     // 要全放行」的显式声明，闸门不得拦它。
-    agent2api_server::server::access::set_panel_gate(true);
+    aiapi_server::server::access::set_panel_gate(true);
     if let Some(p) = panel_port {
         logging::log(
             "[Server]",
@@ -99,10 +107,10 @@ fn main() -> ExitCode {
     }
 
     // 面板访问控制的库句柄与刷新令牌载入（注册 / 双令牌落盘都走它）
-    agent2api_server::server::access::attach_db(state.db().cloned());
-    agent2api_server::server::access::load_refresh_tokens();
+    aiapi_server::server::access::attach_db(state.db().cloned());
+    aiapi_server::server::access::load_refresh_tokens();
     // env 预置的管理员同步进库（明文在此前已转哈希，库里只存哈希）
-    agent2api_server::server::access::sync_env_admin_to_store();
+    aiapi_server::server::access::sync_env_admin_to_store();
 
     // ── 安全闸门：/v1/* 的 fail-closed 与注册提示 ───────────────
     // 桌面形态的安全边界是「只监听 127.0.0.1」，免鉴权语义（一把 Key 都
@@ -113,24 +121,25 @@ fn main() -> ExitCode {
     //     （否则连「创建管理员」都进不去）—— 这是刻意的取舍：抢注只可能
     //     发生在「部署完到用户注册」之间，所以启动日志会强烈提醒立即注册；
     //     注册一完成，管理面立即要求登录。介意这个窗口的，用环境变量
-    //     预置管理员（AGENT2API_ADMIN_USER / …_PASSWORD_HASH，跳过注册）。
-    // 纯内网确要无 Key 裸跑的，显式设 AGENT2API_ALLOW_NO_KEY=1 自己负责。
+    //     预置管理员（AIAPI_ADMIN_USER / …_PASSWORD_HASH，跳过注册）。
+    // 纯内网确要无 Key 裸跑的，显式设 AIAPI_ALLOW_NO_KEY=1 自己负责。
     if !config::current().active_api_keys().is_empty() {
         logging::log("[Security]", "API Key 认证已启用");
-    } else if std::env::var("AGENT2API_ALLOW_NO_KEY")
+    } else if std::env::var("AIAPI_ALLOW_NO_KEY")
+        .or_else(|_| std::env::var("AGENT2API_ALLOW_NO_KEY")) // 改名前的旧名，兼容读
         .map(|v| v.trim() == "1")
         .unwrap_or(false)
     {
         // 裸跑是「我自己要全放行」的显式声明：面板闸门必须让路，
         // 否则 /api/* 会被未注册闸门挡住，与声明自相矛盾
-        agent2api_server::server::access::set_panel_gate(false);
+        aiapi_server::server::access::set_panel_gate(false);
         logging::log(
             "[Security]",
-            "⚠️  AGENT2API_ALLOW_NO_KEY=1：未配置 API Key，网关对所有来源完全开放",
+            "⚠️  AIAPI_ALLOW_NO_KEY=1：未配置 API Key，网关对所有来源完全开放",
         );
     } else {
-        agent2api_server::server::access::set_v1_fail_closed(true);
-        if agent2api_server::server::access::panel_auth_enabled() {
+        aiapi_server::server::access::set_v1_fail_closed(true);
+        if aiapi_server::server::access::panel_auth_enabled() {
             logging::log(
                 "[Security]",
                 "尚未配置 API Key：登录面板后在「网关 Key」页创建第一把，/v1/* 在此之前拒绝服务",
@@ -194,12 +203,14 @@ fn env_port(name: &str) -> Option<u16> {
         .filter(|port| *port > 0)
 }
 
-/// UI 目录：AGENT2API_UI_DIR 优先，默认可执行文件同级的 `ui/`。
+/// UI 目录：`AIAPI_UI_DIR` 优先（改名前的 `AGENT2API_UI_DIR` 兼容读），
+/// 默认可执行文件同级的 `ui/`。
 ///
 /// 这里只判目录**可定位**（能拼出路径），不判存在 —— 目录缺失时面板 404，
 /// API 照常工作（纯 API 部署可以不带 ui/），启动不该因此失败。
 fn resolve_ui_dir() -> PathBuf {
-    if let Some(dir) = std::env::var("AGENT2API_UI_DIR")
+    if let Some(dir) = std::env::var("AIAPI_UI_DIR")
+        .or_else(|_| std::env::var("AGENT2API_UI_DIR"))
         .ok()
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())

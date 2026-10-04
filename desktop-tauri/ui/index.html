@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Agent2API · 多提供商本地网关</title>
+  <title>AIapi · 多提供商本地网关</title>
+  <!-- 标签页图标：SVG 优先（高清、可无损缩放），ico 兜底给不认 SVG 的老浏览器。
+       两者同一份设计（圆角品牌蓝底 + 白色字母 A），见 build/make-favicon.mjs。 -->
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon.ico" sizes="48x48">
   <script>
     // 与主题持久化配合：在 CSS 解析前先贴上 data-theme，避免深色模式首屏闪烁
     (() => {
@@ -65,17 +69,14 @@
         <!-- 品牌标由 icons.js 注入（与应用图标 icon.png 同一造型，见 icons.js 的 brand 项） -->
         <div class="brand-logo"></div>
         <div class="brand-text">
-          <h1>Agent2API</h1>
+          <h1>AIapi</h1>
         </div>
       </div>
 
       <!-- 图标由 icons.js + app.js 注入（内联 SVG，见 icons.js 顶部说明） -->
       <nav class="nav" id="nav">
-        <div class="nav-group-label">运行状态</div>
         <button class="nav-item active" data-page="overview" data-icon="overview"><span class="ico"></span><span class="label">报表</span></button>
         <button class="nav-item" data-page="accounts" data-icon="accounts"><span class="ico"></span><span class="label">账号</span></button>
-
-        <div class="nav-group-label">转发能力</div>
         <button class="nav-item" data-page="gateway" data-icon="gateway"><span class="ico"></span><span class="label">模型管理</span></button>
         <!-- 网络代理：出网出口的管理页（代理池 CRUD + 连通性测试 + Clash 出口引用）。
              挨着「模型管理」是因为它管的是同一个问题的另一半：模型管理决定
@@ -90,8 +91,6 @@
              混在一页里用户要在两件事之间来回滚。图标用 logs（文档 + 文本行），
              语义上就是「文档」，不新画 SVG（见 icons.js）。 -->
         <button class="nav-item" data-page="docs" data-icon="logs"><span class="ico"></span><span class="label">文档</span></button>
-
-        <div class="nav-group-label">诊断</div>
         <button class="nav-item" data-page="requests" data-icon="requests"><span class="ico"></span><span class="label">请求日志</span><span class="count" id="nav-count-requests" style="display:none">0</span></button>
         <button class="nav-item" data-page="logs" data-icon="logs"><span class="ico"></span><span class="label">日志</span><span class="count" id="nav-count-logs" style="display:none">0</span></button>
         <button class="nav-item" data-page="tasks" data-icon="tasks"><span class="ico"></span><span class="label">定时任务</span></button>
@@ -127,7 +126,7 @@
              视线不用先横跨内容再回到左边。 -->
         <button class="nav-toggle" id="nav-toggle" aria-label="折叠侧栏" title="折叠侧栏"></button>
         <div class="crumb">
-          <span>Agent2API</span>
+          <span>AIapi</span>
           <span class="sep">/</span>
           <span class="cur" id="crumb-page">报表</span>
         </div>

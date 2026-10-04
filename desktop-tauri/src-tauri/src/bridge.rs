@@ -30,7 +30,7 @@ fn target_platform() -> &'static str {
     }
 }
 
-/// 桥接脚本全文：模板里的 `__AGENT2API_PLATFORM__` / `__AGENT2API_TITLE__`
+/// 桥接脚本全文：模板里的 `__AIAPI_PLATFORM__` / `__AIAPI_TITLE__`
 /// 换成 [`target_platform`] 与 [`crate::app_title`]。
 ///
 /// 为什么用占位替换而不是 `format!`：脚本里有大量 `{}`（对象字面量、模板串），
@@ -38,8 +38,8 @@ fn target_platform() -> &'static str {
 /// 一个不会被误伤的长占位名更稳。
 pub fn bridge_js() -> String {
     BRIDGE_JS
-        .replace("__AGENT2API_PLATFORM__", target_platform())
-        .replace("__AGENT2API_TITLE__", crate::app_title())
+        .replace("__AIAPI_PLATFORM__", target_platform())
+        .replace("__AIAPI_TITLE__", crate::app_title())
 }
 
 const BRIDGE_JS: &str = r#"
@@ -148,13 +148,13 @@ const BRIDGE_JS: &str = r#"
     // ── 平台 ──
     // 壳的编译目标平台（'macos' / 'windows' / 'linux'）。界面用它裁剪
     // 各平台不可用的功能（见文件头「平台标识」一节）。
-    platform: '__AGENT2API_PLATFORM__',
+    platform: '__AIAPI_PLATFORM__',
 
     // ── 标题 ──
     // 应用标题（窗口标题、托盘提示同一份文案，见壳的 app_title）。开发版
     // 带 "Dev" 标记 —— 自绘标题栏与 document.title 都按它显示，两个实例
     // 同时跑时界面上一眼能分清。
-    title: '__AGENT2API_TITLE__',
+    title: '__AIAPI_TITLE__',
 
     // ── 会话 ──
     getState: () => call('GET', '/api/session'),

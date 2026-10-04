@@ -53,9 +53,9 @@
 //!   sql.rs    `kv` 表的行级读写（本模块唯一出现 SQL 的地方）
 //! ```
 //!
-//! 配置目录本身（`~/.agent2api`）的事实来源在 `crate::paths::config_dir`，
-//! 本模块只做转发；从 1.x 升级上来的一次性目录迁移在 `config_migration`，
-//! 这里只保留旧目录名常量与旧目录路径访问器（`LEGACY_DIR_NAME` 仍是全仓
+//! 配置目录本身（`~/.aiapi`）的事实来源在 `crate::paths::config_dir`，
+//! 本模块只做转发；从旧版升级上来的一次性目录迁移在 `config_migration`，
+//! 这里只保留旧目录名常量与旧目录路径访问器（`LEGACY_DIR_NAMES` 是全仓
 //! 唯一的字面量）。
 
 use std::path::{Path, PathBuf};
@@ -133,7 +133,7 @@ pub struct RuntimeConfig {
     ///
     /// 与 `debug_mode` 同一理由：登录 / 注册端点逐请求判一次（改完开关下一个
     /// 请求就生效），解析一次存下来最省事。默认 `false`，见 `KEY_CAPTCHA_ENABLED`；
-    /// 配置项缺失时可由环境变量 `AGENT2API_CAPTCHA_ENABLED` 兜底（默认 0 关、1 开）。
+    /// 配置项缺失时可由环境变量 `AIAPI_CAPTCHA_ENABLED` 兜底（默认 0 关、1 开）。
     captcha_enabled: bool,
     /// 系统提示词设置（设置页「通用 → 系统提示词」）。
     ///
@@ -249,24 +249,41 @@ pub fn config_file() -> PathBuf {
     config_dir().join("config.json")
 }
 
-/// 旧版配置目录名（仅用于一次性目录迁移）。
+/// 旧版配置目录名（仅用于一次性目录迁移），**按顺序取第一个真实存在的**。
 ///
-/// **这是全仓唯一一处允许出现 `.workbuddy-proxy` 字面量的地方** ——
-/// 别处的路径一律走 `config_dir()`（事实来源在 `gateway::config_dir`），
+/// **这是全仓唯一一处允许出现 `.agent2api` / `.workbuddy-proxy` 字面量的地方**
+/// —— 别处的路径一律走 `config_dir()`（事实来源在 `paths::config_dir`），
 /// 否则改名会出现两套口径。
-const LEGACY_DIR_NAME: &str = ".workbuddy-proxy";
+///
+/// 改名后（`.agent2api` → `.aiapi`）这里是**两级链的取舍**：
+///   - 跑过 2.x 的用户有 `.agent2api` → 迁它。此时不该再看 `.workbuddy-proxy`，
+///     否则会把更旧的那份数据盖到新家上；
+///   - 从 1.x 直接升上来的用户只有 `.workbuddy-proxy` → 也迁它，一步到位到
+///     `.aiapi`（连迁两次只是把同样的数据多拷一遍，跳过中间态等价且更省事）；
+///   - 两个都不存在 → 返回第一个，`migrate_config_dir` 那边
+///     `symlink_metadata` 会失败，按「都不存在 → 什么都不做」收场。
+const LEGACY_DIR_NAMES: [&str; 2] = [".agent2api", ".workbuddy-proxy"];
 
-/// 旧版配置目录的完整路径（`{用户主目录}/.workbuddy-proxy`），供迁移使用。
+/// 旧版配置目录的完整路径，供迁移使用：按序取第一个存在的目录。
+///
+/// 都不存在时回落到第一个候选（`.agent2api`），调用方据此判定「无可迁之物」。
 pub(crate) fn legacy_config_dir() -> PathBuf {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(LEGACY_DIR_NAME)
+    let home = PathBuf::from(home);
+    for name in LEGACY_DIR_NAMES {
+        let candidate = home.join(name);
+        if std::fs::symlink_metadata(&candidate).is_ok() {
+            return candidate;
+        }
+    }
+    home.join(LEGACY_DIR_NAMES[0])
 }
 
 // 迁移本身（唯一入口 `config_migration::migrate_config_dir`）在
 // `server/config_migration.rs`；本模块只提供上面这个旧目录路径，
-// 保证 `.workbuddy-proxy` 字面量全仓只有一处。
+// 保证旧目录名字面量全仓只有一处。
 
 /// 读磁盘上残留的 `providerRoute` 覆盖值：`[(providerId, 优先级)]`，只含文件里
 /// 写了合法数字的那些键。账号存储把「按家分队」的旧号码合并成全局队列时，

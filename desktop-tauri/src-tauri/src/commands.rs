@@ -204,7 +204,7 @@ pub async fn change_port(app: AppHandle, port: u16) -> Result<Value, String> {
     // 不如明确告诉用户该改哪里
     if gateway::port_from_env().is_some() {
         return Err(
-            "当前端口由环境变量 AGENT2API_PROXY_PORT 指定，设置里的端口不会生效。\
+            "当前端口由环境变量 AIAPI_PROXY_PORT 指定，设置里的端口不会生效。\
              请修改该环境变量后重启程序。"
                 .to_string(),
         );

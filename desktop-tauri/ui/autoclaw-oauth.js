@@ -1,4 +1,4 @@
-/* Agent2API · AutoClaw 国际版 OAuth 网页登录（Zai / Google）
+/* AIapi · AutoClaw 国际版 OAuth 网页登录（Zai / Google）
 
    ── 为什么这一家要单独一个文件 ──────────────────────────────
    另外五家的网页登录都是「点按钮 → 壳开窗口 → 等回调」，界面只显示等待态

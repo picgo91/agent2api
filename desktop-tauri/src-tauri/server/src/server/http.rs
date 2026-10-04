@@ -57,7 +57,7 @@ const CORS_HEADERS: &str = "Content-Type, Authorization, x-api-key";
 
 /// 组装完整路由（面板 + 网关**同端口**：默认形态与桌面壳）。
 ///
-/// 分端口部署（headless 设了 `AGENT2API_PANEL_PORT`）时不要用本函数：
+/// 分端口部署（headless 设了 `AIAPI_PANEL_PORT`）时不要用本函数：
 /// 用 [`panel_router`] + [`gateway_router`] 各挂一个监听（见 `mod::start`）。
 pub fn router(state: ServerState) -> Router {
     panel_router(state.clone()).merge(gateway_router(state))
@@ -65,7 +65,7 @@ pub fn router(state: ServerState) -> Router {
 
 /// 管理面路由：管理界面（静态文件 fallback）+ `/api/*`。
 ///
-/// 分端口形态下它单独监听 `AGENT2API_PANEL_PORT` —— 面板端口可以不暴露
+/// 分端口形态下它单独监听 `AIAPI_PANEL_PORT` —— 面板端口可以不暴露
 /// 公网（防火墙 / compose 不映射），管理面就整体留在内网。
 pub fn panel_router(state: ServerState) -> Router {
     // 免鉴权：/api/endpoints（接口清单，排查用）
@@ -495,7 +495,7 @@ pub fn panel_router(state: ServerState) -> Router {
 
 /// 网关面路由：`/v1/*`（模型探针 + 三条协议入口 + token 计数）与 `/health`。
 ///
-/// 分端口形态下它单独监听主端口（`AGENT2API_PROXY_PORT`）—— 对外的
+/// 分端口形态下它单独监听主端口（`AIAPI_PROXY_PORT`）—— 对外的
 /// OpenAI 兼容端点，没有任何管理界面与管理 API；想收敛暴露面，防火墙 /
 /// compose 只映射这个端口即可。同端口形态经 [`router`] 与管理面合并。
 pub fn gateway_router(state: ServerState) -> Router {
@@ -560,7 +560,7 @@ async fn cors(request: Request, next: Next) -> Response {
     let path = request.uri().path().to_string();
     let method = request.method().as_str().to_string();
     // 详细模式下记录每个入站请求（对应 Node 版 `if (opts.verbose && !path.startsWith('/v1/'))`）
-    // ——只有开了 AGENT2API_VERBOSE=1（旧名 WORKBUDDY_VERBOSE 仍可读）才入库，
+    // ——只有开了 AIAPI_VERBOSE=1（旧名 WORKBUDDY_VERBOSE 仍可读）才入库，
     // 普通启动只是控制台多一行
     if logging::is_verbose() && !path.starts_with("/v1/") {
         let query = request.uri().query().map(|q| format!("?{q}")).unwrap_or_default();
@@ -648,7 +648,7 @@ async fn require_api_key(mut request: Request, next: Next) -> Response {
     // 200 会直接进主界面，「部署完先注册」就成了可绕过的一步。
     //
     // 两个例外必须放行，否则闸门会把既有部署形态打断：
-    //   · **兼容模式**（AGENT2API_PROXY_API_KEY 预置了 Key、无管理员）：
+    //   · **兼容模式**（AIAPI_PROXY_API_KEY 预置了 Key、无管理员）：
     //     Key 本来就是这类部署的管理凭证（桌面壳/脚本自动带），闸门必须
     //     先试 Key 再拒绝；
     //   · `/api/panel/` 前缀：注册 / 状态 / 登录本身就在这个前缀里。

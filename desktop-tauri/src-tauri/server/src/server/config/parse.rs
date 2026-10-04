@@ -33,9 +33,13 @@ pub(super) fn env_api_key() -> Option<String> {
     env_api_key_value()
 }
 
-/// 两个候选名按序取第一个有效值（`AGENT2API_PROXY_API_KEY` > 旧名）
+/// 三个候选名按序取第一个有效值（`AIAPI_PROXY_API_KEY` > 改名前 > 1.x 旧名）
 pub(crate) fn env_api_key_value() -> Option<String> {
-    for name in ["AGENT2API_PROXY_API_KEY", "WORKBUDDY_PROXY_API_KEY"] {
+    for name in [
+        "AIAPI_PROXY_API_KEY",
+        "AGENT2API_PROXY_API_KEY",
+        "WORKBUDDY_PROXY_API_KEY",
+    ] {
         if let Ok(value) = std::env::var(name) {
             let trimmed = value.trim().to_string();
             if !trimmed.is_empty() {
@@ -65,10 +69,12 @@ pub(super) fn env_text(name: &str) -> Option<String> {
 /// 而面板前的人机验证对这类部署本来就只是多一次点击。
 ///
 /// 但**显式给了值**时仍沿用旧口径「除字面 `0` 外一律开启」：已经按
-/// `AGENT2API_CAPTCHA_ENABLED=true` 之类写过的部署不会因为这次改默认值
-/// 而突然失去校验。要显式关掉就写 `0`，写 `1` 明确开，其余非 `0` 值也开。
+/// `AIAPI_CAPTCHA_ENABLED=true` / 改名前的 `AGENT2API_CAPTCHA_ENABLED=true`
+/// 之类写过的部署不会因为这次改默认值而突然失去校验。要显式关掉就写 `0`，
+/// 写 `1` 明确开，其余非 `0` 值也开。
 pub(super) fn env_captcha_enabled() -> bool {
-    std::env::var("AGENT2API_CAPTCHA_ENABLED")
+    std::env::var("AIAPI_CAPTCHA_ENABLED")
+        .or_else(|_| std::env::var("AGENT2API_CAPTCHA_ENABLED")) // 改名前的旧名，兼容读
         .map(|value| value.trim() != "0")
         .unwrap_or(false)
 }

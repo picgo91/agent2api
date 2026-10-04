@@ -1,8 +1,8 @@
 // 向量生成器：把本包对 SOLO 通道的全部「出站形状」判定导出成 JSON，
-// 供 Rust 侧（agent2api `providers/trae`）逐字节对拍。
+// 供 Rust 侧（AIapi `providers/trae`）逐字节对拍。
 //
 // 为什么要有这个文件（以及为什么它是 test 而不是生产代码）：
-// agent2api 那份实现要复刻的不是上游接口，而是**这份 Go 实现的判定结果**
+// AIapi 那份实现要复刻的不是上游接口，而是**这份 Go 实现的判定结果**
 // —— body 白名单、四处 SOLO 变形、头集合、SSE→chunk 的转换、错误分类。
 // 这些规则散在 payload.go / headers.go / solosse.go / client.go 里，
 // 靠人读一遍再"照着写"必然漏（codearts 那次就是这么抓出好几个反向用例的）。

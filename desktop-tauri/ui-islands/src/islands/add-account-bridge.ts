@@ -1,5 +1,5 @@
 /**
- * Agent2API · 「登录 / 添加账号」弹窗的共享桥（window 读取 / 提交 / 草稿 / 偏好）。
+ * AIapi · 「登录 / 添加账号」弹窗的共享桥（window 读取 / 提交 / 草稿 / 偏好）。
  *
  * 从 add-account.js + add-provider-forms.js 合并而来的一层：这两份旧脚本都直接
  * 解构 app.js 的顶层全局（$ / toast / esc / refresh）与 window 上的引擎，迁到岛上

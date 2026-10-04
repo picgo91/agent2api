@@ -1,4 +1,4 @@
-/* Agent2API · 模型管理 / 网关 Key / 请求日志，以及「获取模型」弹窗两张表的
+/* AIapi · 模型管理 / 网关 Key / 请求日志，以及「获取模型」弹窗两张表的
    列宽拖动与持久化 */
 /* global wbApp */
 
@@ -58,7 +58,7 @@
  * TABLES 里各列的 track（拖动时整条轨道列表以它为底）。改默认列宽时两处要同步。
  */
 (() => {
-  const STORE_PREFIX = 'agent2api-col-widths:';
+  const STORE_PREFIX = 'aiapi-col-widths:';
 
   /** 拖动的下限：再窄就该点不准里面的控件了（与账号表同一个值） */
   const MIN_WIDTH = 56;

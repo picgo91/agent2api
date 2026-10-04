@@ -19,7 +19,7 @@ import {
 import { TableFooter, useClientPaging } from './table-shell'
 
 /**
- * Agent2API · 网关 Key 页（列表 / 新建 / 启停 / 删除 / 可用范围）—— React 岛。
+ * AIapi · 网关 Key 页（列表 / 新建 / 启停 / 删除 / 可用范围）—— React 岛。
  *
  * 替换 ui/keys-panel.js（那份用 innerHTML 拼 .models-table 的行、事件走容器委托）。
  * 对外接口与原实现**完全一致**：`window.wbKeysPanel = { load, render, visibleColumns }`

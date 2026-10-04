@@ -1,5 +1,5 @@
 /**
- * Agent2API · 账号页（四家混排的一张表 + 批量栏 + 两个弹窗）—— React 岛。
+ * AIapi · 账号页（四家混排的一张表 + 批量栏 + 两个弹窗）—— React 岛。
  *
  * 替换 ui/accounts-table.js + ui/accounts-view.js + ui/accounts-filters.js +
  * ui/accounts-columns.js + ui/accounts-groups.js + ui/accounts-model.js +

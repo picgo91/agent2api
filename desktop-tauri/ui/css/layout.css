@@ -8,6 +8,9 @@
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
+  /* 收起态下侧栏悬停展开成浮层（见「侧栏折叠」一节），absolute 要有定位上下文。
+     留在这里而不是 .sidebar 上：.shell 是那条 grid 的容器，浮层要盖住的是它。 */
+  position: relative;
 }
 
 /* 桌面端自定义标题栏占掉一行 32px，外框只吃剩余高度。
@@ -187,18 +190,10 @@ body.has-titlebar .shell {
   padding-bottom: 4px;
 }
 
-.nav-group-label {
-  padding: 8px 8px 5px;
-  color: var(--sidebar-muted);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: .09em;
-  text-transform: uppercase;
-}
-
-.nav-group-label:first-child { padding-top: 0; }
-
-@media (max-width: 900px) { .nav-group-label { display: none; } }
+/* 分组标签（运行状态 / 转发能力 / 诊断）已移除，导航项全部平铺：
+   一级菜单只有 10 项，一屏内可见，分组靠图标语义与页内标题已足够区分。
+   附带修掉一个对比度问题 —— 原标签是 --sidebar-muted on --sidebar-bg，
+   浅色档实测 2.54:1（低于正文 4.5 的门槛），属本就不该有的 FAIL。 */
 
 .nav-item {
   position: relative;
@@ -220,15 +215,35 @@ body.has-titlebar .shell {
   transition: background .15s ease, color .15s ease;
 }
 
+/* 图标槽：24px 的圆角容器 —— 平时透明，选中时被 .nav-item.active 染成主色底，
+   SVG 本身仍是 18px（由 app.js 的 icon(name, 18) 注入，与这里的容器一起改）。
+   容器比图形大 6px，正好留出底色的呼吸边，选中项因此多出一块可识别的色块，
+   这是「图标优先」真正承担识别的那部分 —— 文字退居其次。 */
 .nav-item .ico {
   flex: 0 0 auto;
-  width: 17px;
-  height: 17px;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
   display: grid;
   place-items: center;
   /* 图标与文字同色：color 由 .nav-item 下发，这里不再降低透明度（旧代码的 .85 会让图标比文字虚） */
   color: currentColor;
+  transition: background .15s ease, color .15s ease, transform .15s ease;
 }
+
+/* 选中态的图标底：主色实底 + 用 --sidebar-bg 挖空图形。
+   不直接写白色 —— 暗色档 --primary 是亮蓝 #60a5fa，白图在其上只有 2.54:1（需 3），
+   而 --sidebar-bg 浅色档是白、暗色档是 #172130，两套各自算下来 5.17 / 6.39 全过。
+   换句话说取侧栏底色当「挖空色」，既没有新增配色，也让两套主题自动都对。 */
+.nav-item.active .ico,
+.nav-item.active:hover:not(:disabled) .ico {
+  background: var(--primary);
+  color: var(--sidebar-bg);
+}
+
+/* 悬停时图标轻微放大：只动 .ico，不动整行，避免文字跟着抖 */
+.nav-item:hover:not(:disabled) .ico { transform: scale(1.06); }
+.nav-item.active:hover:not(:disabled) .ico { transform: scale(1.06); }
 
 /* SVG 图标：尺寸由 .ico 决定，颜色跟随 currentColor（选中态自动变主题色）。
    原来是 ◈ ☰ 这类文字符号 —— 字体字形在不同机器上粗细与基线不一致，
@@ -294,30 +309,32 @@ body.nav-collapsed .shell {
   grid-template-columns: var(--sidebar-rail-w) minmax(0, 1fr);
 }
 
-body.nav-collapsed .sidebar {
+/* 压扁侧栏的规则**全部**限定在 .sidebar:not(:hover)：鼠标一进侧栏，
+   这些规则集体失效，元素自然落回上半部分的展开态基础样式 ——
+   于是展开样式只有一份，不会因为「收起态抄一份、浮层态再抄一份」而逐渐走样。 */
+body.nav-collapsed .sidebar:not(:hover) {
   padding: 12px 8px 8px;
   align-items: center;
 }
 
-body.nav-collapsed .brand {
+body.nav-collapsed .sidebar:not(:hover) .brand {
   justify-content: center;
   padding: 2px 0 12px;
 }
 
-body.nav-collapsed .brand-text,
-body.nav-collapsed .nav-group-label { display: none; }
+body.nav-collapsed .sidebar:not(:hover) .brand-text { display: none; }
 
-body.nav-collapsed .nav-item {
+body.nav-collapsed .sidebar:not(:hover) .nav-item {
   justify-content: center;
   padding: 8px 0;
   width: 36px;
 }
 
-body.nav-collapsed .nav-item .label { display: none; }
+body.nav-collapsed .sidebar:not(:hover) .nav-item .label { display: none; }
 
 /* 折叠后没有文字位，未读角标改成图标右上角的一颗小圆点：
    数字在 36px 宽的轨道里必然被裁，而「有没有未读」这个信息必须保留。 */
-body.nav-collapsed .nav-item .count {
+body.nav-collapsed .sidebar:not(:hover) .nav-item .count {
   position: absolute;
   top: 4px;
   right: 6px;
@@ -332,7 +349,24 @@ body.nav-collapsed .nav-item .count {
   font-size: 0;
 }
 
-body.nav-collapsed .nav-item .count.muted { display: none; }
+body.nav-collapsed .sidebar:not(:hover) .nav-item .count.muted { display: none; }
+
+/* 悬停展开的浮层：收起时侧栏只占 --sidebar-rail-w 那一列（grid 布局，
+   内容区顶满剩下的宽度），悬停时它 absolute 脱离 grid 浮到内容之上，
+   宽度撑到 --sidebar-w。
+   关键在于**内容不被推开** —— grid 那一列始终是 rail 宽，所以鼠标在侧栏与
+   内容之间来回移动时不会整页回流（那正是「悬停即展开」最招人烦的抖动）。
+   z-index 取 25：压住普通内容，但落在弹窗遮罩(30)之下 —— 弹窗一开浮层就被
+   盖住，tooltip(35) 仍能浮在最上。 */
+body.nav-collapsed .sidebar:hover {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--sidebar-peek-w);
+  z-index: 25;
+  box-shadow: var(--shadow-3);
+}
 
 /* 折叠按钮：顶栏最左侧，收起时给一个 32px 的方块（与 topbar 高度齐平） */
 .nav-toggle {
@@ -452,6 +486,16 @@ body.nav-collapsed .nav-toggle .icon-expand { display: none; }
   .status-actions { display: none; }
 }
 
+/* 同一组紧凑规则的**第二个**触发条件：侧栏收起。
+   上面那组只认窗口宽度，而收起态与窗口宽度无关 —— 侧栏默认就是收起的，
+   所以这段必须存在，否则状态卡的文字会在 60px 轨道里溢出。
+   写成两遍而不是合并选择器：一个在 @media 里、一个挂在 class 上，
+   CSS 没有跨这两者的「或」。改这一组时两处同步。 */
+body.nav-collapsed .sidebar:not(:hover) .sidebar-status { padding: 8px 6px; align-items: center; }
+body.nav-collapsed .sidebar:not(:hover) .status-line { justify-content: center; }
+body.nav-collapsed .sidebar:not(:hover) .sidebar-status .txt { display: none; }
+body.nav-collapsed .sidebar:not(:hover) .status-actions { display: none; }
+
 .theme-switch {
   display: flex;
   gap: 2px;
@@ -499,6 +543,16 @@ body.nav-collapsed .nav-toggle .icon-expand { display: none; }
   .theme-switch button[data-mode="light"]::after { content: "浅"; }
   .theme-switch button[data-mode="dark"]::after { content: "深"; }
 }
+
+/* 收起态的同一套紧凑形态：三个按钮横排要 150px+，60px 轨道里必然溢出，
+   所以这里也压成竖排单字。与上面的 @media 同源、只是触发条件不同
+   （那个看窗口宽度，这个看侧栏是否收起），改一处时另一处跟着改。 */
+body.nav-collapsed .sidebar:not(:hover) .theme-switch { flex-direction: column; }
+body.nav-collapsed .sidebar:not(:hover) .theme-switch button { font-size: 0; padding: 6px 0; }
+body.nav-collapsed .sidebar:not(:hover) .theme-switch button::after { font-size: 11px; }
+body.nav-collapsed .sidebar:not(:hover) .theme-switch button[data-mode="system"]::after { content: "自动"; }
+body.nav-collapsed .sidebar:not(:hover) .theme-switch button[data-mode="light"]::after { content: "浅"; }
+body.nav-collapsed .sidebar:not(:hover) .theme-switch button[data-mode="dark"]::after { content: "深"; }
 
 /* ─────────────────────────────
    主区域

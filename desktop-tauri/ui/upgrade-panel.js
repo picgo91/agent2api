@@ -1,4 +1,4 @@
-/* Agent2API · 数据结构升级（旧 JSON/JSONL → 单个 SQLite 库，启动即自动执行） */
+/* AIapi · 数据结构升级（旧 JSON/JSONL → 单个 SQLite 库，启动即自动执行） */
 /* global workbuddyDesktop, wbApp */
 
 /**

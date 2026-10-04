@@ -1,16 +1,16 @@
-//! Agent2API 网关本体（独立 crate）。
+//! AIapi 网关本体（独立 crate）。
 //!
 //! ── 本 crate 服务两种形态 ────────────────────────────────────
 //!   · Tauri 桌面端：壳进程把本 crate 当库链接，网关作为进程内 HTTP
 //!     服务器跑在 tauri 的 Tokio 运行时上（`server::start`）；
-//!   · headless 服务器 / Docker：`agent2api-server` 二进制（`src/bin/`）
+//!   · headless 服务器 / Docker：`aiapi-server` 二进制（`src/bin/`）
 //!     自建 Tokio 运行时、自己托管管理界面（`server::static_files`），
 //!     不链接任何 GUI 依赖。
 //!
 //! 模块结构是**刻意保留的一层壳**：`server/`、`port_conflict.rs` 的目录
 //! 与文件名与拆分前（桌面 crate 的 `src/server`）完全一致，内部所有
 //! `crate::server::…` / `crate::port_conflict::…` 路径零改动 —— 桌面侧
-//! 用 `use agent2api_server as server` 重导出后，两边的既有路径都继续成立。
+//! 用 `use aiapi_server as server` 重导出后，两边的既有路径都继续成立。
 //!
 //! ── 为什么 spawn 必须经由 [`spawn_task`] ─────────────────────
 //! 拆分前模块里用的是 `tauri::async_runtime::spawn`（壳提供全局运行时，

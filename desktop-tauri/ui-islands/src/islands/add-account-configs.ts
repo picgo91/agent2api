@@ -1,5 +1,5 @@
 /**
- * Agent2API · 「登录 / 添加账号」弹窗里各家的表单配置（数据层，无 JSX）。
+ * AIapi · 「登录 / 添加账号」弹窗里各家的表单配置（数据层，无 JSX）。
  *
  * 逐字合并旧实现的三份来源：add-provider-forms.js 的 ADD_FORMS、以及
  * add-qoder.js / add-cline.js / add-accio.js / add-zcode.js 四份**纯常量**配置

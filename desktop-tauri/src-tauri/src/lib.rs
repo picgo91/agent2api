@@ -36,8 +36,8 @@ mod update;
 // 网关本体与端口冲突分类已拆到独立 crate（`server/`，桌面与 headless 二进制
 // 共用）。在这里以原名引入：crate 内所有 `crate::server::…` /
 // `crate::port_conflict::…` 路径与拆分前完全一致，两侧代码零改动。
-use agent2api_server::port_conflict;
-use agent2api_server::server;
+use aiapi_server::port_conflict;
+use aiapi_server::server;
 
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::MacosLauncher;
@@ -66,9 +66,9 @@ pub const MAIN_WINDOW_LABEL: &str = "main";
 /// 判据取 `debug_assertions`，与下面「开发态不做安装迁移 / 自启刷新」同一个口径。
 pub fn app_title() -> &'static str {
     if cfg!(debug_assertions) {
-        "[Dev]Agent2API·多提供商本地网关"
+        "[Dev]AIapi·多提供商本地网关"
     } else {
-        "Agent2API · 多提供商本地网关"
+        "AIapi · 多提供商本地网关"
     }
 }
 
@@ -114,7 +114,7 @@ fn report_startup_failure(app: &tauri::AppHandle, error: &str) {
     const FORCE_EXIT_AFTER: std::time::Duration = std::time::Duration::from_secs(300);
 
     let message = format!(
-        "Agent2API 启动已中止：{error}\n\n\
+        "AIapi 启动已中止：{error}\n\n\
          本次未改动、未删除任何旧数据，也未创建新配置目录。\
          排除原因（磁盘空间、文件占用、权限）后重新打开本程序即可自动重试迁移。"
     );
@@ -122,7 +122,7 @@ fn report_startup_failure(app: &tauri::AppHandle, error: &str) {
     let handle = app.clone();
     app.dialog()
         .message(message)
-        .title("Agent2API 无法启动")
+        .title("AIapi 无法启动")
         .kind(MessageDialogKind::Error)
         .show(move |_| handle.exit(1));
 
@@ -189,7 +189,7 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
 
-            // ── 第一步：一次性配置目录迁移（`~/.workbuddy-proxy` → `~/.agent2api`）──
+            // ── 第一步：一次性配置目录迁移（`~/.workbuddy-proxy` → `~/.aiapi`）──
             // 必须是**全进程最早**的一处配置目录访问：晚于任何写盘（桌面设置、
             // config.json、日志库、账号库）时，一旦迁移失败，后续写盘就会把新目录
             // 建出来，`target.exists()` 从此为真，迁移再也无法重试，用户看到的是

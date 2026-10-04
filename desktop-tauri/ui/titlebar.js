@@ -1,4 +1,4 @@
-/* Agent2API · 自定义标题栏（桌面端） */
+/* AIapi · 自定义标题栏（桌面端） */
 /* global workbuddyDesktop, wbIcons */
 
 /**
@@ -70,7 +70,7 @@
   // 左侧品牌区（图标复用 icons.js 的 brand，与侧栏品牌区 / 应用图标同一造型）。
   // 文案取自桥接层注入的 title —— 与窗口标题、托盘提示同一份（开发版带
   // "Dev" 标记，两个实例同时跑时一眼能分清）；旧壳没注入时回落到发布版文案。
-  const appTitle = bridge.title || 'Agent2API · 多提供商本地网关';
+  const appTitle = bridge.title || 'AIapi · 多提供商本地网关';
   const brand = document.createElement('div');
   brand.className = 'titlebar-brand';
   brand.innerHTML =

@@ -1,5 +1,5 @@
 /**
- * Agent2API · 「添加账号」弹窗第 1 步：选提供商（账号类型分段 + 搜索 + 卡片网格）。
+ * AIapi · 「添加账号」弹窗第 1 步：选提供商（账号类型分段 + 搜索 + 卡片网格）。
  *
  * 替换旧 add-provider-forms.js 的 providerCards / cardHtml / logoHtml / cardMeta /
  * renderProviderCards / newCardHtml 与 mountAddProviderUi 里注入的那段骨架。

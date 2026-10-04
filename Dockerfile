@@ -1,9 +1,9 @@
-# Agent2API headless 网关镜像（多阶段构建，amd64 + arm64）
+# AIapi headless 网关镜像（多阶段构建，amd64 + arm64）
 #
 # ── 为什么只构建 server crate ────────────────────────────────
 # 仓库里有两个 crate：桌面端（tauri，Linux 下要 webkit2gtk 一整套系统库）
 # 与网关本体（server/，无 GUI 依赖）。容器里只需要网关本体 ——
-# `cargo build -p agent2api-server` 明确只编它。
+# `cargo build -p aiapi-server` 明确只编它。
 #
 # ── 多架构：交叉编译而不是 QEMU ─────────────────────────────
 # builder 固定跑在构建机的原生架构（$BUILDPLATFORM）：buildx 构建 arm64
@@ -47,16 +47,16 @@ ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
     CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
 
-# 统一构建脚本：amd64 原生 / arm64 交叉，产物统一归位到 /build/agent2api-server
+# 统一构建脚本：amd64 原生 / arm64 交叉，产物统一归位到 /build/aiapi-server
 #（COPY --from 无法条件分支，所以在这里收拢路径）
 RUN { echo '#!/bin/sh -e'; \
       echo 'cd /build/src-tauri'; \
       echo 'if [ "$TARGETARCH" = "arm64" ]; then'; \
-      echo '  cargo build --release -p agent2api-server --target aarch64-unknown-linux-gnu --target-dir /build/target'; \
-      echo '  cp /build/target/aarch64-unknown-linux-gnu/release/agent2api-server /build/agent2api-server'; \
+      echo '  cargo build --release -p aiapi-server --target aarch64-unknown-linux-gnu --target-dir /build/target'; \
+      echo '  cp /build/target/aarch64-unknown-linux-gnu/release/aiapi-server /build/aiapi-server'; \
       echo 'else'; \
-      echo '  cargo build --release -p agent2api-server --target-dir /build/target'; \
-      echo '  cp /build/target/release/agent2api-server /build/agent2api-server'; \
+      echo '  cargo build --release -p aiapi-server --target-dir /build/target'; \
+      echo '  cp /build/target/release/aiapi-server /build/aiapi-server'; \
       echo 'fi'; \
     } > /build/cargo-build.sh && chmod +x /build/cargo-build.sh
 
@@ -64,7 +64,7 @@ COPY desktop-tauri/src-tauri/Cargo.toml desktop-tauri/src-tauri/Cargo.lock src-t
 COPY desktop-tauri/src-tauri/server/Cargo.toml src-tauri/server/
 RUN mkdir -p src-tauri/server/src/bin src-tauri/src \
     && echo "" > src-tauri/server/src/lib.rs \
-    && echo "fn main() {}" > src-tauri/server/src/bin/agent2api-server.rs \
+    && echo "fn main() {}" > src-tauri/server/src/bin/aiapi-server.rs \
     && echo "" > src-tauri/src/lib.rs \
     && echo "fn main() {}" > src-tauri/src/main.rs
 # 桩依赖层：整棵依赖树编一遍，命中后成为之后每次构建的缓存底座
@@ -83,20 +83,21 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/agent2api-server /usr/local/bin/agent2api-server
+COPY --from=builder /build/aiapi-server /usr/local/bin/aiapi-server
 COPY desktop-tauri/ui /app/ui
 
 # 容器内的默认形态：全网卡监听 + 数据落卷 + 自托管面板。
 # 鉴权：面板需要管理员（登录页注册或 env 预置）；未配置任何 API Key 时
 # /v1/* 处于 fail-closed（登录面板创建第一把后自动恢复）。
-# AGENT2API_CAPTCHA_ENABLED：登录页人机验证组件环境变量，默认为0关闭，1为开启。
-ENV AGENT2API_HOST=0.0.0.0 \
-    AGENT2API_PROXY_HOME=/data \
-    AGENT2API_UI_DIR=/app/ui \
-    AGENT2API_CAPTCHA_ENABLED=0
+# AIAPI_CAPTCHA_ENABLED：登录页人机验证组件环境变量，默认为0关闭，1为开启。
+# （改名前的 AGENT2API_* 同名变量仍可读，但镜像里预置的就是新名）
+ENV AIAPI_HOST=0.0.0.0 \
+    AIAPI_PROXY_HOME=/data \
+    AIAPI_UI_DIR=/app/ui \
+    AIAPI_CAPTCHA_ENABLED=0
 VOLUME ["/data"]
 EXPOSE 3065
 WORKDIR /app
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -fsS "http://127.0.0.1:${AGENT2API_PROXY_PORT:-3065}/health" || exit 1
-ENTRYPOINT ["/usr/local/bin/agent2api-server"]
+    CMD curl -fsS "http://127.0.0.1:${AIAPI_PROXY_PORT:-3065}/health" || exit 1
+ENTRYPOINT ["/usr/local/bin/aiapi-server"]

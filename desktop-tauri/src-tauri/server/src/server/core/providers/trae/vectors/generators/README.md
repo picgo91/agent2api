@@ -27,7 +27,7 @@ TRAE_REF_DIR=/path/to/cpa-multi-plugins bash regenerate.sh
   换证候选 4 组、guidance URL、候选 origin、刷新请求体、DeviceInfo、常量表。
 
 跑完如果答案卷变了，说明**参考实现那一侧的形状漂了** —— 此时 Rust 侧对应的
-用例应当变红，那正是这套东西的目的（`cargo test -p agent2api-server trae`）。
+用例应当变红，那正是这套东西的目的（`cargo test -p aiapi-server trae`）。
 
 两个坑（都踩过，别再来一遍）：
 

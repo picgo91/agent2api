@@ -28,7 +28,7 @@ import {
 } from '@ui'
 
 /**
- * Agent2API · 「获取模型」弹窗（模型管理页那颗按钮的本体）。
+ * AIapi · 「获取模型」弹窗（模型管理页那颗按钮的本体）。
  *
  * 替换 ui/models-fetch-modal.js（innerHTML 拼 .modal-mask / .models-table 那套老类名）；
  * 对外接口与原实现**完全一致**：

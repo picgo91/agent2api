@@ -86,7 +86,7 @@ use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
 
-/// 数据库文件名。放配置目录（`~/.agent2api`）里，与 config.json / 日志并排 ——
+/// 数据库文件名。放配置目录（`~/.aiapi`）里，与 config.json / 日志并排 ——
 /// 用户在设置页看到的「配置目录」就是这一个位置，备份与排障只需要它。
 /// 路径由 `config::config_dir()` 派生，本模块不自己去查 home 目录。
 /// （接入本库的五个 store —— 账号、事件日志、请求统计、调试报文、脱敏词表 ——
@@ -283,7 +283,7 @@ pub(crate) mod test_temp {
                 .chars()
                 .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c.to_ascii_lowercase() } else { '-' })
                 .collect();
-            let path = std::env::temp_dir().join(format!("agent2api-test-{safe}-{}.db", std::process::id()));
+            let path = std::env::temp_dir().join(format!("aiapi-test-{safe}-{}.db", std::process::id()));
             let _ = std::fs::remove_file(&path);
             let db = Db::open(&path)
                 .unwrap_or_else(|error| panic!("临时库打不开（{}）：{error}", path.display()));

@@ -554,7 +554,7 @@ mod tests {
     /// 默认不跑（`#[ignore]`），要手工开：
     /// ```bash
     /// CODEARTS_AK=… CODEARTS_SK=… CODEARTS_STS=… CODEARTS_DOMAIN=… \
-    ///   cargo test -p agent2api-server codearts -- --ignored --nocapture
+    ///   cargo test -p aiapi-server codearts -- --ignored --nocapture
     /// ```
     /// 四个值就是登录换来的临时凭据（CPA 的 `codearts-provider-*.json` 里
     /// `codearts_provider_credential.*`，约 24h 有效）。缺任何一个是**跳过**而不是

@@ -16,7 +16,7 @@ import {
 } from './table-shell'
 
 /**
- * Agent2API · 请求日志页（网关转发明细：筛选 / 分页 / 自动刷新）—— React 岛。
+ * AIapi · 请求日志页（网关转发明细：筛选 / 分页 / 自动刷新）—— React 岛。
  *
  * 替换 ui/requests-panel.js 与 ui/request-phase.js（两份旧文件由本次迁移删除）。
  * 对外接口与原实现**完全一致**，调用点一行都不用改：
