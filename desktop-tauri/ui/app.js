@@ -814,59 +814,6 @@ function paintIcons() {
 }
 paintIcons();
 
-// ─── 侧栏折叠 ──────────────────────────────────────
-//
-// 折叠态只有一处事实来源：body.nav-collapsed。CSS（layout.css 的「侧栏折叠」一节）
-// 完全按这个 class 表达，不再用 @media 写第二套侧栏布局 —— 于是「窗口变窄」与
-// 「用户手动收起」不会互相覆盖，改尺寸也只需改一处。
-//
-// 默认是**收起**（图标条）：一级菜单图标优先，文字只在需要时才出现。收起态并不
-// 牺牲可读性 —— 侧栏悬停会展开成浮层（layout.css 的「悬停展开的浮层」），
-// 而常驻的 60px 轨道给内容区省下的宽度，是每天都在兑现的。
-//
-// 两种来源的优先级：用户手动选择 > 默认收起。手动选择写进 localStorage，
-// 所以「我把侧栏展开了」跨重启保留；从没手动选过就一直是收起态。
-// （原先还有第三档「窄窗自动折叠 + 默认展开」。默认改成收起后那一档变得多余：
-//   收起态下窗口再窄也还是收起，唯一的分支只剩「用户手动展开了」，而手动选择
-//   本就优先于它 —— 连同 NAV_AUTO_BREAKPOINT 和 resize 监听一起删掉。）
-
-const NAV_COLLAPSE_KEY = 'workbuddy-nav-collapsed';
-
-function applyNavCollapse(collapsed, { persist = false } = {}) {
-  document.body.classList.toggle('nav-collapsed', collapsed);
-  const btn = $('nav-toggle');
-  if (btn) {
-    const icon = window.wbIcons?.icon;
-    // 两枚图标都画进同一个按钮，靠 CSS 按 .nav-collapsed 决定显示哪一枚
-    if (icon) {
-      btn.innerHTML =
-        `<span class="icon-collapse">${icon('panelCollapse', 16)}</span>` +
-        `<span class="icon-expand">${icon('panelExpand', 16)}</span>`;
-    }
-    const label = collapsed ? '展开侧栏' : '折叠侧栏';
-    btn.title = label;
-    btn.setAttribute('aria-label', label);
-    btn.setAttribute('aria-expanded', String(!collapsed));
-  }
-  if (persist) {
-    try { localStorage.setItem(NAV_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* 隐私模式忽略 */ }
-  }
-}
-
-$('nav-toggle')?.addEventListener('click', () => {
-  applyNavCollapse(!document.body.classList.contains('nav-collapsed'), { persist: true });
-});
-
-/** 初始化折叠态：手动选过（'0' 展开 / '1' 收起）就照它，否则默认收起。 */
-function syncNavAutoCollapse() {
-  let manual = null;
-  try { manual = localStorage.getItem(NAV_COLLAPSE_KEY); } catch { /* 忽略 */ }
-  // 只有 '0'（手动展开）是例外，'1' 与「从没选过」都走默认收起
-  applyNavCollapse(manual !== '0');
-}
-
-syncNavAutoCollapse();
-
 // ─── 端口状态与冲突处置 ───────────────────────
 //
 // 侧栏那两条状态（网关进程 / 可用账号）与端口冲突时的两个出口

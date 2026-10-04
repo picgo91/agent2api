@@ -8,9 +8,6 @@
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
-  /* 收起态下侧栏悬停展开成浮层（见「侧栏折叠」一节），absolute 要有定位上下文。
-     留在这里而不是 .sidebar 上：.shell 是那条 grid 的容器，浮层要盖住的是它。 */
-  position: relative;
 }
 
 /* 桌面端自定义标题栏占掉一行 32px，外框只吃剩余高度。
@@ -293,112 +290,6 @@ body.has-titlebar .shell {
 .nav-item .count:not(.muted) { border-color: var(--danger-bd); background: var(--danger-soft); color: var(--danger); }
 .nav-item.active .count:not(.muted) { background: var(--surface); }
 
-/* ─────────────────────────────
-   侧栏折叠（图标条）
-   ─────────────────────────────
-   折叠态由 body.nav-collapsed 一个 class 表达，两种触发方式共用它：
-   用户点顶栏的折叠按钮（app.js 写入 localStorage），或窗口窄到 app.js
-   设定的断点（自动折叠，不覆盖用户已手动选择的展开态）。
-   刻意**不用 @media** 写两套侧栏布局 —— 那会让「窗口窄」和「用户手动收起」
-   互相覆盖，且每次改尺寸都要在两个地方同步。现在只有一套折叠样式。 */
-.shell {
-  transition: grid-template-columns var(--sidebar-collapse-ms) ease;
-}
-
-body.nav-collapsed .shell {
-  grid-template-columns: var(--sidebar-rail-w) minmax(0, 1fr);
-}
-
-/* 压扁侧栏的规则**全部**限定在 .sidebar:not(:hover)：鼠标一进侧栏，
-   这些规则集体失效，元素自然落回上半部分的展开态基础样式 ——
-   于是展开样式只有一份，不会因为「收起态抄一份、浮层态再抄一份」而逐渐走样。 */
-body.nav-collapsed .sidebar:not(:hover) {
-  padding: 12px 8px 8px;
-  align-items: center;
-}
-
-body.nav-collapsed .sidebar:not(:hover) .brand {
-  justify-content: center;
-  padding: 2px 0 12px;
-}
-
-body.nav-collapsed .sidebar:not(:hover) .brand-text { display: none; }
-
-body.nav-collapsed .sidebar:not(:hover) .nav-item {
-  justify-content: center;
-  padding: 8px 0;
-  width: 36px;
-}
-
-body.nav-collapsed .sidebar:not(:hover) .nav-item .label { display: none; }
-
-/* 折叠后没有文字位，未读角标改成图标右上角的一颗小圆点：
-   数字在 36px 宽的轨道里必然被裁，而「有没有未读」这个信息必须保留。 */
-body.nav-collapsed .sidebar:not(:hover) .nav-item .count {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  min-width: 0;
-  width: 6px;
-  height: 6px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: var(--danger);
-  color: transparent;
-  font-size: 0;
-}
-
-body.nav-collapsed .sidebar:not(:hover) .nav-item .count.muted { display: none; }
-
-/* 悬停展开的浮层：收起时侧栏只占 --sidebar-rail-w 那一列（grid 布局，
-   内容区顶满剩下的宽度），悬停时它 absolute 脱离 grid 浮到内容之上，
-   宽度撑到 --sidebar-w。
-   关键在于**内容不被推开** —— grid 那一列始终是 rail 宽，所以鼠标在侧栏与
-   内容之间来回移动时不会整页回流（那正是「悬停即展开」最招人烦的抖动）。
-   z-index 取 25：压住普通内容，但落在弹窗遮罩(30)之下 —— 弹窗一开浮层就被
-   盖住，tooltip(35) 仍能浮在最上。 */
-body.nav-collapsed .sidebar:hover {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: var(--sidebar-peek-w);
-  z-index: 25;
-  box-shadow: var(--shadow-3);
-}
-
-/* 折叠按钮：顶栏最左侧，收起时给一个 32px 的方块（与 topbar 高度齐平） */
-.nav-toggle {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  margin-left: -4px;
-  padding: 0;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--text-3);
-  transition: background .15s ease, color .15s ease;
-}
-
-.nav-toggle:hover:not(:disabled) {
-  background: var(--nav-hover);
-  color: var(--text);
-}
-
-.nav-toggle svg { display: block; }
-
-/* 两枚镜像图标叠在同一个格子里，靠 display 决定露出哪一枚 —— 不重新画 button，
-   切状态时也就没有「图标重建 → 一帧空白」的问题。两枚同时在 DOM 里，
-   title / aria-label 由 app.js 按状态改写。 */
-.nav-toggle > span { grid-area: 1 / 1; display: grid; place-items: center; }
-.nav-toggle .icon-collapse { display: none; }
-body.nav-collapsed .nav-toggle .icon-collapse { display: grid; }
-body.nav-collapsed .nav-toggle .icon-expand { display: none; }
-
 /* 侧栏底部 */
 .sidebar-foot {
   flex: 0 0 auto;
@@ -486,16 +377,6 @@ body.nav-collapsed .nav-toggle .icon-expand { display: none; }
   .status-actions { display: none; }
 }
 
-/* 同一组紧凑规则的**第二个**触发条件：侧栏收起。
-   上面那组只认窗口宽度，而收起态与窗口宽度无关 —— 侧栏默认就是收起的，
-   所以这段必须存在，否则状态卡的文字会在 60px 轨道里溢出。
-   写成两遍而不是合并选择器：一个在 @media 里、一个挂在 class 上，
-   CSS 没有跨这两者的「或」。改这一组时两处同步。 */
-body.nav-collapsed .sidebar:not(:hover) .sidebar-status { padding: 8px 6px; align-items: center; }
-body.nav-collapsed .sidebar:not(:hover) .status-line { justify-content: center; }
-body.nav-collapsed .sidebar:not(:hover) .sidebar-status .txt { display: none; }
-body.nav-collapsed .sidebar:not(:hover) .status-actions { display: none; }
-
 .theme-switch {
   display: flex;
   gap: 2px;
@@ -544,27 +425,13 @@ body.nav-collapsed .sidebar:not(:hover) .status-actions { display: none; }
   .theme-switch button[data-mode="dark"]::after { content: "深"; }
 }
 
-/* 收起态的同一套紧凑形态：三个按钮横排要 150px+，60px 轨道里必然溢出，
-   所以这里也压成竖排单字。与上面的 @media 同源、只是触发条件不同
-   （那个看窗口宽度，这个看侧栏是否收起），改一处时另一处跟着改。 */
-body.nav-collapsed .sidebar:not(:hover) .theme-switch { flex-direction: column; }
-body.nav-collapsed .sidebar:not(:hover) .theme-switch button { font-size: 0; padding: 6px 0; }
-body.nav-collapsed .sidebar:not(:hover) .theme-switch button::after { font-size: 11px; }
-body.nav-collapsed .sidebar:not(:hover) .theme-switch button[data-mode="system"]::after { content: "自动"; }
-body.nav-collapsed .sidebar:not(:hover) .theme-switch button[data-mode="light"]::after { content: "浅"; }
-body.nav-collapsed .sidebar:not(:hover) .theme-switch button[data-mode="dark"]::after { content: "深"; }
-
 /* ─────────────────────────────
    主区域
    ───────────────────────────── */
 .main {
   position: relative;
-  /* 显式钉在第二列（grid-template-columns 的 1fr 那一列）。
-     没有这行时，侧栏收起态悬停展开成浮层（position:absolute，见「侧栏折叠」
-     一节）会**脱离网格流** —— 自动排版随即把 .main 塞进第一列，也就是
-     --sidebar-rail-w 那条 60px 轨道、正好藏到浮层背后，第二列空着没人用，
-     表现为「侧栏一展开，右侧内容整块消失」。显式列位之后，侧栏在不在流里，
-     内容都稳在 1fr 那一列，浮层照常盖在它上面。 */
+  /* 钉在第二列（grid-template-columns 的 1fr 那一列）：侧栏恒占第一列，
+     显式列位让往 .shell 里再插元素时内容区也不会被自动排版挤错位。 */
   grid-column: 2;
   min-width: 0;
   display: flex;
