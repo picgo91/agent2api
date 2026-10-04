@@ -114,6 +114,8 @@ export type UpdateBridge = {
   ): Promise<{ launched?: boolean; path?: string; restart?: boolean } | null | undefined>
   /** 打开外链的唯一出口（只放行 http(s)，见 commands.rs） */
   openReleasePage(url: string): Promise<{ url?: string } | null | undefined>
+  /** 端标识：web_shim 注入 'web'，桌面壳按 target_platform() 注入 macos / windows / linux */
+  platform?: string
 }
 
 /**
@@ -166,6 +168,22 @@ export function safeExternal(value: unknown): string {
  * 打开外链：一律交给系统默认浏览器。webview 里直接导航会白屏，而且本程序持有
  * 桥接权限，外部链接不该在应用内部打开（「更新设置」里的 GitHub 令牌页也走它）。
  */
+/**
+ * 是否网页端。
+ *
+ * 判据是桥上的 `platform`：web_shim 注入 'web'，桌面壳由 bridge.rs 的
+ * target_platform() 注入 macos / windows / linux —— 桌面端这三个值都取不到
+ * 'web'，不会误判。
+ *
+ * 更新模块据此换掉那颗按钮：网页端跑在浏览器 / 容器里，既没有桌面壳也弹不了
+ * UAC，`download_update` 会被 web_shim 直接拒绝（「软件更新在网页端不可用：
+ * 请通过 Docker 镜像更新」）。既然装不了，就不该先显示「下载并安装」再等人
+ * 点了才报错 —— 改成打开 GitHub Release 页，人自己下 / 自己 docker pull。
+ */
+export function isWebShell(): boolean {
+  return shared().workbuddyDesktop?.platform === 'web'
+}
+
 export async function openExternal(url: string): Promise<void> {
   const target = safeExternal(url)
   if (!target) {
