@@ -9,7 +9,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@ui'
-import { handleExternalClick, markdownHtml, shared, type UpdateInfo } from './update-shared'
+import {
+  DOCKER_UPDATE_COMMAND,
+  handleExternalClick,
+  isWebShell,
+  markdownHtml,
+  shared,
+  type UpdateInfo,
+} from './update-shared'
 
 /**
  * 「检测到更新」弹窗（按需建、关闭即卸）—— 从 update-panel.tsx 拆出。
@@ -21,7 +28,8 @@ import { handleExternalClick, markdownHtml, shared, type UpdateInfo } from './up
  * 焦点陷阱 / 滚动锁定全部内建）。
  *
  * ── 与 update-panel 的分界 ─────────────────────────────────
- * 「去更新」要回到设置页并直接开始下载，那是面板的流程（openAndDownload）——
+ * 主按钮要回到设置页交给面板：桌面端直接开始下载，网页端（Docker 部署）复制
+ * 宿主机更新命令 —— 那是面板的流程（openAndDownload）——
  * 所以 `showUpdateModal` 收一个 `onGoUpdate` 回调，由 update-panel 把自己的
  * openAndDownload 递进来；弹与不弹的全部判定（跳过版本 / 本会话已弹 / 人在设置页）
  * 连同「跳过此次更新」的 localStorage 记录都归本文件，调用方只管把 checkUpdate /
@@ -100,7 +108,11 @@ function UpdateModal({ info, onGoUpdate, onClose }: UpdateModalProps) {
   }
 
   /**
-   * 「去更新」：关窗 → 切到设置页的「更新」分类 → 带着弹窗这份结果直接开始下载。
+   * 主按钮：关窗 → 切到设置页的「更新」分类 → 面板接手。
+   *
+   * 桌面端接手后**直接开始下载**；网页端（Docker 部署）复制宿主机更新命令并把
+   * 指引铺进状态行 —— 两边都走面板的 openAndDownload，分界在 downloadOrCancel
+   * 开头的 isWebShell。所以按钮文案也按端分流：装不了安装包时不该喊「去更新」。
    *
    * 为什么走 wbApp.showPage + wbSettingsPanel.showCategory：与旧 app.js 的
    * `#update-modal-go` 逐字对应（只切视图、不写分类偏好 —— 这是弹窗带来的深链，
@@ -127,6 +139,18 @@ function UpdateModal({ info, onGoUpdate, onClose }: UpdateModalProps) {
             新版本 <strong className='text-foreground'>{version}</strong> 已发布（当前{' '}
             {info.currentVersion || '未知'}），更新日志如下：
           </p>
+          {/* 网页端（Docker 部署）：容器内既装不了安装包也碰不到宿主机的 docker，
+              弹窗里就把「去哪更新、执行什么」说清楚 —— 主按钮只是去面板复制命令，
+              不该让人以为这里能一键升级 */}
+          {isWebShell() ? (
+            <p className='text-[12.5px] leading-[1.6] text-subtle'>
+              Docker 部署无法在容器内自动更新：请在宿主机执行{' '}
+              <code className='rounded border border-border bg-surface-inset px-1.5 py-0.5 font-mono text-[11.5px] text-subtle'>
+                {DOCKER_UPDATE_COMMAND}
+              </code>{' '}
+              完成更新后刷新本页。
+            </p>
+          ) : null}
           {/* 正文限高 + 滚动（旧 .update-modal-notes 的 46vh），长日志不会把弹窗撑出一屏；
               overscroll-contain 拦住滚动链，滚到底不带动外层页面 */}
           <div className='max-h-[46vh] overflow-y-auto overscroll-contain pr-1.5' onClick={handleExternalClick}>
@@ -142,7 +166,9 @@ function UpdateModal({ info, onGoUpdate, onClose }: UpdateModalProps) {
           <Button variant='outline' size='sm' onClick={handleSkip}>跳过此次更新</Button>
           <div className='mr-auto' />
           <Button variant='outline' onClick={onClose}>取消</Button>
-          <Button variant='default' onClick={handleGo}>去更新</Button>
+          <Button variant='default' onClick={handleGo}>
+            {isWebShell() ? '查看更新方法' : '去更新'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -2,7 +2,8 @@ import * as React from 'react'
 import { createRoot } from 'react-dom/client'
 import { Badge, Button, Progress } from '@ui'
 import {
-  errorMessage, handleExternalClick, isWebShell, markdownHtml, openExternal,
+  copyText, DOCKER_UPDATE_COMMAND, DOCKER_UPDATE_GUIDE,
+  errorMessage, handleExternalClick, isWebShell, markdownHtml,
   safeExternal, shared, toast,
   type DownloadTask, type UpdateInfo,
 } from './update-shared'
@@ -243,8 +244,12 @@ function renderCheckResult(): void {
   if (!info) return
   const at = checkedAt ? `（检查于 ${formatClock(checkedAt)}）` : ''
   if (info.hasUpdate === true) {
-    setBadge('有新版本', 'warn')
-    setState(`发现新版本 ${info.latestVersion}（当前 ${info.currentVersion}）。${at}`)
+    setBadge('发现新版本', 'warn')
+    // 网页端（Docker 部署）没有桌面壳、容器也碰不到宿主机的 docker：状态行直接
+    // 把「宿主机执行什么」写清楚，不给人留「这里能不能自动升」的疑问
+    setState(isWebShell()
+      ? `发现新版本 ${info.latestVersion}（当前 ${info.currentVersion}），${at}；${DOCKER_UPDATE_GUIDE}`
+      : `发现新版本 ${info.latestVersion}（当前 ${info.currentVersion}），${at}`)
   } else if (info.hasUpdate === false) {
     setBadge('已是最新', 'ok')
     setState(`当前已是最新版本（${info.currentVersion}）。${at}`)
@@ -456,14 +461,16 @@ async function syncFromCache(): Promise<void> {
  * 「不重铺 toggleActions」实现同一效果，这里写成显式条件）。
  */
 async function downloadOrCancel(): Promise<void> {
-  // 网页端没有桌面壳，装不了安装包 —— 这里是**唯一**发起下载的入口，三条路都汇到
-  // 这里：面板那颗按钮、弹窗「去更新」的 openAndDownload、定时检查的自动触发。
-  // 统一改走 Release 页，而不是等 web_shim 把 download_update 拒掉（「软件更新在
-  // 网页端不可用：请通过 Docker 镜像更新」）才让人看见：装不了的按钮压根不该先亮。
+  // 网页端没有桌面壳，装不了安装包；容器也碰不到宿主机的 docker，后台自更新同样
+  // 做不到 —— 这里是**唯一**发起更新的入口，三条路都汇到这里：面板那颗按钮、
+  // 弹窗「查看更新方法」的 openAndDownload、定时检查的自动触发。统一改成复制
+  // 「宿主机执行的更新命令」并把指引铺进状态行，而不是等 web_shim 把
+  // download_update 拒掉才让人看见：装不了的按钮压根不该先亮。
   if (isWebShell()) {
-    const info = getSnapshot().info
-    const target = String(info?.pageUrl || info?.asset?.url || '')
-    if (target) await openExternal(target)
+    const ok = await copyText(DOCKER_UPDATE_COMMAND)
+    setState(DOCKER_UPDATE_GUIDE)
+    if (ok) toast(`✅ 已复制：${DOCKER_UPDATE_COMMAND}（在宿主机执行）`)
+    else toast('复制失败，请手动选取状态行里的命令', 'err')
     return
   }
   if (busy) return
@@ -605,12 +612,13 @@ function downloadButton(snap: Snapshot): { label: string; disabled: boolean } | 
   // 有更新且真的有可下载资产时才给出「下载并安装」
   const actionable = snap.info?.hasUpdate === true && !!snap.info?.asset?.url
   if (!actionable && snap.phase !== 'downloading' && snap.phase !== 'ready') return null
-  // 网页端装不了安装包（理由见 downloadOrCancel 开头）：按钮换成打开 Release 页。
-  // 只改文案不改分发 —— 这颗按钮的 onClick 仍走 downloadOrCancel，网页端那条路在
-  // 它开头统一拦掉，面板按钮 / 弹窗「去更新」 / 自动触发三条路因此同源，不会出现
-  // 「这里开外链、那里报不可用」的分裂。
+  // 网页端装不了安装包（理由见 downloadOrCancel 开头）：按钮换成「复制更新命令」，
+  // 点击复制宿主机执行的 docker 命令并把指引铺进状态行。只改语义不改分发 ——
+  // 这颗按钮的 onClick 仍走 downloadOrCancel，网页端那条路在它开头统一拦掉，
+  // 面板按钮 / 弹窗「查看更新方法」 / 自动触发三条路因此同源，不会出现
+  // 「这里复制命令、那里报不可用」的分裂。
   if (isWebShell()) {
-    return actionable ? { label: '打开下载页', disabled: false } : null
+    return actionable ? { label: '复制更新命令', disabled: false } : null
   }
   const label = snap.phase === 'downloading'
     ? '取消下载'

@@ -176,12 +176,60 @@ export function safeExternal(value: unknown): string {
  * 'web'，不会误判。
  *
  * 更新模块据此换掉那颗按钮：网页端跑在浏览器 / 容器里，既没有桌面壳也弹不了
- * UAC，`download_update` 会被 web_shim 直接拒绝（「软件更新在网页端不可用：
- * 请通过 Docker 镜像更新」）。既然装不了，就不该先显示「下载并安装」再等人
- * 点了才报错 —— 改成打开 GitHub Release 页，人自己下 / 自己 docker pull。
+ * UAC，`download_update` 会被 web_shim 直接拒。装不了安装包，就不该先亮
+ * 「下载并安装」再等人点了才报错 —— 网页端的正确更新方式是**在宿主机拉新
+ * 镜像重建容器**（容器自己碰不到宿主机的 docker，后台自更新做不到），所以
+ * 按钮换成「复制更新命令」，文案见 DOCKER_UPDATE_GUIDE。
  */
 export function isWebShell(): boolean {
   return shared().workbuddyDesktop?.platform === 'web'
+}
+
+/* ─── 网页端（Docker 部署）的更新指引 ───────────── */
+
+/** Docker Hub 官方镜像名 —— 与 README / compose 示例同一份，改名三处同步 */
+export const DOCKER_IMAGE = 'anwang520/agent2api'
+
+/**
+ * 网页端的更新命令（按钮复制的就是它）。
+ *
+ * compose 是 README 的标准部署方式，整条链 pull + up 一步完成；docker run
+ * 起的容器不适用 `compose up`，所以宿主机指引文案里单独给 pull 变体。
+ */
+export const DOCKER_UPDATE_COMMAND = 'docker compose pull && docker compose up -d'
+
+/** 按钮点击后的状态行指引：命令嵌在文案里，复制失败时人也能照着手动执行 */
+export const DOCKER_UPDATE_GUIDE =
+  `容器内无法自动更新：请到宿主机执行 ${DOCKER_UPDATE_COMMAND}` +
+  `（docker run 部署：docker pull ${DOCKER_IMAGE}:latest 后重建容器），完成后刷新本页`
+
+/**
+ * 复制文本到剪贴板。
+ *
+ * `navigator.clipboard` 只在安全上下文（https / localhost）可用，Docker 面板
+ * 大多走局域网 http 访问 —— 那里 writeText 直接拒，必须退到 textarea +
+ * execCommand('copy') 这条老路（与 ui/clipboard.js 同一套兜底）。
+ */
+export async function copyText(text: string): Promise<boolean> {
+  if (!text) return false
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    try {
+      const area = document.createElement('textarea')
+      area.value = text
+      area.style.position = 'fixed'
+      area.style.opacity = '0'
+      document.body.appendChild(area)
+      area.select()
+      const ok = document.execCommand('copy')
+      area.remove()
+      return ok
+    } catch {
+      return false
+    }
+  }
 }
 
 export async function openExternal(url: string): Promise<void> {

@@ -359,7 +359,7 @@ pub fn shim_js() -> &'static str {
     return Promise.reject(new Error(
       command === 'download_update' || command === 'update_progress' || command === 'cancel_update'
       || command === 'run_installer'
-        ? '软件更新在网页端不可用：请通过 Docker 镜像更新'
+        ? '容器内无法自动更新：请复制更新命令，在宿主机执行 docker compose pull && docker compose up -d'
         : SHELL_UNAVAILABLE
     ));
   }
