@@ -559,6 +559,13 @@ body.nav-collapsed .sidebar:not(:hover) .theme-switch button[data-mode="dark"]::
    ───────────────────────────── */
 .main {
   position: relative;
+  /* 显式钉在第二列（grid-template-columns 的 1fr 那一列）。
+     没有这行时，侧栏收起态悬停展开成浮层（position:absolute，见「侧栏折叠」
+     一节）会**脱离网格流** —— 自动排版随即把 .main 塞进第一列，也就是
+     --sidebar-rail-w 那条 60px 轨道、正好藏到浮层背后，第二列空着没人用，
+     表现为「侧栏一展开，右侧内容整块消失」。显式列位之后，侧栏在不在流里，
+     内容都稳在 1fr 那一列，浮层照常盖在它上面。 */
+  grid-column: 2;
   min-width: 0;
   display: flex;
   flex-direction: column;
