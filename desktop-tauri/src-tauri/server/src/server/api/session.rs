@@ -124,7 +124,11 @@ pub async fn get_session(State(state): State<ServerState>) -> Response {
 ///
 /// 模型未知 / 该模型下确实没有可用账号时给 null —— 界面回落到
 /// `currentAccountId`，宁可让它标一个「队列第一位」，也不要整列 ★ 凭空消失。
-fn routed_account_id(accounts: &Value, model: Option<&str>, counts: &HashMap<String, usize>) -> Value {
+fn routed_account_id(
+    accounts: &Value,
+    model: Option<&str>,
+    counts: &HashMap<String, usize>,
+) -> Value {
     let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) else {
         return Value::Null;
     };
@@ -220,9 +224,7 @@ pub async fn login_start(State(state): State<ServerState>, body: Bytes) -> Respo
     // 两张卡片共用一个表单时就会串味（点了国际版却落了国内版账号，
     // 而账号记录一旦落错家，转发会稳定打错域名）。因此这里由 kind 反查地区，
     // 再把地区交给登录任务（任务表里的 edition 串只用做日志与回显）。
-    if let Some(region) =
-        crate::server::core::providers::zcode::region::Region::from_kind(kind)
-    {
+    if let Some(region) = crate::server::core::providers::zcode::region::Region::from_kind(kind) {
         let handle = match state.login().start_zcode_login(region) {
             Ok(handle) => handle,
             Err(error) => return management_error(400, error),
@@ -298,7 +300,11 @@ pub async fn login_start(State(state): State<ServerState>, body: Bytes) -> Respo
             .map(str::to_string)
             .filter(|value| !value.trim().is_empty());
         let provider_id = crate::server::core::providers::kind_id(kind);
-        let handle = match state.login().start_cline_device_login(provider_id, name).await {
+        let handle = match state
+            .login()
+            .start_cline_device_login(provider_id, name)
+            .await
+        {
             Ok(handle) => handle,
             Err(error) => return management_error(400, error),
         };
@@ -363,7 +369,10 @@ pub async fn login_start(State(state): State<ServerState>, body: Bytes) -> Respo
 /// 响应形状与 workbuddy 分支**完全一致**（`{state, authUrl}` + 一个 `edition`
 /// 字段）：前端与壳侧轮询逻辑只认这三个键，多一个 provider 维度不该改动它们。
 /// `edition` 对非 workbuddy 没有语义（这里仍给默认值，省得前端读到 null）。
-async fn start_web_login(state: ServerState, kind: crate::server::core::providers::ProviderKind) -> Response {
+async fn start_web_login(
+    state: ServerState,
+    kind: crate::server::core::providers::ProviderKind,
+) -> Response {
     let label = crate::server::core::providers::meta(kind).label;
     let handle = match state.login().start_web_login(kind) {
         Ok(handle) => handle,
@@ -371,7 +380,10 @@ async fn start_web_login(state: ServerState, kind: crate::server::core::provider
     };
     let task = handle.snapshot();
     let (Some(task_state), Some(auth_url)) = (task.state, task.auth_url) else {
-        return management_error(500, format!("{label}网页登录未能生成 state/授权地址，请重试"));
+        return management_error(
+            500,
+            format!("{label}网页登录未能生成 state/授权地址，请重试"),
+        );
     };
     ok_json(json!({
         "state": task_state,
@@ -687,9 +699,9 @@ pub async fn login_sms_verify(State(state): State<ServerState>, body: Bytes) -> 
     )
     .await
     {
-            Ok(credentials) => credentials,
-            Err(error) => return management_error(error.status_code, error.message),
-        };
+        Ok(credentials) => credentials,
+        Err(error) => return management_error(error.status_code, error.message),
+    };
     // 备注名：用户显式填的优先；没填则用脱敏手机号（`130****4229`）——
     // 比默认的「账号 830290」更像用户自己认得出来的标识
     let name = payload
@@ -727,14 +739,20 @@ pub async fn login_sms_verify(State(state): State<ServerState>, body: Bytes) -> 
 ///
 /// 不认识的值一律 400：**不静默回落**到某一个变体 —— 那会让用户点 Google
 /// 却打开 Zai 的授权页（而两者用的是不同的账号体系，登进去是个陌生账号）。
-fn oauth_vendor_of(payload: &Value) -> Result<crate::server::core::providers::autoclaw::oauth::Vendor, Response> {
+fn oauth_vendor_of(
+    payload: &Value,
+) -> Result<crate::server::core::providers::autoclaw::oauth::Vendor, Response> {
     let raw = payload
         .get("vendor")
         .and_then(Value::as_str)
         .map(str::trim)
         .unwrap_or("");
-    crate::server::core::providers::autoclaw::oauth::Vendor::from_id(raw)
-        .ok_or_else(|| management_error(400, format!("未知的登录方式「{raw}」（只支持 zai / google）")))
+    crate::server::core::providers::autoclaw::oauth::Vendor::from_id(raw).ok_or_else(|| {
+        management_error(
+            400,
+            format!("未知的登录方式「{raw}」（只支持 zai / google）"),
+        )
+    })
 }
 
 /// `GET /api/session/login/oauth/captcha-config` —— 取风控验证配置。
@@ -806,7 +824,13 @@ pub async fn login_oauth_start(State(state): State<ServerState>, body: Bytes) ->
     let gateway_base = format!("http://localhost:{api_port}");
     let (handle, warning) = match state
         .login()
-        .start_autoclaw_oauth_login(region, vendor, captcha, &gateway_base, state.host.is_loopback())
+        .start_autoclaw_oauth_login(
+            region,
+            vendor,
+            captcha,
+            &gateway_base,
+            state.host.is_loopback(),
+        )
         .await
     {
         Ok(result) => result,
@@ -872,7 +896,9 @@ pub async fn login_autoclaw_oauth_callback(
         .await
     {
         Ok(_) => oauth_callback_page(200, "登录成功，已返回网关，可以关闭此页面。"),
-        Err(error) => oauth_callback_page(error.status_code, &format!("登录失败：{}", error.message)),
+        Err(error) => {
+            oauth_callback_page(error.status_code, &format!("登录失败：{}", error.message))
+        }
     }
 }
 
@@ -974,7 +1000,9 @@ pub async fn login_codearts_callback_post(
 ) -> Response {
     let text = String::from_utf8_lossy(&body).to_string();
     let mut params: std::collections::HashMap<String, String> =
-        url::form_urlencoded::parse(text.as_bytes()).map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
+        url::form_urlencoded::parse(text.as_bytes())
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
     // 上游也可能把整条回调 URL 塞进某个字段（代理过的链路），那一路径先按查询串拆一次
     if params.is_empty() {
         if let Some((_, query)) = text.split_once('?') {
@@ -991,9 +1019,15 @@ fn render_codearts_callback(outcome: crate::server::core::login::codearts::Callb
     use axum::response::Redirect;
     match outcome {
         // 第一趟必须原样转出去：这一跳是 portal 登录链路的一部分，不跳就没有第二趟
-        crate::server::core::login::codearts::Callback::ContinueTo(url) => Redirect::temporary(&url).into_response(),
-        crate::server::core::login::codearts::Callback::Accepted(_, message) => oauth_callback_page(200, &message),
-        crate::server::core::login::codearts::Callback::Failed(status, message) => oauth_callback_page(i32::from(status), &message),
+        crate::server::core::login::codearts::Callback::ContinueTo(url) => {
+            Redirect::temporary(&url).into_response()
+        }
+        crate::server::core::login::codearts::Callback::Accepted(_, message) => {
+            oauth_callback_page(200, &message)
+        }
+        crate::server::core::login::codearts::Callback::Failed(status, message) => {
+            oauth_callback_page(i32::from(status), &message)
+        }
     }
 }
 

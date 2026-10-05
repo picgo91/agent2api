@@ -134,10 +134,10 @@
 //! 真正没人用的函数已删；排障与路由登记等有意保留的设施逐个标注 `#[allow(dead_code)]`
 //! 并写明保留理由，便于后续定位。
 
-pub mod api;
-mod account_bootstrap;
 pub mod access;
+mod account_bootstrap;
 pub mod altcha;
+pub mod api;
 pub mod config;
 pub mod config_migration;
 pub mod core;
@@ -427,10 +427,8 @@ impl ServerState {
         // 定时签到的 stop() 要从**停机路径**（backend::shutdown，只有 Tauri 的
         // AppState）调到，所以必须能从全局拿到；这里装入后 ServerState 里那份
         // 与全局那份是同一实例。
-        let auto_checkin = core::auto_checkin::init_global(AutoCheckin::new(
-            store.clone(),
-            billing.clone(),
-        ));
+        let auto_checkin =
+            core::auto_checkin::init_global(AutoCheckin::new(store.clone(), billing.clone()));
         // 更新管理器：下载目录 `{config_dir}/updates`，与壳侧 update::download_dir() 同源
         let update = core::update::init_global(UpdateManager::new(config_dir.clone()));
 
@@ -509,17 +507,27 @@ impl ServerState {
             db,
             upgrade_pending: Arc::new(AtomicBool::new(upgrade_pending)),
         };
-        logging::log("[Server]", "AIapi 多提供商本地网关（Rust 进程内服务）启动中…");
+        logging::log(
+            "[Server]",
+            "AIapi 多提供商本地网关（Rust 进程内服务）启动中…",
+        );
         logging::log("[Config]", &format!("API 端口: {}", port));
         logging::log("[Config]", &format!("API 监听地址: {}", host));
         logging::log(
             "[Config]",
             &format!(
                 "API Key 认证: {}",
-                if snapshot.api_key_set() { "✅ 已启用" } else { "❌ 未启用" }
+                if snapshot.api_key_set() {
+                    "✅ 已启用"
+                } else {
+                    "❌ 未启用"
+                }
             ),
         );
-        logging::log("[Config]", &format!("默认模型: {}", snapshot.default_model()));
+        logging::log(
+            "[Config]",
+            &format!("默认模型: {}", snapshot.default_model()),
+        );
         logging::log("[Config]", &format!("计费语言: {}", snapshot.locale()));
         // 出站指纹脱敏一行：开着时说明「出站会剥离审核指纹」，关着时点明后果
         // （客户端 system 模板会原样发上游，可能被 400 code=11128 误拦）
@@ -549,12 +557,15 @@ impl ServerState {
                 },
             ),
         );
-        logging::log("[Config]", &format!("配置目录: {}", state.config_dir.display()));        // 数据库状态一行（排障第一手信息：库在哪、有没有就绪）。
-        // 放在「配置目录」之后：坏库时的第一句话就是「库在哪、能不能打开」，
-        // 而 `Db::file()` 是唯一知道自己路径的对象（不让别处再拼一次
-        // `config_dir.join(FILE_NAME)` —— 那是把路径知识复制到第二个地方）。
-        // 打开失败的情形在 `Db::open` 那一步已经打过 ❌ 日志，这里不重复报错，
-        // 只把「本次运行数据库不可用」这个后果说清楚（各 store 会降级回落）。
+        logging::log(
+            "[Config]",
+            &format!("配置目录: {}", state.config_dir.display()),
+        ); // 数据库状态一行（排障第一手信息：库在哪、有没有就绪）。
+           // 放在「配置目录」之后：坏库时的第一句话就是「库在哪、能不能打开」，
+           // 而 `Db::file()` 是唯一知道自己路径的对象（不让别处再拼一次
+           // `config_dir.join(FILE_NAME)` —— 那是把路径知识复制到第二个地方）。
+           // 打开失败的情形在 `Db::open` 那一步已经打过 ❌ 日志，这里不重复报错，
+           // 只把「本次运行数据库不可用」这个后果说清楚（各 store 会降级回落）。
         match state.db() {
             Some(db) => {
                 logging::log("[Storage]", &format!("数据库: {}", db.file().display()));
@@ -590,7 +601,10 @@ impl ServerState {
                 .get("currentAccountId")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("未知");
-            logging::log("[Init]", &format!("✅ 凭证来源: {source}（账号 {account}）"));
+            logging::log(
+                "[Init]",
+                &format!("✅ 凭证来源: {source}（账号 {account}）"),
+            );
             if let Some(expires_at) = summary
                 .get("tokenExpiresAt")
                 .and_then(serde_json::Value::as_f64)

@@ -37,8 +37,8 @@ use crate::server::logging;
 // `send_request` 保留导出：登录流程（login.rs）与切片 4 的转发都会用它走直连档。
 #[allow(unused_imports)]
 pub use crate::server::core::auth_http::{
-    send_public_request, send_request, send_request_via, unwrap_public_response,
-    unwrap_response, WorkBuddyAuthError, REFRESH_WINDOW_MS, SERVER_CODE_RETRY_FETCH_TOKEN,
+    send_public_request, send_request, send_request_via, unwrap_public_response, unwrap_response,
+    WorkBuddyAuthError, REFRESH_WINDOW_MS, SERVER_CODE_RETRY_FETCH_TOKEN,
 };
 
 // ─── 会话与凭证 ─────────────────────────────────────────────
@@ -531,7 +531,9 @@ impl AuthService {
         let auth = session.get("auth").cloned().unwrap_or(Value::Null);
         // 续期也走该账号自己的出口（账号没配代理 → 直连）
         let proxy = session_proxy(&session);
-        let next = self.refresh_session(&auth, &context, proxy.as_ref()).await?;
+        let next = self
+            .refresh_session(&auth, &context, proxy.as_ref())
+            .await?;
         if next.access_token.is_empty() {
             return Err(WorkBuddyAuthError::new("token 刷新响应缺少 accessToken"));
         }
@@ -570,7 +572,10 @@ impl AuthService {
         let refreshed = self.refresh_account(&entry.id).await?;
         let mut session = entry.session;
         if let Some(object) = session.get_mut("auth").and_then(Value::as_object_mut) {
-            object.insert("accessToken".to_string(), Value::String(refreshed.access_token));
+            object.insert(
+                "accessToken".to_string(),
+                Value::String(refreshed.access_token),
+            );
             if let Some(token) = refreshed.refresh_token {
                 object.insert("refreshToken".to_string(), Value::String(token));
             }
@@ -696,7 +701,13 @@ pub fn with_expires_at(mut auth: Value) -> Value {
         .get("expiresAt")
         .and_then(Value::as_f64)
         .filter(|value| *value != 0.0)
-        .unwrap_or_else(|| if expires_in != 0.0 { now + expires_in * 1000.0 } else { 0.0 });
+        .unwrap_or_else(|| {
+            if expires_in != 0.0 {
+                now + expires_in * 1000.0
+            } else {
+                0.0
+            }
+        });
     let refresh_expires_at = object
         .get("refreshExpiresAt")
         .and_then(Value::as_f64)
@@ -717,7 +728,10 @@ pub fn with_expires_at(mut auth: Value) -> Value {
     // `Date.now() + n*1000` 这种整数值不会输出 `.0`，浮点会让 accounts.json
     // 与本机展示的时间戳出现「看起来一样但文本不同」的差异
     object.insert("expiresAt".to_string(), json_number(expires_at));
-    object.insert("refreshExpiresAt".to_string(), json_number(refresh_expires_at));
+    object.insert(
+        "refreshExpiresAt".to_string(),
+        json_number(refresh_expires_at),
+    );
     object.insert("lastRefreshTime".to_string(), json_number(last_refresh));
     auth
 }
@@ -764,7 +778,9 @@ pub fn urlencoding(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for byte in value.as_bytes() {
         let ch = *byte as char;
-        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '!' | '~' | '*' | '\'' | '(' | ')') {
+        if ch.is_ascii_alphanumeric()
+            || matches!(ch, '-' | '_' | '.' | '!' | '~' | '*' | '\'' | '(' | ')')
+        {
             out.push(ch);
         } else {
             out.push_str(&format!("%{byte:02X}"));

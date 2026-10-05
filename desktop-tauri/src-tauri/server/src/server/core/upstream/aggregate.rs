@@ -88,11 +88,13 @@ pub async fn aggregate_frame_stream(
     // 响应体的总预算，对应 OmniProxy 的 readBodyWithStallGuard）。
     // 超时中止整个聚合：非流式客户端此时还没收到任何响应，收尾记账不会丢，
     // 错误原样返回（502 + 明确文案）。
-    let budget = std::time::Duration::from_millis(
-        crate::server::config::timeout_settings().body_ms(),
-    );
-    match tokio::time::timeout(budget, aggregate_frame_stream_inner(stream, telemetry, model_rewrite))
-        .await
+    let budget =
+        std::time::Duration::from_millis(crate::server::config::timeout_settings().body_ms());
+    match tokio::time::timeout(
+        budget,
+        aggregate_frame_stream_inner(stream, telemetry, model_rewrite),
+    )
+    .await
     {
         Ok(result) => result,
         Err(_elapsed) => Err(GatewayError::with_status(
@@ -122,7 +124,10 @@ async fn aggregate_frame_stream_inner(
     // 非流式总超时（默认 300 秒）才报 502（详见 `cancellable` 的说明）。
     let mut stream = cancellation::cancellable(stream, telemetry.cancel_token());
     let mut buffer = String::new();
-    let mut acc = CompletionAccumulator { rewrite: model_rewrite, ..Default::default() };
+    let mut acc = CompletionAccumulator {
+        rewrite: model_rewrite,
+        ..Default::default()
+    };
     // 首响采集：聚合路径不走 RecordingStream（客户端要的是完整 JSON，
     // 没有下发流可言），所以第一个**上游** chunk 在这里记 —— 它就是
     // 「上游开始吐内容」的时刻。非流式请求的用时要等聚合完才有意义，
@@ -165,7 +170,10 @@ async fn aggregate_frame_stream_inner(
             acc.consume_line(&line, &telemetry)?;
         }
         if buffer.len() > MAX_LINE_BYTES {
-            return Err(GatewayError::with_status(502, "上游返回的单行数据过大，已中断"));
+            return Err(GatewayError::with_status(
+                502,
+                "上游返回的单行数据过大，已中断",
+            ));
         }
     }
     // 尾行（上游没以换行结尾）
@@ -196,7 +204,11 @@ struct CompletionAccumulator {
 
 impl CompletionAccumulator {
     /// 处理一行 SSE（`data: {...}` / `data: [DONE]` / 其他）
-    fn consume_line(&mut self, line: &str, telemetry: &RequestTelemetry) -> Result<(), GatewayError> {
+    fn consume_line(
+        &mut self,
+        line: &str,
+        telemetry: &RequestTelemetry,
+    ) -> Result<(), GatewayError> {
         let Some(data) = line.strip_prefix("data:") else {
             return Ok(());
         };
@@ -212,7 +224,11 @@ impl CompletionAccumulator {
         self.consume_chunk(&chunk, telemetry)
     }
 
-    fn consume_chunk(&mut self, chunk: &Value, telemetry: &RequestTelemetry) -> Result<(), GatewayError> {
+    fn consume_chunk(
+        &mut self,
+        chunk: &Value,
+        telemetry: &RequestTelemetry,
+    ) -> Result<(), GatewayError> {
         let Some(object) = chunk.as_object() else {
             return Ok(());
         };
@@ -245,7 +261,10 @@ impl CompletionAccumulator {
         // Node: `created = chunk.created || created` —— 真值判定（0 不覆盖已有值）
         if let Some(created) = object.get("created") {
             if js_number_truthy(created) {
-                self.created = created.as_i64().or_else(|| created.as_f64().map(|value| value as i64)).unwrap_or(0);
+                self.created = created
+                    .as_i64()
+                    .or_else(|| created.as_f64().map(|value| value as i64))
+                    .unwrap_or(0);
             }
         }
         if let Some(usage) = object.get("usage") {
@@ -285,16 +304,13 @@ impl CompletionAccumulator {
                     .and_then(Value::as_i64)
                     // Node: `Number.isInteger(tc.index) ? tc.index : 0`
                     .unwrap_or(0);
-                let entry = self
-                    .tool_calls
-                    .entry(index)
-                    .or_insert_with(|| {
-                        json!({
-                            "id": "",
-                            "type": "function",
-                            "function": { "name": "", "arguments": "" },
-                        })
-                    });
+                let entry = self.tool_calls.entry(index).or_insert_with(|| {
+                    json!({
+                        "id": "",
+                        "type": "function",
+                        "function": { "name": "", "arguments": "" },
+                    })
+                });
                 merge_tool_call(entry, call);
             }
         }
@@ -306,11 +322,18 @@ impl CompletionAccumulator {
         let mut message = Map::new();
         message.insert(
             "role".to_string(),
-            Value::String(if self.role.is_empty() { "assistant".to_string() } else { self.role }),
+            Value::String(if self.role.is_empty() {
+                "assistant".to_string()
+            } else {
+                self.role
+            }),
         );
         message.insert("content".to_string(), Value::String(self.content));
         if !self.reasoning.is_empty() {
-            message.insert("reasoning_content".to_string(), Value::String(self.reasoning));
+            message.insert(
+                "reasoning_content".to_string(),
+                Value::String(self.reasoning),
+            );
         }
         if !self.tool_calls.is_empty() {
             message.insert(
@@ -327,7 +350,10 @@ impl CompletionAccumulator {
                 self.id
             }),
         );
-        body.insert("object".to_string(), Value::String("chat.completion".to_string()));
+        body.insert(
+            "object".to_string(),
+            Value::String("chat.completion".to_string()),
+        );
         body.insert(
             "created".to_string(),
             Value::from(if self.created != 0 {
@@ -354,11 +380,11 @@ impl CompletionAccumulator {
         // Node 的返回对象里 `usage` 是**始终存在**的键：上游没下发时是 null
         // （JSON.stringify 会保留 null，而不是丢掉这个键）——
         // OpenAI SDK 对 `usage: null` 与缺键的处理不完全一样，照抄更稳。
-        body.insert(
-            "usage".to_string(),
-            self.usage.unwrap_or(Value::Null),
-        );
-        AggregatedCompletion { body: Value::Object(body), chunk_count: self.chunk_count }
+        body.insert("usage".to_string(), self.usage.unwrap_or(Value::Null));
+        AggregatedCompletion {
+            body: Value::Object(body),
+            chunk_count: self.chunk_count,
+        }
     }
 }
 
@@ -380,10 +406,7 @@ fn merge_tool_call(entry: &mut Value, incoming: &Value) {
     let Some(function) = incoming.get("function") else {
         return;
     };
-    let Some(target_function) = target
-        .get_mut("function")
-        .and_then(Value::as_object_mut)
-    else {
+    let Some(target_function) = target.get_mut("function").and_then(Value::as_object_mut) else {
         return;
     };
     if let Some(name) = function.get("name").and_then(Value::as_str) {
@@ -392,7 +415,10 @@ fn merge_tool_call(entry: &mut Value, incoming: &Value) {
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
-        target_function.insert("name".to_string(), Value::String(format!("{current}{name}")));
+        target_function.insert(
+            "name".to_string(),
+            Value::String(format!("{current}{name}")),
+        );
     }
     if let Some(arguments) = function.get("arguments").and_then(Value::as_str) {
         let current = target_function

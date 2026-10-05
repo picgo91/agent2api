@@ -106,8 +106,7 @@ impl ZcodeCredentials {
 /// `expiresAt` 一律是毫秒（与 workbuddy / qoder 同口径），混用会让时间
 /// 显示成 1970 年。
 pub fn expires_at_ms(credentials: &ZcodeCredentials) -> Option<f64> {
-    jwt_expires_at_ms(&credentials.access_token)
-        .or_else(|| jwt_expires_at_ms(&credentials.jwt))
+    jwt_expires_at_ms(&credentials.access_token).or_else(|| jwt_expires_at_ms(&credentials.jwt))
 }
 
 /// 解一个 JWT 的 payload 段取 `exp`（秒 → 毫秒）。解不出返回 None。
@@ -123,9 +122,7 @@ fn jwt_expires_at_ms(token: &str) -> Option<f64> {
         &base64::engine::general_purpose::URL_SAFE_NO_PAD,
         normalized,
     )
-    .or_else(|_| {
-        base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE, normalized)
-    })
+    .or_else(|_| base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE, normalized))
     .ok()?;
     let value: Value = serde_json::from_slice(&decoded).ok()?;
     let exp = value.get("exp").and_then(Value::as_f64)?;

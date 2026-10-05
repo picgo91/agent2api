@@ -103,9 +103,8 @@ fn is_route_id(value: &str) -> bool {
     if tail.is_empty() || tail.len() > 127 {
         return false;
     }
-    tail.iter().all(|&byte| {
-        byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-')
-    })
+    tail.iter()
+        .all(|&byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-'))
 }
 
 /// 剥掉已知路由前缀（源实现 `stripRoutePrefix`）：

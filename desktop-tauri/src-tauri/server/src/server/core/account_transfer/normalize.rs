@@ -50,9 +50,9 @@ fn positive_number_of(value: Option<&Value>) -> Option<Value> {
             (parsed.is_finite() && parsed > 0.0).then(|| value.cloned().unwrap_or(Value::Null))
         }
         Some(Value::String(text)) => match text.trim().parse::<f64>() {
-            Ok(parsed) if parsed.is_finite() && parsed > 0.0 => {
-                Some(crate::server::core::account_store::state::json_number(parsed))
-            }
+            Ok(parsed) if parsed.is_finite() && parsed > 0.0 => Some(
+                crate::server::core::account_store::state::json_number(parsed),
+            ),
             _ => None,
         },
         _ => None,
@@ -118,7 +118,10 @@ pub(super) fn normalize_imported(
         }
     };
     if !access_token.is_empty() {
-        record.insert("accessToken".to_string(), Value::String(access_token.clone()));
+        record.insert(
+            "accessToken".to_string(),
+            Value::String(access_token.clone()),
+        );
     }
     if !refresh_token.is_empty() {
         record.insert("refreshToken".to_string(), Value::String(refresh_token));
@@ -305,33 +308,46 @@ fn normalize_workbuddy_known_fields(
         ),
     );
 
-    let before_text = |getter: fn(&StoredAccount) -> String| -> String {
-        before.map(getter).unwrap_or_default()
-    };
+    let before_text =
+        |getter: fn(&StoredAccount) -> String| -> String { before.map(getter).unwrap_or_default() };
     for (key, fallback) in [
         ("nickname", before_text(StoredAccount::nickname)),
         ("enterpriseId", before_text(StoredAccount::enterprise_id)),
-        ("enterpriseName", before_text(StoredAccount::enterprise_name)),
+        (
+            "enterpriseName",
+            before_text(StoredAccount::enterprise_name),
+        ),
         ("domain", before_text(StoredAccount::domain)),
     ] {
         let incoming = text_of(item.get(key));
         record.insert(
             key.to_string(),
-            Value::String(if incoming.is_empty() { fallback } else { incoming }),
+            Value::String(if incoming.is_empty() {
+                fallback
+            } else {
+                incoming
+            }),
         );
     }
     let account_type = {
         let incoming = text_of(item.get("type"));
         if incoming.is_empty() {
             let fallback = before_text(StoredAccount::account_type);
-            if fallback.is_empty() { "personal".to_string() } else { fallback }
+            if fallback.is_empty() {
+                "personal".to_string()
+            } else {
+                fallback
+            }
         } else {
             incoming
         }
     };
     record.insert("type".to_string(), Value::String(account_type));
     for (key, getter) in [
-        ("expiresAt", StoredAccount::expires_at as fn(&StoredAccount) -> Option<f64>),
+        (
+            "expiresAt",
+            StoredAccount::expires_at as fn(&StoredAccount) -> Option<f64>,
+        ),
         ("refreshExpiresAt", StoredAccount::refresh_expires_at),
     ] {
         let fallback = before

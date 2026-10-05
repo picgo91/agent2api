@@ -35,7 +35,11 @@ pub enum Part {
     /// 思考（`thought: true` 的文本 part）
     Thought(String),
     /// 工具调用（参数是字符串，可能分片）
-    FunctionCall { id: String, name: String, args: String },
+    FunctionCall {
+        id: String,
+        name: String,
+        args: String,
+    },
     /// 其它（内联数据、函数结果回显等）：转发热路径不消费
     Other,
 }
@@ -94,14 +98,25 @@ fn bool_field(value: &Value, camel: &str, snake: &str) -> bool {
 
 /// 单个 part → `Part`
 fn parse_part(part: &Value) -> Part {
-    let thought = part.get("thought").and_then(Value::as_bool).unwrap_or(false);
-    if let Some(function_call) = part.get("functionCall").or_else(|| part.get("function_call")) {
+    let thought = part
+        .get("thought")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if let Some(function_call) = part
+        .get("functionCall")
+        .or_else(|| part.get("function_call"))
+    {
         let id = text_field(function_call, "id", "id");
         let name = text_field(function_call, "name", "name");
         // 参数三种形态都见过：`argsJson`（字符串包 JSON）、`args_json`、
         // 以及客户端高层 API 的 `args`（对象）。取到哪个算哪个。
-        let args = if let Some(raw) = function_call.get("argsJson").or_else(|| function_call.get("args_json")) {
-            raw.as_str().map(str::to_string).unwrap_or_else(|| raw.to_string())
+        let args = if let Some(raw) = function_call
+            .get("argsJson")
+            .or_else(|| function_call.get("args_json"))
+        {
+            raw.as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| raw.to_string())
         } else if let Some(raw) = function_call.get("args") {
             if raw.is_string() {
                 raw.as_str().unwrap_or("").to_string()
@@ -235,7 +250,12 @@ impl LineBuffer {
 pub enum Delta {
     Content(String),
     Reasoning(String),
-    ToolCall { index: i64, id: Option<String>, name: Option<String>, arguments: Option<String> },
+    ToolCall {
+        index: i64,
+        id: Option<String>,
+        name: Option<String>,
+        arguments: Option<String>,
+    },
 }
 
 /// 累积中的工具调用
@@ -296,7 +316,8 @@ impl Translator {
             }
         }
         if !frame.finish_reason.is_empty() {
-            self.finish_reason = Some(super::protocol::finish_reason(&frame.finish_reason).to_string());
+            self.finish_reason =
+                Some(super::protocol::finish_reason(&frame.finish_reason).to_string());
         }
         for part in &frame.parts {
             match part {
@@ -328,8 +349,12 @@ impl Translator {
                         self.saw_tool_call = true;
                         out.push(Delta::ToolCall {
                             index,
-                            id: announce.then(|| call_id.clone()).filter(|value| !value.is_empty()),
-                            name: announce.then(|| call_name.clone()).filter(|value| !value.is_empty()),
+                            id: announce
+                                .then(|| call_id.clone())
+                                .filter(|value| !value.is_empty()),
+                            name: announce
+                                .then(|| call_name.clone())
+                                .filter(|value| !value.is_empty()),
                             arguments: Some(args.clone()),
                         });
                     }
@@ -356,7 +381,8 @@ impl Translator {
                 return false;
             }
             // 已有内容是完整 JSON 且新片段也完整 → 不是续写
-            let previous_complete = !entry.args.is_empty() && serde_json::from_str::<Value>(&entry.args).is_ok();
+            let previous_complete =
+                !entry.args.is_empty() && serde_json::from_str::<Value>(&entry.args).is_ok();
             let incoming_complete = !args.is_empty() && serde_json::from_str::<Value>(args).is_ok();
             !(previous_complete && incoming_complete)
         });
@@ -404,9 +430,13 @@ impl Translator {
 
     /// 收尾的 finish_reason：上游给了就用它，没给按「有没有工具调用」推断
     pub fn final_finish_reason(&self) -> String {
-        self.finish_reason
-            .clone()
-            .unwrap_or_else(|| if self.saw_tool_call { "tool_calls".to_string() } else { "stop".to_string() })
+        self.finish_reason.clone().unwrap_or_else(|| {
+            if self.saw_tool_call {
+                "tool_calls".to_string()
+            } else {
+                "stop".to_string()
+            }
+        })
     }
 
     /// 收尾的工具调用（非流式聚合用）

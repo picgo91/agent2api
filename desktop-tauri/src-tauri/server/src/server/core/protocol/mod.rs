@@ -318,7 +318,9 @@ pub fn strip_internal_fields(body: &Value) -> Cow<'_, Value> {
     let Some(object) = body.as_object() else {
         return Cow::Borrowed(body);
     };
-    let top_dirty = object.keys().any(|key| key.starts_with(INTERNAL_FIELD_PREFIX));
+    let top_dirty = object
+        .keys()
+        .any(|key| key.starts_with(INTERNAL_FIELD_PREFIX));
     let messages_dirty = object
         .get("messages")
         .and_then(Value::as_array)
@@ -347,9 +349,11 @@ pub fn strip_internal_fields(body: &Value) -> Cow<'_, Value> {
 
 /// 一个对象上是否带内部暂存字段
 fn has_internal_fields(value: &Value) -> bool {
-    value
-        .as_object()
-        .is_some_and(|object| object.keys().any(|key| key.starts_with(INTERNAL_FIELD_PREFIX)))
+    value.as_object().is_some_and(|object| {
+        object
+            .keys()
+            .any(|key| key.starts_with(INTERNAL_FIELD_PREFIX))
+    })
 }
 
 /// 原地剥掉一个对象上的内部暂存字段（对象本身存在才调用）

@@ -25,12 +25,18 @@ pub struct Credentials {
 impl Credentials {
     pub fn from_payload(payload: &Value) -> Result<Self, GatewayError> {
         if !payload.is_object() {
-            return Err(GatewayError::with_status(400, "Qoder 账号内容必须是 JSON 对象"));
+            return Err(GatewayError::with_status(
+                400,
+                "Qoder 账号内容必须是 JSON 对象",
+            ));
         }
         let region = Region::from_payload(payload)?;
         let access_token = secret(payload, &["accessToken", "access", "token", "access_token"])?;
         if access_token.is_empty() {
-            return Err(GatewayError::with_status(400, "缺少 Qoder access / accessToken"));
+            return Err(GatewayError::with_status(
+                400,
+                "缺少 Qoder access / accessToken",
+            ));
         }
         let refresh = secret(payload, &["refreshToken", "refresh", "refresh_token"])?;
         let parts: Vec<&str> = refresh.split('|').collect();
@@ -38,18 +44,37 @@ impl Credentials {
             ["pat", pat, _, user, machine] if !pat.is_empty() => (*user, *machine),
             [_, user, machine] => (*user, *machine),
             [_] => ("", ""),
-            _ => return Err(GatewayError::with_status(400, "Qoder refresh 格式无效，请粘贴完整账号记录")),
+            _ => {
+                return Err(GatewayError::with_status(
+                    400,
+                    "Qoder refresh 格式无效，请粘贴完整账号记录",
+                ))
+            }
         };
         let user_id = identity(payload, &["userId", "user_id", "uid"])?;
         if !user_id.is_empty() && !packed_user.is_empty() && user_id != packed_user {
-            return Err(GatewayError::with_status(400, "Qoder userId 与刷新凭证中的用户不一致"));
+            return Err(GatewayError::with_status(
+                400,
+                "Qoder userId 与刷新凭证中的用户不一致",
+            ));
         }
         let machine_id = identity(payload, &["machineId", "machine_id"])?;
         if !machine_id.is_empty() && !packed_machine.is_empty() && machine_id != packed_machine {
-            return Err(GatewayError::with_status(400, "Qoder machineId 与刷新凭证中的设备不一致"));
+            return Err(GatewayError::with_status(
+                400,
+                "Qoder machineId 与刷新凭证中的设备不一致",
+            ));
         }
-        let user_id = if user_id.is_empty() { packed_user.to_string() } else { user_id };
-        let machine_id = if machine_id.is_empty() { packed_machine.to_string() } else { machine_id };
+        let user_id = if user_id.is_empty() {
+            packed_user.to_string()
+        } else {
+            user_id
+        };
+        let machine_id = if machine_id.is_empty() {
+            packed_machine.to_string()
+        } else {
+            machine_id
+        };
         validate_identity(&user_id)?;
         validate_identity(&machine_id)?;
         let expires_at = ["expiresAt", "expires", "expires_at", "tokenExpiresAt"]
@@ -62,18 +87,27 @@ impl Credentials {
             expires_at,
             user_id,
             email: text(payload, &["email"]).chars().take(320).collect(),
-            name: text(payload, &["nickname", "name"]).chars().take(100).collect(),
+            name: text(payload, &["nickname", "name"])
+                .chars()
+                .take(100)
+                .collect(),
             machine_id,
         };
         if parts.len() == 1 && !refresh.is_empty() {
-            credentials.refresh_token = format!("{}|{}|{}", refresh, credentials.user_id, credentials.machine_id);
+            credentials.refresh_token = format!(
+                "{}|{}|{}",
+                refresh, credentials.user_id, credentials.machine_id
+            );
         }
         Ok(credentials)
     }
 
     pub fn complete_identity(&mut self) -> Result<(), GatewayError> {
         if self.user_id.is_empty() {
-            return Err(GatewayError::with_status(400, "缺少 Qoder userId，无法标识账号，请重新登录或粘贴完整账号记录"));
+            return Err(GatewayError::with_status(
+                400,
+                "缺少 Qoder userId，无法标识账号，请重新登录或粘贴完整账号记录",
+            ));
         }
         validate_identity(&self.user_id)?;
         if self.machine_id.is_empty() {
@@ -101,7 +135,11 @@ impl Credentials {
     }
 
     pub fn pat(&self) -> Option<&str> {
-        self.refresh_token.strip_prefix("pat|")?.split('|').next().filter(|value| !value.is_empty())
+        self.refresh_token
+            .strip_prefix("pat|")?
+            .split('|')
+            .next()
+            .filter(|value| !value.is_empty())
     }
 
     pub fn oauth_refresh(&self) -> &str {
@@ -117,14 +155,21 @@ impl Credentials {
     }
 
     pub fn expiring(&self) -> bool {
-        self.can_refresh() && self.expires_at.is_some_and(|expiry| expiry <= logging::now_ms() + REFRESH_MARGIN_MS)
+        self.can_refresh()
+            && self
+                .expires_at
+                .is_some_and(|expiry| expiry <= logging::now_ms() + REFRESH_MARGIN_MS)
     }
 
     pub fn to_value(&self) -> Value {
         // 空串按 null 落进记录：`add_qoder_account` 用「空值不覆盖」的合并规则，
         // 缺失的 refreshToken / expiresAt 不该把既有值洗成空串。
         let text_or_null = |value: &str| -> Value {
-            if value.is_empty() { Value::Null } else { Value::String(value.to_string()) }
+            if value.is_empty() {
+                Value::Null
+            } else {
+                Value::String(value.to_string())
+            }
         };
         json!({
             "mode": self.region.id(),
@@ -140,21 +185,39 @@ impl Credentials {
 }
 
 pub fn text(payload: &Value, keys: &[&str]) -> String {
-    keys.iter().find_map(|key| match payload.get(*key) {
-        Some(Value::String(value)) if !value.trim().is_empty() => Some(value.trim().to_string()),
-        Some(Value::Number(value)) => Some(value.to_string()),
-        _ => None,
-    }).unwrap_or_default()
+    keys.iter()
+        .find_map(|key| match payload.get(*key) {
+            Some(Value::String(value)) if !value.trim().is_empty() => {
+                Some(value.trim().to_string())
+            }
+            Some(Value::Number(value)) => Some(value.to_string()),
+            _ => None,
+        })
+        .unwrap_or_default()
 }
 
 pub fn secret(payload: &Value, keys: &[&str]) -> Result<String, GatewayError> {
-    let mut value = keys.iter().find_map(|key| payload.get(*key).and_then(Value::as_str)
-        .map(str::trim).filter(|value| !value.is_empty())).unwrap_or("");
-    if value.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("Bearer ")) {
+    let mut value = keys
+        .iter()
+        .find_map(|key| {
+            payload
+                .get(*key)
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+        })
+        .unwrap_or("");
+    if value
+        .get(..7)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("Bearer "))
+    {
         value = value[7..].trim();
     }
     if value.len() > MAX_TOKEN_LENGTH || value.chars().any(char::is_control) {
-        return Err(GatewayError::with_status(400, "Qoder 凭证过长或包含非法控制字符"));
+        return Err(GatewayError::with_status(
+            400,
+            "Qoder 凭证过长或包含非法控制字符",
+        ));
     }
     Ok(value.to_string())
 }
@@ -174,9 +237,17 @@ fn validate_identity(value: &str) -> Result<(), GatewayError> {
 
 pub fn timestamp(value: Option<&Value>) -> Option<i64> {
     let value = value?;
-    let number = value.as_i64().or_else(|| value.as_str()?.trim().parse::<i64>().ok());
+    let number = value
+        .as_i64()
+        .or_else(|| value.as_str()?.trim().parse::<i64>().ok());
     if let Some(number) = number.filter(|value| *value > 0) {
-        return if number < 100_000_000_000 { number.checked_mul(1000) } else { Some(number) };
+        return if number < 100_000_000_000 {
+            number.checked_mul(1000)
+        } else {
+            Some(number)
+        };
     }
-    chrono::DateTime::parse_from_rfc3339(value.as_str()?).ok().map(|time| time.timestamp_millis())
+    chrono::DateTime::parse_from_rfc3339(value.as_str()?)
+        .ok()
+        .map(|time| time.timestamp_millis())
 }

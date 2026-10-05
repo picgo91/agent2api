@@ -507,9 +507,7 @@ pub trait ProviderAdapter: Send + Sync {
         store: &'a AccountStore,
         account_id: &'a str,
         force: bool,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = ModelRefreshOutcome> + Send + 'a>,
-    >;
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ModelRefreshOutcome> + Send + 'a>>;
 
     /// 模型目录刷新是否走「账号」这一维（默认 true；Cline 覆写为 false）。
     ///
@@ -594,7 +592,12 @@ pub trait ProviderAdapter: Send + Sync {
     /// 「同一账号重试」那一档给出（见 `config::RetrySettings`）。
     /// 适配器据此判断该不该再退避 —— 而不是自己去读全局设置：那样写的话
     /// 「哪一档管什么」这条规则就会漏进每个适配器里各实现一遍。
-    fn retry_advice(&self, _error_body: &Value, _attempt: usize, _budget: usize) -> Option<RetryAdvice> {
+    fn retry_advice(
+        &self,
+        _error_body: &Value,
+        _attempt: usize,
+        _budget: usize,
+    ) -> Option<RetryAdvice> {
         None
     }
 
@@ -848,9 +851,8 @@ pub trait ProviderAdapter: Send + Sync {
         &'a self,
         _store: &'a AccountStore,
         _account_id: &'a str,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>>
+    {
         let kind = self.kind();
         Box::pin(async move {
             Err(GatewayError::with_status(
@@ -1023,7 +1025,11 @@ pub struct ModelRefreshOutcome {
 impl ModelRefreshOutcome {
     /// 真刷新成功（`count` 是落地后的条目数）
     pub fn refreshed(count: usize) -> Self {
-        Self { refreshed: true, count, message: None }
+        Self {
+            refreshed: true,
+            count,
+            message: None,
+        }
     }
 
     /// 没有刷（按缓存/TTL 跳过、上游没给可用清单、没有可用的家等）——
@@ -1034,7 +1040,11 @@ impl ModelRefreshOutcome {
 
     /// 尝试刷新但失败（`reason` 是会显示给用户的原因）
     pub fn failed(reason: impl Into<String>) -> Self {
-        Self { refreshed: false, count: 0, message: Some(reason.into()) }
+        Self {
+            refreshed: false,
+            count: 0,
+            message: Some(reason.into()),
+        }
     }
 }
 
@@ -1128,7 +1138,8 @@ pub async fn refresh_implemented(store: &AccountStore) -> Vec<Value> {
     seed_current_workbuddy_defaults();
     seed_current_qoder_defaults();
     seed_current_cline_defaults();
-    let results = super::catalog_refresh::refresh(store, &serde_json::Map::new(), None, false).await;
+    let results =
+        super::catalog_refresh::refresh(store, &serde_json::Map::new(), None, false).await;
     // 刷新落地后补种一次：新增的带前缀 / 别名模型在这一刻才出现在清单里
     // （与开头那次同一件事 —— 那时种的是缓存恢复的清单）
     seed_current_cline_defaults();

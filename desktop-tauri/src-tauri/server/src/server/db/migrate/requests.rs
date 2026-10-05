@@ -98,7 +98,10 @@ fn read_requests(path: &Path) -> Option<Vec<RequestEntry>> {
         Err(error) => {
             logging::console_line(
                 "[Storage]",
-                &format!("❌ 请求明细迁移失败：无法读取 {}（{error}）", path.display()),
+                &format!(
+                    "❌ 请求明细迁移失败：无法读取 {}（{error}）",
+                    path.display()
+                ),
             );
             return None;
         }
@@ -196,28 +199,35 @@ pub(super) fn import_daily(conn: &Connection, dir: &Path) -> Option<LegacyOutcom
         Err(error) => {
             logging::console_line(
                 "[Storage]",
-                &format!("❌ 请求聚合迁移失败：无法读取 {}（{error}）", path.display()),
+                &format!(
+                    "❌ 请求聚合迁移失败：无法读取 {}（{error}）",
+                    path.display()
+                ),
             );
             return None;
         }
     };
     let daily = request_stats::legacy::parse_daily_jsonl(&text);
     let bounds = request_stats::legacy::legacy_bounds();
-    let (imported, backfilled) = match request_stats::legacy::import_legacy_daily(conn, &daily, &bounds) {
-        Ok(result) => result,
-        Err(error) => {
-            logging::console_line(
-                "[Storage]",
-                &format!("❌ 请求聚合迁移失败：写入数据库失败（{error}）"),
-            );
-            return None;
-        }
-    };
+    let (imported, backfilled) =
+        match request_stats::legacy::import_legacy_daily(conn, &daily, &bounds) {
+            Ok(result) => result,
+            Err(error) => {
+                logging::console_line(
+                    "[Storage]",
+                    &format!("❌ 请求聚合迁移失败：写入数据库失败（{error}）"),
+                );
+                return None;
+            }
+        };
     // 回填过的日子逐日列出：这几天的数字与用户昨天看到的可能不同（重算用的是
     // 今天的口径，见 `backfill` 模块头的代价分析），出问题时日志里要有线索。
     // 走控制台通道 —— 迁移发生在 `logging::init_store` 之前（见框架模块头）。
     if !backfilled.is_empty() {
-        logging::console_line("[Storage]", &request_stats::legacy::backfill_report_line(&backfilled));
+        logging::console_line(
+            "[Storage]",
+            &request_stats::legacy::backfill_report_line(&backfilled),
+        );
     }
     let backup = backup_legacy_file(&path);
     Some(LegacyOutcome {

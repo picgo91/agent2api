@@ -108,7 +108,10 @@ impl ReasoningCoalescer {
 
     /// 带 usage 旁路槽的合并器（流式转发用；`new()` 保留给无统计需求的调用点）
     pub fn with_telemetry(telemetry: Arc<RequestTelemetry>) -> Self {
-        Self { telemetry: Some(telemetry), ..Self::new() }
+        Self {
+            telemetry: Some(telemetry),
+            ..Self::new()
+        }
     }
 
     /// 设置 model 名回写（转发链路按适配器的 `sse_model_rewrite()` 决定是否调用）。
@@ -322,7 +325,8 @@ impl ReasoningCoalescer {
             _ => Value::String(String::new()),
         };
         // 逐个值做 JSON 编码（字符串会带引号并转义，数字/布尔/null 原样）
-        let encode = |value: &Value| serde_json::to_string(value).unwrap_or_else(|_| "null".to_string());
+        let encode =
+            |value: &Value| serde_json::to_string(value).unwrap_or_else(|_| "null".to_string());
         let text = format!(
             r#"{{"id":{},"object":"chat.completion.chunk","created":{},"model":{},"choices":[{{"index":0,"delta":{{"reasoning_content":{}}},"finish_reason":null}}]}}"#,
             encode(&id),

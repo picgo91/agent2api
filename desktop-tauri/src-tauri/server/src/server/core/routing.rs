@@ -80,7 +80,10 @@ pub struct CooldownKeys<'a> {
 
 impl<'a> CooldownKeys<'a> {
     pub fn new(requested: &'a str) -> Self {
-        Self { requested, resolved: Mutex::new(HashMap::new()) }
+        Self {
+            requested,
+            resolved: Mutex::new(HashMap::new()),
+        }
     }
 
     /// 该家实际收到的上游模型名 —— 也就是它的冷却键。
@@ -111,20 +114,19 @@ impl<'a> CooldownKeys<'a> {
         // `custom_providers::wire_model_for`）。跳过这一步会让 alias 请求的
         // 冷却写在请求名上：正是本模块头描述的那类「判定漏命中、已限额账号
         // 被反复选中」的事故形态，所以这里必须按家分派。
-        let wire =
-            if crate::server::core::custom_providers::is_custom_provider_id(provider_id) {
-                crate::server::core::providers::custom::forward::cooldown_model(
-                    provider_id,
-                    self.requested,
-                )
-            } else {
-                crate::server::core::providers::catalog::wire_target_for_provider(
-                    self.requested,
-                    provider_id,
-                    None,
-                )
-                .model
-            };
+        let wire = if crate::server::core::custom_providers::is_custom_provider_id(provider_id) {
+            crate::server::core::providers::custom::forward::cooldown_model(
+                provider_id,
+                self.requested,
+            )
+        } else {
+            crate::server::core::providers::catalog::wire_target_for_provider(
+                self.requested,
+                provider_id,
+                None,
+            )
+            .model
+        };
         if let Ok(mut cache) = self.resolved.lock() {
             cache.insert(provider_id.to_string(), wire.clone());
         }
@@ -161,10 +163,7 @@ pub fn rate_limit_reset_at(account: &Value, keys: &CooldownKeys<'_>, now: i64) -
     else {
         return 0;
     };
-    let reset_at = limit
-        .get("resetAt")
-        .and_then(js_number)
-        .unwrap_or(0.0);
+    let reset_at = limit.get("resetAt").and_then(js_number).unwrap_or(0.0);
     if reset_at > now as f64 {
         reset_at as i64
     } else {
@@ -178,12 +177,21 @@ pub fn account_usability(account: &Value, keys: &CooldownKeys<'_>, now: i64) -> 
     // Node: `account?.enabled === false` —— 只有显式 false 才算禁用，
     // 缺失/字符串 "false"/0 都视为启用（与 account-store 的 enabled() 同口径）
     if matches!(account.get("enabled"), Some(Value::Bool(false))) {
-        return AccountUsability { usable: false, reason: Some("disabled") };
+        return AccountUsability {
+            usable: false,
+            reason: Some("disabled"),
+        };
     }
     if is_rate_limited(account, keys, now) {
-        return AccountUsability { usable: false, reason: Some("rate-limited") };
+        return AccountUsability {
+            usable: false,
+            reason: Some("rate-limited"),
+        };
     }
-    AccountUsability { usable: true, reason: None }
+    AccountUsability {
+        usable: true,
+        reason: None,
+    }
 }
 
 /// `account_usability` 的结果
@@ -302,7 +310,8 @@ pub fn pick_for_model(
     let candidates: Vec<Value> = accounts
         .iter()
         .filter(|account| {
-            if !providers.is_empty() && !providers.iter().any(|known| *known == provider_of(account))
+            if !providers.is_empty()
+                && !providers.iter().any(|known| *known == provider_of(account))
             {
                 return false;
             }
@@ -413,7 +422,10 @@ pub fn accounts_of(snapshot: &Value) -> Vec<Value> {
 fn compare_by_priority(a: &Value, b: &Value) -> std::cmp::Ordering {
     let key = |account: &Value| {
         (
-            normalize_priority(account.get("priority"), crate::server::core::account_store::priority::DEFAULT_PRIORITY),
+            normalize_priority(
+                account.get("priority"),
+                crate::server::core::account_store::priority::DEFAULT_PRIORITY,
+            ),
             js_number(account.get("addedAt").unwrap_or(&Value::Null)).unwrap_or(0.0),
         )
     };
@@ -441,7 +453,10 @@ fn js_number(value: &Value) -> Option<f64> {
                 // JS: Number('') === 0（与 Number('abc') 的 NaN 不同）
                 Some(0.0)
             } else {
-                trimmed.parse::<f64>().ok().filter(|value| value.is_finite())
+                trimmed
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|value| value.is_finite())
             }
         }
         // Boolean / null / 对象 / 数组：Number(true)=1、Number(null)=0、

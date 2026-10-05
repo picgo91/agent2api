@@ -381,7 +381,9 @@ impl Default for SessionRegistry {
 impl SessionRegistry {
     /// 建一个空注册表（原实现 `createSessionRegistry`）
     pub fn new() -> Self {
-        Self { inner: Mutex::new(Inner::default()) }
+        Self {
+            inner: Mutex::new(Inner::default()),
+        }
     }
 
     /// 这次请求能不能占用该会话（原实现 `markInflight`）。
@@ -414,7 +416,9 @@ impl SessionRegistry {
             return false;
         }
         inner.inflight.insert(session_id.to_string());
-        inner.inflight_identities.insert(session_id.to_string(), identity.clone());
+        inner
+            .inflight_identities
+            .insert(session_id.to_string(), identity.clone());
         // 记录里的 inflight 是镜像（可能还没有记录 —— 新会话在第一轮
         // 登记之前就已经占用了），所以这里只在记录存在时同步一下
         if let Some(record) = inner.sessions.get_mut(session_id) {
@@ -521,7 +525,9 @@ impl SessionRegistry {
         let mut record = record;
         record.last_active_at = now;
         record.inflight = inner.inflight.contains(session_id);
-        inner.sessions.insert(session_id.to_string(), record.clone());
+        inner
+            .sessions
+            .insert(session_id.to_string(), record.clone());
         inner.touch(record.conversation_id.as_str());
         SessionResolution::Reuse(record)
     }

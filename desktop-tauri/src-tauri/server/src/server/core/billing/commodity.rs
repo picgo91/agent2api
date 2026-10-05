@@ -77,8 +77,16 @@ pub fn plan_priority(code: Option<&str>) -> i32 {
         return 7;
     };
     if [
-        PRO_MON, PRO_MON_PLUS, PRO_YEAR, YOUTH, ADVANCED, FLAGSHIP, FREE_MON_INTL,
-        PRO_TRIAL_MON, PRO_TRIAL_YEAR, FREE_MON,
+        PRO_MON,
+        PRO_MON_PLUS,
+        PRO_YEAR,
+        YOUTH,
+        ADVANCED,
+        FLAGSHIP,
+        FREE_MON_INTL,
+        PRO_TRIAL_MON,
+        PRO_TRIAL_YEAR,
+        FREE_MON,
     ]
     .contains(&code)
     {
@@ -106,8 +114,18 @@ pub fn is_plan_base(code: Option<&str>) -> bool {
         return false;
     };
     [
-        FLAGSHIP, ADVANCED, YOUTH, PRO_MON, PRO_YEAR, PRO_MON_PLUS, PRO_TRIAL_MON,
-        PRO_TRIAL_YEAR, GIFT, FREE, FREE_MON, FREE_MON_INTL,
+        FLAGSHIP,
+        ADVANCED,
+        YOUTH,
+        PRO_MON,
+        PRO_YEAR,
+        PRO_MON_PLUS,
+        PRO_TRIAL_MON,
+        PRO_TRIAL_YEAR,
+        GIFT,
+        FREE,
+        FREE_MON,
+        FREE_MON_INTL,
     ]
     .contains(&code)
 }

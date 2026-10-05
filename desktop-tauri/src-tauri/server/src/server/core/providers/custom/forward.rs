@@ -70,7 +70,9 @@ use crate::server::core::model_rules;
 use crate::server::core::protocol::{anthropic_outbound, responses_outbound};
 use crate::server::core::proxies::ResolvedProxy;
 use crate::server::core::upstream::connections::ConnectionGuard;
-use crate::server::core::upstream::request::{read_upstream_error, send_chat_request, TransportRequest};
+use crate::server::core::upstream::request::{
+    read_upstream_error, send_chat_request, TransportRequest,
+};
 use crate::server::core::upstream::sse::ModelRewrite;
 use crate::server::core::upstream::usage::RequestTelemetry;
 use crate::server::core::upstream::{ForwardOutcome, ForwardStream, InFlightGuard};
@@ -120,7 +122,8 @@ pub(crate) async fn forward(
                 400,
                 format!(
                     "自定义提供商「{}」的协议 {other} 无法识别，请检查提供商配置",
-                    custom_providers::label_of(provider_id).unwrap_or_else(|| provider_id.to_string()),
+                    custom_providers::label_of(provider_id)
+                        .unwrap_or_else(|| provider_id.to_string()),
                 ),
             ));
         }
@@ -208,7 +211,11 @@ pub(crate) async fn forward(
         "[CustomProvider]",
         &format!(
             "POST {url} model={} stream={stream} account={account_id} 出口={}",
-            if requested.is_empty() { "(默认)" } else { &requested },
+            if requested.is_empty() {
+                "(默认)"
+            } else {
+                &requested
+            },
             describe_proxy(proxy.as_ref()),
         ),
     );
@@ -329,9 +336,7 @@ impl ProviderQuirks {
             tool_type_custom: provider
                 .get("anthropicToolType")
                 .and_then(Value::as_str)
-                .is_some_and(|text| {
-                    text.eq_ignore_ascii_case(custom_providers::TOOL_TYPE_CUSTOM)
-                }),
+                .is_some_and(|text| text.eq_ignore_ascii_case(custom_providers::TOOL_TYPE_CUSTOM)),
         }
     }
 
@@ -340,7 +345,10 @@ impl ProviderQuirks {
     /// 鉴权方式 —— 那是记录持有者的选择，这里只负责如实执行。
     fn apply_to(&self, headers: &mut Vec<(String, String)>) {
         for (key, value) in &self.headers {
-            match headers.iter_mut().find(|(name, _)| name.eq_ignore_ascii_case(key)) {
+            match headers
+                .iter_mut()
+                .find(|(name, _)| name.eq_ignore_ascii_case(key))
+            {
                 Some(slot) => slot.1 = value.clone(),
                 None => headers.push((key.clone(), value.clone())),
             }
@@ -395,11 +403,9 @@ async fn forward_translated(
                 base_url.trim_end_matches('/'),
                 quirks.url_suffix
             );
-            let mut payload = responses_outbound::responses_request_from_chat(
-                &outbound_chat,
-                &wire_model,
-            )
-            .map_err(|message| GatewayError::with_status(400, message))?;
+            let mut payload =
+                responses_outbound::responses_request_from_chat(&outbound_chat, &wire_model)
+                    .map_err(|message| GatewayError::with_status(400, message))?;
             // 上游恒以 stream:true 被请求（与 chat 协议同一条策略：流式才是
             // 完整能力，非流式下游由聚合路径收流）—— 转换器输出的 stream 只是
             // chat 体的如实搬运，这里统一覆写，不依赖编排层的注入约定
@@ -424,11 +430,9 @@ async fn forward_translated(
             } else {
                 format!("{base}/v1/messages{}", quirks.url_suffix)
             };
-            let mut payload = anthropic_outbound::anthropic_request_from_chat(
-                &outbound_chat,
-                &wire_model,
-            )
-            .map_err(|message| GatewayError::with_status(400, message))?;
+            let mut payload =
+                anthropic_outbound::anthropic_request_from_chat(&outbound_chat, &wire_model)
+                    .map_err(|message| GatewayError::with_status(400, message))?;
             if let Some(object) = payload.as_object_mut() {
                 object.insert("stream".to_string(), Value::Bool(true));
             }
@@ -439,10 +443,7 @@ async fn forward_translated(
                 if let Some(tools) = payload.get_mut("tools").and_then(Value::as_array_mut) {
                     for tool in tools.iter_mut() {
                         if let Some(object) = tool.as_object_mut() {
-                            object.insert(
-                                "type".to_string(),
-                                Value::String("custom".to_string()),
-                            );
+                            object.insert("type".to_string(), Value::String("custom".to_string()));
                         }
                     }
                 }
@@ -466,7 +467,11 @@ async fn forward_translated(
         &format!(
             "POST {url} protocol={} model={} stream={stream} account={account_id} 出口={}",
             kind.label(),
-            if wire_model.is_empty() { "(默认)" } else { &wire_model },
+            if wire_model.is_empty() {
+                "(默认)"
+            } else {
+                &wire_model
+            },
             describe_proxy(proxy.as_ref()),
         ),
     );
@@ -505,8 +510,12 @@ async fn forward_translated(
     // 上游字节流先过协议翻译（→ 标准 chat SSE），再交给既有消费层：
     // 流式进 ForwardStream（reasoning 合并 / usage 提取 / model 回写），
     // 非流式进聚合器 —— 槽位与连接计数的移交时序与 chat 分支逐字同构
-    let translated =
-        Box::pin(ProtocolTranslateStream::new(kind, &wire_model, response, telemetry));
+    let translated = Box::pin(ProtocolTranslateStream::new(
+        kind,
+        &wire_model,
+        response,
+        telemetry,
+    ));
     if stream {
         Ok(ForwardOutcome::Stream {
             status,
@@ -525,7 +534,9 @@ async fn forward_translated(
             rewrite,
         )
         .await?;
-        Ok(ForwardOutcome::Completion { body: aggregated.body })
+        Ok(ForwardOutcome::Completion {
+            body: aggregated.body,
+        })
     }
 }
 
@@ -761,10 +772,7 @@ fn classify_custom_error(status: u16, raw: &str, retry_after: Option<&str>) -> G
             }
             GatewayError::with_status(429, message)
         }
-        _ => GatewayError::with_status(
-            i32::from(status),
-            format!("上游返回 {status}: {raw}"),
-        ),
+        _ => GatewayError::with_status(i32::from(status), format!("上游返回 {status}: {raw}")),
     }
 }
 

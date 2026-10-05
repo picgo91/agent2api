@@ -50,7 +50,9 @@ use crate::server::core::account_store::priority::next_free_priority;
 use crate::server::core::account_store::sql;
 use crate::server::core::account_store::state::StoredAccount;
 use crate::server::core::account_store::store::{AccountStore, AccountStoreError};
-use crate::server::core::account_store::store_util::{max_concurrent_public, token_tail_of, truncate_chars};
+use crate::server::core::account_store::store_util::{
+    max_concurrent_public, token_tail_of, truncate_chars,
+};
 use crate::server::core::account_store::{
     is_cline_family, CredentialWrite, CLINE_FREE_PROVIDER_ID, CLINE_PASS_PROVIDER_ID,
     MAX_TOKEN_LENGTH,
@@ -342,7 +344,12 @@ impl AccountStore {
         fields.insert("priority".to_string(), Value::from(priority));
         fields.insert(
             "enabled".to_string(),
-            Value::Bool(existing.as_ref().map(StoredAccount::enabled).unwrap_or(true)),
+            Value::Bool(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::enabled)
+                    .unwrap_or(true),
+            ),
         );
         fields.insert("desktop".to_string(), Value::Bool(false));
         fields.insert(
@@ -366,7 +373,14 @@ impl AccountStore {
         );
         fields.insert("updatedAt".to_string(), Value::from(now));
         // 清掉可能来自别家的残留字段（同一个 id 曾被别家占用过时）
-        for key in ["edition", "endpoint", "prefixPath", "platform", "uid", "deviceId"] {
+        for key in [
+            "edition",
+            "endpoint",
+            "prefixPath",
+            "platform",
+            "uid",
+            "deviceId",
+        ] {
             fields.remove(key);
         }
         let saved = StoredAccount::from_map(fields);
@@ -406,10 +420,7 @@ impl AccountStore {
         let credentials = credentials::read_desktop_credentials()
             .map_err(|error| AccountStoreError::new(error.message, error.status_code))?
             .ok_or_else(|| {
-                AccountStoreError::new(
-                    "本机没有找到 Cline 登录态（请先在 Cline 客户端登录）",
-                    400,
-                )
+                AccountStoreError::new("本机没有找到 Cline 登录态（请先在 Cline 客户端登录）", 400)
             })?;
         let id = credentials::desktop_account_id(provider);
         let _guard = self.guard();
@@ -502,7 +513,12 @@ impl AccountStore {
         fields.insert("priority".to_string(), Value::from(priority));
         fields.insert(
             "enabled".to_string(),
-            Value::Bool(existing.as_ref().map(StoredAccount::enabled).unwrap_or(true)),
+            Value::Bool(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::enabled)
+                    .unwrap_or(true),
+            ),
         );
         fields.insert("desktop".to_string(), Value::Bool(true));
         fields.insert("source".to_string(), Value::String("imported".to_string()));
@@ -619,10 +635,7 @@ impl AccountStore {
         out.insert("id".to_string(), Value::String(record.id().to_string()));
         // provider 取**记录自己的**（不是某个写死的值）：两个池共用这一份
         // 公开形态，回错池会让账号显示在另一个分组里
-        out.insert(
-            "provider".to_string(),
-            Value::String(record.provider()),
-        );
+        out.insert("provider".to_string(), Value::String(record.provider()));
         let account = value
             .get("account")
             .and_then(Value::as_str)
@@ -717,9 +730,12 @@ impl AccountStore {
         } else {
             None
         };
-        let expires = live_expires
-            .map(Value::from)
-            .or_else(|| value.get("expiresAt").filter(|value| !value.is_null()).cloned());
+        let expires = live_expires.map(Value::from).or_else(|| {
+            value
+                .get("expiresAt")
+                .filter(|value| !value.is_null())
+                .cloned()
+        });
         if let Some(expires) = expires {
             out.insert("expiresAt".to_string(), expires);
         }

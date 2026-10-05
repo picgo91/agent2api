@@ -45,12 +45,23 @@ pub fn solo_headers(identity: &HeaderIdentity<'_>, stream: bool) -> BTreeMap<Str
     let mut headers = BTreeMap::new();
     headers.insert(
         "Accept".to_string(),
-        if stream { "text/event-stream" } else { "application/json" }.to_string(),
+        if stream {
+            "text/event-stream"
+        } else {
+            "application/json"
+        }
+        .to_string(),
     );
     headers.insert("Content-Type".to_string(), "application/json".to_string());
     headers.insert("User-Agent".to_string(), CLIENT_USER_AGENT.to_string());
-    headers.insert("Authorization".to_string(), format!("Cloud-IDE-JWT {}", identity.access_token));
-    headers.insert("X-Cloudide-Token".to_string(), identity.access_token.to_string());
+    headers.insert(
+        "Authorization".to_string(),
+        format!("Cloud-IDE-JWT {}", identity.access_token),
+    );
+    headers.insert(
+        "X-Cloudide-Token".to_string(),
+        identity.access_token.to_string(),
+    );
     headers.insert("X-Ide-Token".to_string(), identity.access_token.to_string());
     if !identity.uid.is_empty() {
         headers.insert("X-Uid".to_string(), identity.uid.to_string());
@@ -64,8 +75,14 @@ pub fn solo_headers(identity: &HeaderIdentity<'_>, stream: bool) -> BTreeMap<Str
     headers.insert("X-App-Id".to_string(), APP_ID.to_string());
     headers.insert("X-App-Version".to_string(), "default".to_string());
     headers.insert("X-Ide-Version".to_string(), IDE_VERSION.to_string());
-    headers.insert("X-Ide-Version-Code".to_string(), IDE_VERSION_CODE.to_string());
-    headers.insert("X-App-Version-Code".to_string(), IDE_VERSION_CODE.to_string());
+    headers.insert(
+        "X-Ide-Version-Code".to_string(),
+        IDE_VERSION_CODE.to_string(),
+    );
+    headers.insert(
+        "X-App-Version-Code".to_string(),
+        IDE_VERSION_CODE.to_string(),
+    );
     headers.insert("X-Ide-Version-Type".to_string(), "stable".to_string());
     headers.insert("X-Device-Type".to_string(), "windows".to_string());
     headers.insert("X-OS-Version".to_string(), OS_VERSION.to_string());
@@ -101,7 +118,9 @@ mod tests {
             // 既做不到也没意义 —— 与 codearts 那边"DPoP 不需要与 Go 对齐"同一条道理。
             // 值必须逐字节相同，那才是上游真正比的东西。
             let normalize = |map: &BTreeMap<String, String>| -> BTreeMap<String, String> {
-                map.iter().map(|(key, value)| (key.to_lowercase(), value.clone())).collect()
+                map.iter()
+                    .map(|(key, value)| (key.to_lowercase(), value.clone()))
+                    .collect()
             };
             let want: BTreeMap<String, String> = case["output"]
                 .as_object()
@@ -109,14 +128,25 @@ mod tests {
                 .iter()
                 .map(|(key, value)| (key.clone(), value.as_str().unwrap_or_default().to_string()))
                 .collect();
-            assert_eq!(normalize(&want), normalize(&got), "用例：{}", case["name"].as_str().unwrap_or("?"));
+            assert_eq!(
+                normalize(&want),
+                normalize(&got),
+                "用例：{}",
+                case["name"].as_str().unwrap_or("?")
+            );
         }
     }
 
     #[test]
     fn the_same_token_is_carried_in_three_headers() {
         // 少一个头的后果是上游按"未登录"处理，而 HTTP 层是 200 —— 最难查的那种。
-        let headers = solo_headers(&HeaderIdentity { access_token: "JWT", ..Default::default() }, true);
+        let headers = solo_headers(
+            &HeaderIdentity {
+                access_token: "JWT",
+                ..Default::default()
+            },
+            true,
+        );
         assert_eq!("Cloud-IDE-JWT JWT", headers["Authorization"]);
         assert_eq!("JWT", headers["X-Cloudide-Token"]);
         assert_eq!("JWT", headers["X-Ide-Token"]);

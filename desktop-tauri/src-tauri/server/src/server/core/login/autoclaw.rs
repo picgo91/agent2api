@@ -129,18 +129,15 @@ impl LoginService {
     ) -> Result<(LoginTaskHandle, Option<String>), String> {
         let state = random_hex()?;
         let device_id = oauth::new_oauth_device_id();
-        let endpoint = self.callback_endpoint(gateway_base, vendor, local_browser).await;
+        let endpoint = self
+            .callback_endpoint(gateway_base, vendor, local_browser)
+            .await;
         let navigate = oauth::navigate_uri(&endpoint.base, vendor);
         // 这一步要过风控，失败原因（630014 / 631002）由 oauth 模块翻成人话
-        let auth_url = oauth::request_oauth_url(
-            region,
-            vendor,
-            &navigate,
-            captcha_verify_param,
-            &device_id,
-        )
-        .await
-        .map_err(|error| error.message)?;
+        let auth_url =
+            oauth::request_oauth_url(region, vendor, &navigate, captcha_verify_param, &device_id)
+                .await
+                .map_err(|error| error.message)?;
 
         let info = crate::server::core::endpoints::resolve_edition(Some("intl"));
         let handle = self.new_handle_for_provider(info, region.provider_id());
@@ -226,7 +223,10 @@ impl LoginService {
                     };
                 }
                 CallbackEndpoint {
-                    base: format!("http://localhost:{}", callback_server::REGISTERED_CALLBACK_PORTS[0]),
+                    base: format!(
+                        "http://localhost:{}",
+                        callback_server::REGISTERED_CALLBACK_PORTS[0]
+                    ),
                     listener: None,
                     notice: Some(format!(
                         "{reason}：内嵌窗口方式仍可正常登录，用「系统浏览器」方式请先退出它"
@@ -238,13 +238,19 @@ impl LoginService {
 
     /// 把这次登录的额外状态记进待办表（见 `PendingOauth`）。
     fn store_pending_oauth(&self, state: &str, pending: PendingOauth) {
-        let mut table = self.autoclaw_oauth.lock().unwrap_or_else(|error| error.into_inner());
+        let mut table = self
+            .autoclaw_oauth
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         table.insert(state.to_string(), pending);
     }
 
     /// 取一次待办状态（回调进来时用）。
     fn take_pending_oauth(&self, state: &str) -> Option<PendingOauth> {
-        let mut table = self.autoclaw_oauth.lock().unwrap_or_else(|error| error.into_inner());
+        let mut table = self
+            .autoclaw_oauth
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         table.remove(state)
     }
 
@@ -264,7 +270,10 @@ impl LoginService {
     /// `start`（先任务后待办）形成反向嵌套。
     fn find_pending_for_vendor(&self, vendor: Vendor) -> Option<(String, LoginTaskHandle)> {
         let mut candidates: Vec<(String, i64)> = {
-            let table = self.autoclaw_oauth.lock().unwrap_or_else(|error| error.into_inner());
+            let table = self
+                .autoclaw_oauth
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
             table
                 .iter()
                 .filter(|(_, pending)| pending.vendor == vendor)
@@ -352,7 +361,10 @@ impl LoginService {
         }
         let Some(pending) = self.take_pending_oauth(&state) else {
             finish_task_error(&handle, "登录上下文已丢失，请重新发起");
-            return Err(GatewayError::with_status(410, "登录上下文已丢失，请重新发起"));
+            return Err(GatewayError::with_status(
+                410,
+                "登录上下文已丢失，请重新发起",
+            ));
         };
         // 换码要用**上游**的 state（见上面的说明）；它为空时退回落空串 ——
         // 官方客户端也是 `searchParams.get("state") || ""`，上游接受这种形态
@@ -419,10 +431,7 @@ impl LoginService {
                     }));
                     task.finished_at = Some(logging::now_ms());
                 });
-                logging::log(
-                    "[Login]",
-                    &format!("✅ AutoClaw OAuth 登录成功: {label}"),
-                );
+                logging::log("[Login]", &format!("✅ AutoClaw OAuth 登录成功: {label}"));
                 Ok(account_id)
             }
             Err(error) => {

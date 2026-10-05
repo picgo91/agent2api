@@ -38,7 +38,9 @@ use crate::server::core::account_store::priority::next_free_priority;
 use crate::server::core::account_store::sql;
 use crate::server::core::account_store::state::StoredAccount;
 use crate::server::core::account_store::store::AccountStore;
-use crate::server::core::account_store::store_util::{strip_bearer_prefix, token_tail_of, truncate_chars};
+use crate::server::core::account_store::store_util::{
+    strip_bearer_prefix, token_tail_of, truncate_chars,
+};
 use crate::server::core::providers::catpaw::credentials;
 use crate::server::core::providers::{kind_id, ProviderKind};
 use crate::server::logging;
@@ -80,18 +82,17 @@ impl AccountStore {
             // 查询失败（库不可用）按「有账号」处理并跳过：本函数是启动期的
             // **一次性**导入，库不可用时顺势去写只会再失败一次并刷屏；
             // 账号功能整体已不可用这件事由别处的 ❌ 日志说明。
-            let has_catpaw = match self
-                .with_conn(&_guard, |conn| sql::count_by_provider(conn, catpaw))
-            {
-                Ok(count) => count > 0,
-                Err(error) => {
-                    logging::log(
-                        "[Accounts]",
-                        &format!("⚠️  读取CatPaw账号数失败，跳过旧数据导入: {error}"),
-                    );
-                    true
-                }
-            };
+            let has_catpaw =
+                match self.with_conn(&_guard, |conn| sql::count_by_provider(conn, catpaw)) {
+                    Ok(count) => count > 0,
+                    Err(error) => {
+                        logging::log(
+                            "[Accounts]",
+                            &format!("⚠️  读取CatPaw账号数失败，跳过旧数据导入: {error}"),
+                        );
+                        true
+                    }
+                };
             let flagged = crate::server::config::current()
                 .raw()
                 .get(IMPORT_FLAG_KEY)
@@ -163,8 +164,9 @@ impl AccountStore {
     /// 保留、`balanceCookies[id]` 搬到记录的 `balanceCookie`（保留不消费）。
     fn import_legacy_catpaw_accounts_file(&self) -> Result<(usize, usize), String> {
         let path = credentials::catpaw_home().join("catpaw-proxy-accounts.json");
-        let text = std::fs::read_to_string(&path)
-            .map_err(|error| format!("未找到 CatPaw 旧代理账号文件 {}（{error}）", path.display()))?;
+        let text = std::fs::read_to_string(&path).map_err(|error| {
+            format!("未找到 CatPaw 旧代理账号文件 {}（{error}）", path.display())
+        })?;
         let value: Value = serde_json::from_str(&text)
             .map_err(|_| format!("CatPaw 旧代理账号文件无法解析: {}", path.display()))?;
         let items = value

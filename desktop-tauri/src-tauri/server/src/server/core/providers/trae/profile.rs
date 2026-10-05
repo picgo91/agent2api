@@ -25,11 +25,11 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::server::errors::GatewayError;
 use crate::server::core::proxies::ResolvedProxy;
+use crate::server::errors::GatewayError;
 
 use super::credentials::Credential;
-use super::headers::{IDE_VERSION, CLIENT_USER_AGENT};
+use super::headers::{CLIENT_USER_AGENT, IDE_VERSION};
 use super::http::{describe_candidates, post_json};
 use super::oauth::query_pairs;
 use super::refresh::candidate_hosts;
@@ -54,11 +54,16 @@ impl Identity {
     /// `from_callback` 是回调回显。
     pub fn merged(authoritative: &Self, from_callback: &Self, variant: &str) -> Self {
         let uid = first_non_empty([&authoritative.uid, &from_callback.uid]).to_string();
-        let nickname = first_non_empty([&authoritative.nickname, &from_callback.nickname]).to_string();
+        let nickname =
+            first_non_empty([&authoritative.nickname, &from_callback.nickname]).to_string();
         Self {
             // unknown 兜底**只兜 uid**：昵称没有它就没有（界面显示成账号名即可，
             // 造一个假昵称反而让人以为真是账号名）。
-            uid: if uid.is_empty() { unknown_uid_fallback(variant).to_string() } else { uid },
+            uid: if uid.is_empty() {
+                unknown_uid_fallback(variant).to_string()
+            } else {
+                uid
+            },
             nickname,
             enterprise_id: authoritative.enterprise_id.clone(),
             raw: authoritative.raw.clone(),
@@ -85,7 +90,11 @@ pub fn unknown_uid_fallback(variant: &str) -> &'static str {
 pub fn callback_identity(query: &str) -> Identity {
     let pairs = query_pairs(query);
     for key in ["userInfo", "user_info", "UserInfo", "userinfo"] {
-        let Some((_, raw)) = pairs.iter().find(|(name, _)| name == key).filter(|(_, value)| !value.trim().is_empty()) else {
+        let Some((_, raw)) = pairs
+            .iter()
+            .find(|(name, _)| name == key)
+            .filter(|(_, value)| !value.trim().is_empty())
+        else {
             continue;
         };
         let found = identity_from_json(raw, 0);
@@ -97,7 +106,15 @@ pub fn callback_identity(query: &str) -> Identity {
 }
 
 const UID_KEYS: [&str; 5] = ["UserID", "userId", "uid", "UID", "user_id"];
-const NICKNAME_KEYS: [&str; 7] = ["ScreenName", "screenName", "Nickname", "nickname", "Name", "name", "displayName"];
+const NICKNAME_KEYS: [&str; 7] = [
+    "ScreenName",
+    "screenName",
+    "Nickname",
+    "nickname",
+    "Name",
+    "name",
+    "displayName",
+];
 
 fn identity_from_json(raw: &str, depth: usize) -> Identity {
     if depth > 2 {
@@ -129,7 +146,13 @@ fn identity_from_json(raw: &str, depth: usize) -> Identity {
 
 fn pick_string(value: &Value, keys: &[&str]) -> String {
     keys.iter()
-        .find_map(|key| value.get(*key).and_then(Value::as_str).map(str::trim).filter(|text| !text.is_empty()))
+        .find_map(|key| {
+            value
+                .get(*key)
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+        })
         .unwrap_or_default()
         .to_string()
 }
@@ -137,7 +160,11 @@ fn pick_string(value: &Value, keys: &[&str]) -> String {
 fn first_non_empty<'a>(values: impl IntoIterator<Item = &'a String>) -> &'a str {
     // 只回引用，不回 String：调用方紧接着就要 clone 成它自己的字段，
     // 在这里先分配一份再丢是白做。
-    values.into_iter().map(String::as_str).find(|text| !text.trim().is_empty()).unwrap_or_default()
+    values
+        .into_iter()
+        .map(String::as_str)
+        .find(|text| !text.trim().is_empty())
+        .unwrap_or_default()
 }
 
 /// 问上游要账号身份。
@@ -147,7 +174,10 @@ fn first_non_empty<'a>(values: impl IntoIterator<Item = &'a String>) -> &'a str 
 /// 前缀只出现在 `Authorization` 那个头里，见 `headers.rs` 与参考实现
 /// `OAuthHeaders` + `req.Header.Set("X-Cloudide-Token", a.JWT())`），host 表与
 /// 续期同源），所以它不属于 `oauth.rs`（那条链只认识授权与换证）。
-pub async fn get_user_info(credential: &Credential, proxy: Option<&ResolvedProxy>) -> Result<Identity, GatewayError> {
+pub async fn get_user_info(
+    credential: &Credential,
+    proxy: Option<&ResolvedProxy>,
+) -> Result<Identity, GatewayError> {
     let body = serde_json::json!({ "ReqSource": "IDE", "IDEVersion": IDE_VERSION });
     // User-Agent **必须显式给**：`egress` 的默认 UA 是 `"undici"`（那是给
     // workbuddy 计费接口挡刀用的），而参考实现在这条链上发的是 `Trae/0.1.61`。
@@ -162,7 +192,12 @@ pub async fn get_user_info(credential: &Credential, proxy: Option<&ResolvedProxy
         let url = format!("{host}{USER_INFO_PATH}");
         match post_json(&url, &body, &headers, Duration::from_secs(15), proxy).await {
             Ok(reply) if reply.status >= 400 => {
-                errors.push(format!("{} => HTTP {} {}", url, reply.status, reply.body.chars().take(120).collect::<String>()));
+                errors.push(format!(
+                    "{} => HTTP {} {}",
+                    url,
+                    reply.status,
+                    reply.body.chars().take(120).collect::<String>()
+                ));
             }
             Ok(reply) => {
                 // 参考实现只读 `Result.{UserID,ScreenName,EnterpriseID}`；
@@ -174,14 +209,20 @@ pub async fn get_user_info(credential: &Credential, proxy: Option<&ResolvedProxy
                 return Ok(Identity {
                     uid: pick_string(source, &UID_KEYS),
                     nickname: pick_string(source, &NICKNAME_KEYS),
-                    enterprise_id: pick_string(source, &["EnterpriseID", "enterpriseId", "TenantID", "tenantId"]),
+                    enterprise_id: pick_string(
+                        source,
+                        &["EnterpriseID", "enterpriseId", "TenantID", "tenantId"],
+                    ),
                     raw: reply.body,
                 });
             }
             Err(error) => errors.push(format!("{} => {}", url, error.message)),
         }
     }
-    Err(GatewayError::with_status(502, describe_candidates(&hosts, &errors)))
+    Err(GatewayError::with_status(
+        502,
+        describe_candidates(&hosts, &errors),
+    ))
 }
 
 /// 上游把资料装在 `Result` 里（顶层也认，历史版本漂过）。
@@ -230,14 +271,25 @@ mod tests {
             "nothing=1",
         ] {
             let identity = callback_identity(query);
-            assert!(identity.uid.is_empty() && identity.nickname.is_empty(), "{query} 不该读出身份");
+            assert!(
+                identity.uid.is_empty() && identity.nickname.is_empty(),
+                "{query} 不该读出身份"
+            );
         }
     }
 
     #[test]
     fn the_identity_precedence_is_authoritative_then_echo_then_a_stable_unknown() {
-        let from_get = Identity { uid: "u-get".into(), nickname: "Get".into(), ..Default::default() };
-        let from_echo = Identity { uid: "u-echo".into(), nickname: "Echo".into(), ..Default::default() };
+        let from_get = Identity {
+            uid: "u-get".into(),
+            nickname: "Get".into(),
+            ..Default::default()
+        };
+        let from_echo = Identity {
+            uid: "u-echo".into(),
+            nickname: "Echo".into(),
+            ..Default::default()
+        };
         let merged = Identity::merged(&from_get, &from_echo, "solo");
         assert_eq!("u-get", merged.uid, "GetUserInfo 是权威来源");
         assert_eq!("Get", merged.nickname);
@@ -251,8 +303,14 @@ mod tests {
         let none = Identity::merged(&Identity::default(), &Identity::default(), "solo");
         assert_eq!("solo-unknown", none.uid);
         assert!(none.nickname.is_empty(), "造一个假昵称会让人以为那是账号名");
-        assert_eq!("unknown-cn", Identity::merged(&Identity::default(), &Identity::default(), "cn").uid);
-        assert_eq!("unknown-intl", Identity::merged(&Identity::default(), &Identity::default(), "intl").uid);
+        assert_eq!(
+            "unknown-cn",
+            Identity::merged(&Identity::default(), &Identity::default(), "cn").uid
+        );
+        assert_eq!(
+            "unknown-intl",
+            Identity::merged(&Identity::default(), &Identity::default(), "intl").uid
+        );
     }
 
     #[test]

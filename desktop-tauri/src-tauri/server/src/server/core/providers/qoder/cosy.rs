@@ -106,10 +106,16 @@ pub fn build_auth_headers(
     identity: &CosyIdentity<'_>,
 ) -> Result<Vec<(String, String)>, GatewayError> {
     if identity.user_id.is_empty() {
-        return Err(GatewayError::with_status(400, "Qoder 账号缺少用户标识，无法签名"));
+        return Err(GatewayError::with_status(
+            400,
+            "Qoder 账号缺少用户标识，无法签名",
+        ));
     }
     if identity.auth_token.is_empty() {
-        return Err(GatewayError::with_status(401, "Qoder 账号缺少访问令牌，请重新登录"));
+        return Err(GatewayError::with_status(
+            401,
+            "Qoder 账号缺少访问令牌，请重新登录",
+        ));
     }
 
     // 一次性 AES 密钥：16 个 ASCII 字符（源实现在 UUID 去掉连字符后取前 16 位，
@@ -182,8 +188,14 @@ pub fn build_auth_headers(
         ("Cosy-User".to_string(), identity.user_id.to_string()),
         ("Cosy-Date".to_string(), timestamp),
         ("Cosy-Version".to_string(), GATEWAY_COSY_VERSION.to_string()),
-        ("Cosy-Machineid".to_string(), identity.machine_id.to_string()),
-        ("Cosy-Machinetoken".to_string(), identity.machine_id.to_string()),
+        (
+            "Cosy-Machineid".to_string(),
+            identity.machine_id.to_string(),
+        ),
+        (
+            "Cosy-Machinetoken".to_string(),
+            identity.machine_id.to_string(),
+        ),
         ("Cosy-Machinetype".to_string(), MACHINE_TYPE.to_string()),
         ("Cosy-Machineos".to_string(), machine_os()),
         ("Cosy-Clienttype".to_string(), CLIENT_TYPE.to_string()),
@@ -253,12 +265,19 @@ pub fn signature_path(request_url: &str) -> Result<String, GatewayError> {
     let parsed = url::Url::parse(request_url)
         .map_err(|_| GatewayError::with_status(500, "Qoder 请求地址无效"))?;
     let path = parsed.path();
-    Ok(path.strip_prefix("/algo").map(str::to_string).unwrap_or_else(|| path.to_string()))
+    Ok(path
+        .strip_prefix("/algo")
+        .map(str::to_string)
+        .unwrap_or_else(|| path.to_string()))
 }
 
 /// 机器操作系统标识（源实现 `machineOs`）：`{arch}_windows` 这类形态。
 fn machine_os() -> String {
-    let arch = if cfg!(target_arch = "aarch64") { "aarch64" } else { "x86_64" };
+    let arch = if cfg!(target_arch = "aarch64") {
+        "aarch64"
+    } else {
+        "x86_64"
+    };
     let platform = if cfg!(target_os = "windows") {
         "windows"
     } else if cfg!(target_os = "macos") {

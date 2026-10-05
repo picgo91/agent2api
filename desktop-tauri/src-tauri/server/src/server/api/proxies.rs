@@ -174,11 +174,14 @@ fn pool_references(state: &ServerState) -> std::collections::HashMap<String, Vec
         let Some(proxy_id) = config.get("proxyId").and_then(Value::as_str) else {
             continue;
         };
-        references.entry(proxy_id.to_string()).or_default().push(json!({
-            "id": account.get("id").cloned().unwrap_or(Value::Null),
-            "name": account.get("name").cloned().unwrap_or(Value::Null),
-            "enabled": account.get("enabled").cloned().unwrap_or(Value::Bool(true)),
-        }));
+        references
+            .entry(proxy_id.to_string())
+            .or_default()
+            .push(json!({
+                "id": account.get("id").cloned().unwrap_or(Value::Null),
+                "name": account.get("name").cloned().unwrap_or(Value::Null),
+                "enabled": account.get("enabled").cloned().unwrap_or(Value::Bool(true)),
+            }));
     }
     references
 }
@@ -345,7 +348,10 @@ pub async fn pool_test(state: &ServerState, body: &Bytes) -> Response {
         }
         object.insert(
             "items".to_string(),
-            pool_payload(state).get("items").cloned().unwrap_or_else(|| json!([])),
+            pool_payload(state)
+                .get("items")
+                .cloned()
+                .unwrap_or_else(|| json!([])),
         );
     }
     ok_json(data)

@@ -230,8 +230,14 @@ impl Credential {
             Ok(value) => value.as_object().cloned().unwrap_or_default(),
             Err(_) => serde_json::Map::new(),
         };
-        record.insert("accessToken".to_string(), Value::String(self.access_key_id.clone()));
-        record.insert("refreshToken".to_string(), Value::String(self.refresh_token.clone()));
+        record.insert(
+            "accessToken".to_string(),
+            Value::String(self.access_key_id.clone()),
+        );
+        record.insert(
+            "refreshToken".to_string(),
+            Value::String(self.refresh_token.clone()),
+        );
         record.insert("userId".to_string(), Value::String(self.user_id.clone()));
         record.insert(
             "expiresAt".to_string(),
@@ -289,7 +295,10 @@ mod tests {
         let at = |minutes_before: i64| EXPIRY - minutes_before * MINUTE;
         // 15 分钟提前量：离到期还有 10 分钟 → 要刷；还有 30 分钟 → 还不刷；正好 15 → 要刷
         assert!(credential.needs_refresh(15 * MINUTE, at(10)));
-        assert!(credential.needs_refresh(15 * MINUTE, EXPIRY - 15 * MINUTE), "边界是闭区间");
+        assert!(
+            credential.needs_refresh(15 * MINUTE, EXPIRY - 15 * MINUTE),
+            "边界是闭区间"
+        );
         assert!(!credential.needs_refresh(15 * MINUTE, at(30)));
         // 45 分钟提前量：离到期 30 分钟就该刷了（提前量越大越早动手）
         assert!(credential.needs_refresh(45 * MINUTE, at(30)));
@@ -347,15 +356,29 @@ mod tests {
         });
         let credential = Credential::from_payload(&nested).expect("嵌套形状应当能解析");
         assert_eq!("AK1", credential.access_key_id);
-        assert_eq!("2026-09-27T00:00:00Z", credential.expires_at, "expiration 要归一到 expires_at");
+        assert_eq!(
+            "2026-09-27T00:00:00Z", credential.expires_at,
+            "expiration 要归一到 expires_at"
+        );
         assert_eq!("WEB", credential.login_type, "缺 login_type 时按 WEB 兜底");
-        assert!(credential.can_refresh(), "有 verifier 与 refresh token 就应当能续期");
+        assert!(
+            credential.can_refresh(),
+            "有 verifier 与 refresh token 就应当能续期"
+        );
 
         // 平铺 + accessKeyId 这类驼峰别名不该被认成有效（不给它乱猜的机会）
         let flat = json!({"accessKeyId": "AK2", "secretAccessKey": "SK2"});
-        assert!(Credential::from_payload(&flat).is_err(), "只有驼峰名时应当明确报错而不是收下一份空凭据");
+        assert!(
+            Credential::from_payload(&flat).is_err(),
+            "只有驼峰名时应当明确报错而不是收下一份空凭据"
+        );
 
         let flat_ok = json!({"access_key_id": "AK3", "secret_access_key": "SK3"});
-        assert_eq!("AK3", Credential::from_payload(&flat_ok).expect("平铺应当能解析").access_key_id);
+        assert_eq!(
+            "AK3",
+            Credential::from_payload(&flat_ok)
+                .expect("平铺应当能解析")
+                .access_key_id
+        );
     }
 }

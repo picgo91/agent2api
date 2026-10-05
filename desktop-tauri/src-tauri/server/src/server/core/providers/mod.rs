@@ -95,8 +95,8 @@
 //!                stream / chat / balance
 //! 本文件仍然只做「身份与元数据」这一件事，不认识磁盘也不认识账号。
 
-pub mod adapter;
 pub mod accio;
+pub mod adapter;
 pub mod autoclaw;
 pub mod catalog;
 /// 远程模型清单的**持久化缓存**（各家的清单在进程重启后由它读回，见模块头）。
@@ -307,29 +307,71 @@ pub struct ProviderMeta {
 /// 注册表顺序只用于**展示**（providers 摘要、模型目录合并时同名模型的去重顺序）
 /// 与旧数据迁移（把按家分队的优先级合并成全局队列时，作为旧默认路由顺序的依据）。
 pub const PROVIDERS: &[ProviderMeta] = &[
-    ProviderMeta { id: "workbuddy", label: "WorkBuddy" },
-    ProviderMeta { id: "raccoon", label: "小浣熊" },
-    ProviderMeta { id: "catpaw", label: "CatPaw" },
+    ProviderMeta {
+        id: "workbuddy",
+        label: "WorkBuddy",
+    },
+    ProviderMeta {
+        id: "raccoon",
+        label: "小浣熊",
+    },
+    ProviderMeta {
+        id: "catpaw",
+        label: "CatPaw",
+    },
     // AutoClaw 两个地区**相邻**排列（本次改动的要求）：界面上它们是同一条产品线的
     // 两个版本，中间隔着别的家会让「找国际版」变成一次扫描。顺序也决定模型目录
     // 合并时同名模型先归谁家 —— 国内版在前，与存量账号的归属一致。
-    ProviderMeta { id: "autoclaw", label: "AutoClaw 国内版" },
-    ProviderMeta { id: "autoclaw-intl", label: "AutoClaw 国际版" },
-    ProviderMeta { id: "qoder", label: "Qoder" },
-    ProviderMeta { id: "cline-free", label: "Cline Free" },
-    ProviderMeta { id: "cline-pass", label: "Cline Pass" },
+    ProviderMeta {
+        id: "autoclaw",
+        label: "AutoClaw 国内版",
+    },
+    ProviderMeta {
+        id: "autoclaw-intl",
+        label: "AutoClaw 国际版",
+    },
+    ProviderMeta {
+        id: "qoder",
+        label: "Qoder",
+    },
+    ProviderMeta {
+        id: "cline-free",
+        label: "Cline Free",
+    },
+    ProviderMeta {
+        id: "cline-pass",
+        label: "Cline Pass",
+    },
     // Accio 两个地区**相邻**排列（与 AutoClaw 同一理由：同一条产品线的两个
     // 版本，中间隔着别家会让「找国际版」变成一次扫描）。顺序也决定模型目录
     // 合并时同名模型先归谁家 —— 国际版在前（用户装的、默认用的是它）。
-    ProviderMeta { id: "accio", label: "Accio" },
-    ProviderMeta { id: "accio-cn", label: "Accio 国内版" },
+    ProviderMeta {
+        id: "accio",
+        label: "Accio",
+    },
+    ProviderMeta {
+        id: "accio-cn",
+        label: "Accio 国内版",
+    },
     // ZCode 两个地区**相邻**排列（与 AutoClaw / Accio 同一理由：同一条产品线的
     // 两个版本，中间隔着别家会让「找国际版」变成一次扫描）。顺序也决定模型目录
     // 合并时同名模型先归谁家 —— 国内版在前（国内网络环境下更常被添加的那个）。
-    ProviderMeta { id: "zcode", label: "ZCode 国内版" },
-    ProviderMeta { id: "zcode-intl", label: "ZCode 国际版" },
-    ProviderMeta { id: "codearts", label: "CodeArts" },
-    ProviderMeta { id: "trae", label: "Trae" },
+    ProviderMeta {
+        id: "zcode",
+        label: "ZCode 国内版",
+    },
+    ProviderMeta {
+        id: "zcode-intl",
+        label: "ZCode 国际版",
+    },
+    ProviderMeta {
+        id: "codearts",
+        label: "CodeArts",
+    },
+    ProviderMeta {
+        id: "trae",
+        label: "Trae",
+    },
 ];
 
 /// provider id 在注册表里的下标（未知 id → None）。

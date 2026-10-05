@@ -45,7 +45,7 @@ use crate::server::errors::GatewayError;
 use crate::server::logging;
 
 use super::conversation::CatPawCredentials;
-use super::{DEFAULT_BASE_URL, APP_KEY};
+use super::{APP_KEY, DEFAULT_BASE_URL};
 
 /// 桌面端实时账号的固定 id（原项目 `account-store.mjs` 的 `DESKTOP_ACCOUNT_ID`）。
 ///
@@ -219,8 +219,8 @@ fn read_login_file(path: &std::path::Path) -> Result<DesktopLogin, String> {
         .and_then(|time| time.duration_since(std::time::SystemTime::UNIX_EPOCH).ok())
         .map(|duration| duration.as_millis() as i64)
         .unwrap_or(0);
-    let text =
-        std::fs::read_to_string(path).map_err(|error| format!("读取 CatPaw 登录态失败: {error}"))?;
+    let text = std::fs::read_to_string(path)
+        .map_err(|error| format!("读取 CatPaw 登录态失败: {error}"))?;
     let value = serde_json::from_str::<Value>(&text)
         .map_err(|_| "CatPaw 本地登录态文件无法解析".to_string())?;
     let Value::Object(root) = value else {
@@ -236,7 +236,9 @@ fn read_login_file(path: &std::path::Path) -> Result<DesktopLogin, String> {
         .trim()
         .to_lowercase();
     if !login_type.is_empty() && login_type != "passport" {
-        return Err(format!("当前 CatPaw 登录方式 {login_type} 暂不支持自动直连"));
+        return Err(format!(
+            "当前 CatPaw 登录方式 {login_type} 暂不支持自动直连"
+        ));
     }
     let token = safe_field(
         auth.and_then(|auth| auth.get("accessToken"))
@@ -270,7 +272,11 @@ fn read_login_file(path: &std::path::Path) -> Result<DesktopLogin, String> {
     }
     Ok(DesktopLogin {
         token,
-        uid: if uid.is_empty() { login_name.clone() } else { uid },
+        uid: if uid.is_empty() {
+            login_name.clone()
+        } else {
+            uid
+        },
         login_name,
         modified_at,
     })
@@ -285,9 +291,7 @@ fn safe_field(value: String, field: &str, max_length: usize) -> Result<String, S
     if trimmed.is_empty() {
         return Err(format!("CatPaw 本地登录态缺少 {field}"));
     }
-    if trimmed.chars().count() > max_length
-        || trimmed.contains(['\r', '\n', ';'])
-    {
+    if trimmed.chars().count() > max_length || trimmed.contains(['\r', '\n', ';']) {
         return Err(format!("CatPaw 本地登录态中的 {field} 格式无效"));
     }
     Ok(trimmed)
@@ -406,7 +410,11 @@ pub fn log_source(source: &str, account_id: &str, uid: &str) {
         "[CatPaw]",
         &format!(
             "凭证来源 {source}（账号 {}，uid {}）",
-            if account_id.is_empty() { "(默认登录态)" } else { account_id },
+            if account_id.is_empty() {
+                "(默认登录态)"
+            } else {
+                account_id
+            },
             if uid.is_empty() { "-" } else { uid },
         ),
     );

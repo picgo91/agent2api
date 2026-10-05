@@ -45,11 +45,11 @@ use crate::server::core::providers::refresh_flight;
 use crate::server::errors::GatewayError;
 use crate::server::logging;
 
-use super::crypto;
 use super::credentials::{
     credentials_from_claims, js_text, number_value, store_cached_if_current, AutoClawCredentials,
     CredentialOrigin, REFRESH_FALLBACK_CODE, REQUEST_TIMEOUT_MS,
 };
+use super::crypto;
 
 /// 签名用的 appId / appKey（源实现 `AUTH_APP_ID` / `AUTH_APP_KEY`）。
 ///
@@ -171,10 +171,7 @@ pub async fn refresh(
                 if !store_cached_if_current(next.region, cache_key, credentials, &next) {
                     logging::verbose(
                         "[AutoClaw]",
-                        &format!(
-                            "账号 {} 的刷新结果未写入缓存（登录态已被更换）",
-                            next.id
-                        ),
+                        &format!("账号 {} 的刷新结果未写入缓存（登录态已被更换）", next.id),
                     );
                     // 重新取当前登录态：桌面端刚重新登录时，它的凭证才是有效的。
                     // 读不到（文件被删/损坏）时**不重建、也不拿刷新结果顶替** ——
@@ -326,10 +323,7 @@ async fn call_refresh_api(
     if !response.ok {
         return Err(GatewayError::with_status(
             if response.status == 401 { 401 } else { 502 },
-            format!(
-                "AutoClaw 刷新接口 {path} 失败（HTTP {}）",
-                response.status
-            ),
+            format!("AutoClaw 刷新接口 {path} 失败（HTTP {}）", response.status),
         ));
     }
     Ok(payload)
@@ -340,7 +334,10 @@ async fn call_refresh_api_with_fallback(
     credentials: &AutoClawCredentials,
 ) -> Result<AutoClawCredentials, GatewayError> {
     let mut payload = call_refresh_api(credentials, "/userapi/v1/refresh").await?;
-    if payload.get("code").and_then(number_value).map(|code| code as i64)
+    if payload
+        .get("code")
+        .and_then(number_value)
+        .map(|code| code as i64)
         == Some(REFRESH_FALLBACK_CODE)
     {
         logging::verbose(

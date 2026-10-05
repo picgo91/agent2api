@@ -111,7 +111,10 @@ pub struct CatPawCredentials {
 
 impl CatPawCredentials {
     pub fn new(token: impl Into<String>, uid: impl Into<String>) -> Self {
-        Self { token: token.into(), uid: uid.into() }
+        Self {
+            token: token.into(),
+            uid: uid.into(),
+        }
     }
 }
 
@@ -201,7 +204,9 @@ pub async fn run_conversation(
             "CatPaw 没有可用的登录凭证：请在账号页添加账号，或配置环境变量",
         ));
     }
-    let prepared = prepare(&request).await.map_err(|error| error.to_gateway())?;
+    let prepared = prepare(&request)
+        .await
+        .map_err(|error| error.to_gateway())?;
     execute(request, prepared).await
 }
 
@@ -225,7 +230,10 @@ async fn execute(
     // 用户标识取**本次实际使用的凭证**里的 uid（上游 `user-uid` 头的同一个值）。
     // 两个维度都要：前者管「换了账号记录」，后者管「同一记录底下换了用户」
     // （桌面端实时登录态在客户端侧换号）。
-    let identity = AccountIdentity::new(request.account_id.as_str(), request.credentials.uid.as_str());
+    let identity = AccountIdentity::new(
+        request.account_id.as_str(),
+        request.credentials.uid.as_str(),
+    );
     let mut inflight = false;
     let mut inflight_conflict = false;
     if !request.session_id.is_empty() && !stateless {
@@ -314,10 +322,8 @@ async fn execute(
                 // 毫无意义（它没见过那些消息），前缀必须清空、提交集换成全量 ——
                 // 否则下一轮 `locate_increment` 会以为上游已见过整段历史，
                 // 增量从末尾开始，新 conversation 就只看到一段断层的历史。
-                history = HistoryFingerprints::new(
-                    Vec::new(),
-                    fingerprints_for(&prepared.messages),
-                );
+                history =
+                    HistoryFingerprints::new(Vec::new(), fingerprints_for(&prepared.messages));
                 ctx.conversation_id = guard.conversation_id.clone();
             }
             Err(error) => {
@@ -350,14 +356,19 @@ async fn execute(
     guard.mark_active();
 
     // ── turn 请求体（含「末尾必须是 user」的持久会话校验）───────────
-    let TurnBody { body: turn_body, final_type } = build_turn_body(&prepared, &decision, &guard)?;
+    let TurnBody {
+        body: turn_body,
+        final_type,
+    } = build_turn_body(&prepared, &decision, &guard)?;
     if decision.mode != TurnMode::ToolContinuation && final_type != "user" && persistent {
         // 只有持久会话要求轮次以 user 结尾；无状态辅助请求末尾可以是 assistant。
         // 走到这里说明客户端提交的历史与映射对不上（例如上一轮工具会话已失效），
         // 作废映射让它下一轮全量重来
         registry().invalidate(&request.session_id, InvalidationReason::Explicit);
         guard.close("failed", None).await;
-        return Err(GatewayError::bad_request("工具会话已失效，请重新发起当前回合"));
+        return Err(GatewayError::bad_request(
+            "工具会话已失效，请重新发起当前回合",
+        ));
     }
 
     logging::verbose(
@@ -438,15 +449,33 @@ fn build_turn_body(
         .filter_map(|tool| tool.get("name").cloned())
         .collect();
     let mut body = serde_json::Map::new();
-    body.insert("conversationId".to_string(), Value::String(guard.conversation_id.clone()));
-    body.insert("turnRequestId".to_string(), Value::String(guard.turn_request_id.clone()));
-    body.insert("source".to_string(), Value::String(DEFAULT_SOURCE.to_string()));
+    body.insert(
+        "conversationId".to_string(),
+        Value::String(guard.conversation_id.clone()),
+    );
+    body.insert(
+        "turnRequestId".to_string(),
+        Value::String(guard.turn_request_id.clone()),
+    );
+    body.insert(
+        "source".to_string(),
+        Value::String(DEFAULT_SOURCE.to_string()),
+    );
     body.insert("action".to_string(), Value::String("turn".to_string()));
     body.insert("message".to_string(), message);
-    body.insert("modelType".to_string(), Value::from(prepared.resolution.model_type));
+    body.insert(
+        "modelType".to_string(),
+        Value::from(prepared.resolution.model_type),
+    );
     body.insert("mode".to_string(), Value::String(DEFAULT_MODE.to_string()));
-    body.insert("permissionMode".to_string(), Value::String(PERMISSION_MODE.to_string()));
-    body.insert("toolVersion".to_string(), Value::String(DEFAULT_TOOL_VERSION.to_string()));
+    body.insert(
+        "permissionMode".to_string(),
+        Value::String(PERMISSION_MODE.to_string()),
+    );
+    body.insert(
+        "toolVersion".to_string(),
+        Value::String(DEFAULT_TOOL_VERSION.to_string()),
+    );
     body.insert("toolConfigs".to_string(), Value::Array(selected_tools));
     body.insert("availableTools".to_string(), Value::Array(available));
     if let Some(system_prompt) = &prepared.system_prompt {
@@ -456,9 +485,15 @@ fn build_turn_body(
         );
     }
     if let Some(rules_message) = &prepared.rules_message {
-        body.insert("rulesMessage".to_string(), Value::String(rules_message.clone()));
+        body.insert(
+            "rulesMessage".to_string(),
+            Value::String(rules_message.clone()),
+        );
     }
-    Ok(TurnBody { body: Value::Object(body), final_type })
+    Ok(TurnBody {
+        body: Value::Object(body),
+        final_type,
+    })
 }
 
 /// round 提交 + 「会话正在执行中」的自愈重试（模块头差异 3）。
@@ -517,13 +552,31 @@ async fn submit_round(
     round_messages: &[Value],
 ) -> Result<(), CatPawError> {
     let mut body = serde_json::Map::new();
-    body.insert("conversationId".to_string(), Value::String(guard.conversation_id.clone()));
-    body.insert("source".to_string(), Value::String(DEFAULT_SOURCE.to_string()));
-    body.insert("messages".to_string(), Value::Array(round_messages.to_vec()));
-    body.insert("modelType".to_string(), Value::from(prepared.resolution.model_type));
+    body.insert(
+        "conversationId".to_string(),
+        Value::String(guard.conversation_id.clone()),
+    );
+    body.insert(
+        "source".to_string(),
+        Value::String(DEFAULT_SOURCE.to_string()),
+    );
+    body.insert(
+        "messages".to_string(),
+        Value::Array(round_messages.to_vec()),
+    );
+    body.insert(
+        "modelType".to_string(),
+        Value::from(prepared.resolution.model_type),
+    );
     body.insert("mode".to_string(), Value::String(DEFAULT_MODE.to_string()));
-    body.insert("permissionMode".to_string(), Value::String(PERMISSION_MODE.to_string()));
-    body.insert("toolVersion".to_string(), Value::String(DEFAULT_TOOL_VERSION.to_string()));
+    body.insert(
+        "permissionMode".to_string(),
+        Value::String(PERMISSION_MODE.to_string()),
+    );
+    body.insert(
+        "toolVersion".to_string(),
+        Value::String(DEFAULT_TOOL_VERSION.to_string()),
+    );
     if let Some(system_prompt) = &prepared.system_prompt {
         body.insert(
             "systemPromptContext".to_string(),
@@ -531,7 +584,10 @@ async fn submit_round(
         );
     }
     if let Some(rules_message) = &prepared.rules_message {
-        body.insert("rulesMessage".to_string(), Value::String(rules_message.clone()));
+        body.insert(
+            "rulesMessage".to_string(),
+            Value::String(rules_message.clone()),
+        );
     }
     let mut declarative = serde_json::Map::new();
     if let Some(effort) = &prepared.effort {
@@ -546,7 +602,9 @@ async fn submit_round(
             json!({ "modelParams": { "declarativeParams": Value::Object(declarative) } }),
         );
     }
-    let body_bytes = serde_json::to_string(&body).map(|text| text.len()).unwrap_or(0);
+    let body_bytes = serde_json::to_string(&body)
+        .map(|text| text.len())
+        .unwrap_or(0);
     let started_at = logging::now_ms();
     // ── 调试模式：采这一次 round 往返 ────────────────────────────
     // CatPaw 是**会话式**：一次用户请求内部有多次上游往返（round → events

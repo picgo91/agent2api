@@ -22,8 +22,8 @@ use axum::http::HeaderMap;
 use serde_json::Value;
 
 use crate::server::core::account_store::{AccountStore, CredentialWrite};
-use crate::server::errors::GatewayError;
 use crate::server::core::proxies::ResolvedProxy;
+use crate::server::errors::GatewayError;
 
 use super::super::adapter::{
     ChatRequestPlan, ModelRefreshOutcome, ProviderAdapter, UpstreamErrorClass,
@@ -68,9 +68,16 @@ impl ProviderAdapter for TraeAdapter {
         stream: bool,
         telemetry: &'a std::sync::Arc<crate::server::core::upstream::usage::RequestTelemetry>,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<crate::server::core::upstream::ForwardOutcome, GatewayError>> + Send + 'a>,
+        Box<
+            dyn std::future::Future<
+                    Output = Result<crate::server::core::upstream::ForwardOutcome, GatewayError>,
+                > + Send
+                + 'a,
+        >,
     > {
-        Box::pin(async move { super::forward::forward(store, account_id, body, proxy, stream, telemetry).await })
+        Box::pin(async move {
+            super::forward::forward(store, account_id, body, proxy, stream, telemetry).await
+        })
     }
 
     /// 无状态路径的入口。本家**不会**被走到这里（`is_stateful()` 已为 true），
@@ -142,11 +149,17 @@ impl ProviderAdapter for TraeAdapter {
             // 只有落到"其它 4xx"这一档才交给跨家的内容拦截判定：本家的
             // 请求级分类（过大 / 通道不可用 / 404）必须优先，把它们误判成
             // 内容拦截会触发一次无意义的同账号重试。
-            ErrorKind::Client => content_block::classify_or_fatal(status, error_body, message, code),
+            ErrorKind::Client => {
+                content_block::classify_or_fatal(status, error_body, message, code)
+            }
             // Server / NotFound / InputTooLarge / ModelUnavailable / None
             // 都不该罚账号：只有 QuotaLimited / TokenExpired 会让编排层去换
             // 账号或重试，其余落到 Fatal 原样透出。
-            _ => UpstreamErrorClass::Fatal { message, upstream_code: code, status },
+            _ => UpstreamErrorClass::Fatal {
+                message,
+                upstream_code: code,
+                status,
+            },
         }
     }
 
@@ -155,16 +168,25 @@ impl ProviderAdapter for TraeAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>,
+    > {
         Box::pin(async move {
             let record = read_record(store, account_id)?;
             let mut credential = Credential::from_payload(&record).map_err(GatewayError::new)?;
-            if credential.needs_refresh(REFRESH_LEAD_MS, MAX_ISSUE_AGE_MS, crate::server::logging::now_ms()) {
+            if credential.needs_refresh(
+                REFRESH_LEAD_MS,
+                MAX_ISSUE_AGE_MS,
+                crate::server::logging::now_ms(),
+            ) {
                 let proxy = account_proxy(&record)?;
                 credential = renew(store, &record, &credential, proxy.as_ref()).await?;
             }
             if credential.access_token.trim().is_empty() {
-                return Err(GatewayError::with_status(401, "Trae 账号缺少 accessToken，请重新登录"));
+                return Err(GatewayError::with_status(
+                    401,
+                    "Trae 账号缺少 accessToken，请重新登录",
+                ));
             }
             Ok(credential.access_token)
         })
@@ -180,7 +202,9 @@ impl ProviderAdapter for TraeAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>,
+    > {
         Box::pin(async move {
             let record = read_record(store, account_id)?;
             let credential = Credential::from_payload(&record).map_err(GatewayError::new)?;
@@ -209,9 +233,11 @@ impl ProviderAdapter for TraeAdapter {
         match Credential::from_payload(&record) {
             // 没有 refreshToken 的账号（手工粘贴只给了 accessToken 是常态）在这里
             // 判 false：续期手段都没有，交给维护只会变成每轮一条稳定失败的记录。
-            Ok(credential) if credential.can_refresh() => {
-                credential.needs_refresh(REFRESH_LEAD_MS, MAX_ISSUE_AGE_MS, crate::server::logging::now_ms())
-            }
+            Ok(credential) if credential.can_refresh() => credential.needs_refresh(
+                REFRESH_LEAD_MS,
+                MAX_ISSUE_AGE_MS,
+                crate::server::logging::now_ms(),
+            ),
             // 凭据读不出（缺 accessToken 之类）同理：它连"还有多久过期"都判不了。
             _ => false,
         }
@@ -242,7 +268,10 @@ impl ProviderAdapter for TraeAdapter {
             // 挡住。`read_record` 的 401 语义留给转发与余额那两条链，
             // 目录这条按空 id（自动）与点名（手动）分开处理。
             let Some(record) = store.trae_account_record(account_id) else {
-                crate::server::logging::verbose("[Models]", "Trae 模型目录刷新跳过：尚未添加 Trae 账号");
+                crate::server::logging::verbose(
+                    "[Models]",
+                    "Trae 模型目录刷新跳过：尚未添加 Trae 账号",
+                );
                 if account_id.trim().is_empty() {
                     return ModelRefreshOutcome::unchanged();
                 }
@@ -281,7 +310,8 @@ impl ProviderAdapter for TraeAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>>
+    {
         Box::pin(async move { super::usage::query_usage(store, account_id).await })
     }
 }
@@ -294,7 +324,11 @@ pub(crate) async fn renew_if_due(
     credential: &Credential,
     proxy: Option<&ResolvedProxy>,
 ) -> Result<Credential, GatewayError> {
-    if credential.needs_refresh(REFRESH_LEAD_MS, MAX_ISSUE_AGE_MS, crate::server::logging::now_ms()) {
+    if credential.needs_refresh(
+        REFRESH_LEAD_MS,
+        MAX_ISSUE_AGE_MS,
+        crate::server::logging::now_ms(),
+    ) {
         return renew(store, record, credential, proxy).await;
     }
     Ok(credential.clone())
@@ -322,7 +356,8 @@ async fn renew(
             "Trae 账号里没有 refreshToken，无法续期（请在「账号」页重新登录）",
         ));
     }
-    let renewed = refresh_shared(credential, &refresh_candidates(&credential.api_host), proxy).await?;
+    let renewed =
+        refresh_shared(credential, &refresh_candidates(&credential.api_host), proxy).await?;
     match store.update_trae_credentials_if_current(record, &renewed) {
         Ok(CredentialWrite::Written) => {}
         Ok(CredentialWrite::Stale) => {
@@ -390,18 +425,28 @@ mod tests {
 
     /// 临时库 + 账号 id + **删文件的守卫**（第三个值必须留在作用域里，
     /// 否则用例跑完文件还在 —— 见 `test_temp::TempDb` 的注释）。
-    fn store_with(credential: Credential) -> (AccountStore, String, crate::server::db::test_temp::TempDb) {
-        let (db, guard) = crate::server::db::test_temp::TempDb::open(&format!("trae-maint-{}", credential.uid));
+    fn store_with(
+        credential: Credential,
+    ) -> (AccountStore, String, crate::server::db::test_temp::TempDb) {
+        let (db, guard) =
+            crate::server::db::test_temp::TempDb::open(&format!("trae-maint-{}", credential.uid));
         let store = AccountStore::with_db(Some(db));
         let added = store
             .add_trae_account(&credential, None, "test")
             .expect("账号应能落库");
-        let id = added["account"]["id"].as_str().or_else(|| added["id"].as_str()).unwrap_or("").to_string();
+        let id = added["account"]["id"]
+            .as_str()
+            .or_else(|| added["id"].as_str())
+            .unwrap_or("")
+            .to_string();
         // **反空跑**：id 取不到时会退化成空串，而 `trae_account_record("")` 是
         // "取队首可用账号" —— 那等于三条负向用例可能因为"根本没查到记录"而全绿，
         // 而不是因为判定正确。所以这里直接把"记录按 id 查得到"钉住。
         assert!(!id.is_empty(), "落库返回里没拿到账号 id：{added}");
-        assert!(store.trae_account_record(&id).is_some(), "按 id 查不回记录：{id}");
+        assert!(
+            store.trae_account_record(&id).is_some(),
+            "按 id 查不回记录：{id}"
+        );
         (store, id, guard)
     }
 
@@ -425,14 +470,20 @@ mod tests {
     fn the_maintenance_task_is_told_about_an_expired_credential() {
         let past = crate::server::logging::now_ms() - 60_000;
         let (store, id, _db) = store_with(credential("9001", "rt-1", past));
-        assert!(TRAE_ADAPTER.credentials_expiring(&store, &id), "已过期且有 refreshToken → 该交给维护");
+        assert!(
+            TRAE_ADAPTER.credentials_expiring(&store, &id),
+            "已过期且有 refreshToken → 该交给维护"
+        );
     }
 
     #[test]
     fn a_still_valid_credential_is_left_alone() {
         let future = crate::server::logging::now_ms() + 30 * 24 * 3600 * 1000;
         let (store, id, _db) = store_with(credential("9002", "rt-2", future));
-        assert!(!TRAE_ADAPTER.credentials_expiring(&store, &id), "还有 30 天 → 不该去打上游");
+        assert!(
+            !TRAE_ADAPTER.credentials_expiring(&store, &id),
+            "还有 30 天 → 不该去打上游"
+        );
     }
 
     #[test]
@@ -456,12 +507,23 @@ mod tests {
         // 面板那三处登记（能力表 / 表单 / 图标）都按**字段名**取值，字段名漂了
         // 界面只会静默少一项。这里把契约钉在 Rust 侧：uid / expiresAt / variant /
         // hasRefreshToken / available 五个键必须在公开形态里。
-        let (store, id, _db) = store_with(credential("9004", "rt-4", crate::server::logging::now_ms() + 3_600_000));
+        let (store, id, _db) = store_with(credential(
+            "9004",
+            "rt-4",
+            crate::server::logging::now_ms() + 3_600_000,
+        ));
         let record = store.trae_account_record(&id).expect("记录应在");
         for key in ["uid", "expiresAt", "variant", "provider", "id"] {
-            assert!(record.get(key).is_some(), "公开/存储形态里少了 {key}：{}", json!(&record));
+            assert!(
+                record.get(key).is_some(),
+                "公开/存储形态里少了 {key}：{}",
+                json!(&record)
+            );
         }
         assert_eq!("trae", record["provider"].as_str().unwrap_or_default());
-        assert!(record.get("accessToken").is_some(), "维护判定要用到凭据本体（这条记录是内部形态）");
+        assert!(
+            record.get("accessToken").is_some(),
+            "维护判定要用到凭据本体（这条记录是内部形态）"
+        );
     }
 }

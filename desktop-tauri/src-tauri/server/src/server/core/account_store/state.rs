@@ -144,7 +144,11 @@ impl StoredAccount {
     /// 账号类型：缺省视为个人版（对应 Node 版 `type || 'personal'`）
     pub fn account_type(&self) -> String {
         let value = as_text(self.fields.get("type"));
-        if value.is_empty() { "personal".to_string() } else { value }
+        if value.is_empty() {
+            "personal".to_string()
+        } else {
+            value
+        }
     }
 
     pub fn enterprise_id(&self) -> String {
@@ -215,9 +219,7 @@ impl StoredAccount {
             _ => None,
         };
         match parsed {
-            Some(number) if number.is_finite() => {
-                normalize_priority_value(number.round() as i64)
-            }
+            Some(number) if number.is_finite() => normalize_priority_value(number.round() as i64),
             _ => fallback,
         }
     }
@@ -276,7 +278,8 @@ impl StoredAccount {
     }
 
     pub fn set_claim_at(&mut self, value: i64) {
-        self.fields.insert("claimAt".to_string(), Value::from(value));
+        self.fields
+            .insert("claimAt".to_string(), Value::from(value));
     }
 
     /// 最近一次领取到的套餐 id（`zcode-v3-start-plan-trust-0928` 这类带日期段的串）。
@@ -359,7 +362,10 @@ impl StoredAccount {
     /// **原样存取**，归一化（认不出的值怎么落）在 `zcode::normalize_plan` 一处：
     /// 存储层不做取值白名单，否则将来加第三条通道要改两个地方。
     pub fn zcode_plan(&self) -> String {
-        as_text(self.fields.get(crate::server::core::providers::zcode::PLAN_FIELD))
+        as_text(
+            self.fields
+                .get(crate::server::core::providers::zcode::PLAN_FIELD),
+        )
     }
 
     pub fn set_zcode_plan(&mut self, value: &str) {
@@ -504,9 +510,9 @@ fn positive_number(value: Option<&Value>) -> Option<f64> {
 /// 所以这里按 i64 取整保存（毫秒时间戳用整数表达即可）。
 fn integer_of(value: Option<&Value>) -> i64 {
     match value {
-        Some(Value::Number(number)) => number.as_i64().unwrap_or_else(|| {
-            number.as_f64().map(|float| float as i64).unwrap_or(0)
-        }),
+        Some(Value::Number(number)) => number
+            .as_i64()
+            .unwrap_or_else(|| number.as_f64().map(|float| float as i64).unwrap_or(0)),
         Some(Value::String(text)) => text.trim().parse::<i64>().unwrap_or(0),
         _ => 0,
     }

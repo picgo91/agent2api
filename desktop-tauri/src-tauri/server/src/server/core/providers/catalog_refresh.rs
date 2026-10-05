@@ -58,7 +58,11 @@ pub async fn refresh(
             continue;
         }
         let adapter = adapter_for(kind);
-        let requested = accounts.get(provider).and_then(Value::as_str).unwrap_or("").trim();
+        let requested = accounts
+            .get(provider)
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
         let mut item = json!({
             "provider": provider,
             "providerLabel": meta(kind).label,
@@ -66,11 +70,15 @@ pub async fn refresh(
         });
         if adapter.refresh_uses_account() {
             let used = if requested.is_empty() {
-                store.current_entry_for_provider(provider).map(|entry| entry.id)
+                store
+                    .current_entry_for_provider(provider)
+                    .map(|entry| entry.id)
             } else {
                 Some(requested.to_string())
             };
-            if let Some(id) = used { item["accountId"] = json!(id); }
+            if let Some(id) = used {
+                item["accountId"] = json!(id);
+            }
         }
         if !adapter.supports_model_refresh() {
             item["status"] = json!("skipped");
@@ -111,7 +119,9 @@ pub async fn refresh(
                 item["status"] = json!("skipped");
                 item["message"] = json!(if state.retry_at > logging::now_ms() || state.running() {
                     state.waiting_message()
-                } else { "沿用缓存，尚未到刷新时间".to_string() });
+                } else {
+                    "沿用缓存，尚未到刷新时间".to_string()
+                });
                 item["retryAt"] = json!(state.retry_at);
                 results.push(item);
                 continue;
@@ -136,7 +146,11 @@ pub async fn refresh(
         }
         item["refreshedAt"] = json!(catalog::refresh_meta(kind).1);
         let success = item["status"] != "failed";
-        let summary = item.get("message").and_then(Value::as_str).unwrap_or("模型清单已刷新").to_string();
+        let summary = item
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("模型清单已刷新")
+            .to_string();
         // 间隔在这里**现读一次**（而不是复用开跑前那份）：这一轮可能跨几十秒的
         // 网络请求，期间用户完全可能把间隔改掉；用旧值排期会让界面显示「已生效」
         // 而实际按旧节奏跑（与 `scheduled_tasks::finish` 同一取舍）。
@@ -145,7 +159,9 @@ pub async fn refresh(
             item["status"] = json!("failed");
             item["message"] = json!(error);
         }
-        if cline { cline_result = Some(item.clone()); }
+        if cline {
+            cline_result = Some(item.clone());
+        }
         results.push(item);
     }
     results
@@ -157,10 +173,14 @@ pub async fn refresh(
 /// 「定时任务什么时候跑一轮」—— 只改任务级键会让各家的实际间隔留在旧值上。
 pub fn reschedule(interval_ms: i64) -> Result<(), String> {
     for kind in implemented_kinds() {
-        if !adapter_for(kind).supports_model_refresh() { continue; }
+        if !adapter_for(kind).supports_model_refresh() {
+            continue;
+        }
         let scope = if matches!(kind, ProviderKind::ClineFree | ProviderKind::ClinePass) {
             "cline"
-        } else { kind_id(kind) };
+        } else {
+            kind_id(kind)
+        };
         task_state::reschedule(&format!("modelRefresh:{scope}"), interval_ms)?;
     }
     Ok(())

@@ -20,10 +20,10 @@
 use base64::Engine;
 use std::time::Duration;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
-use crate::server::errors::GatewayError;
 use crate::server::core::proxies::ResolvedProxy;
+use crate::server::errors::GatewayError;
 
 use super::device::generate_device_key_pair;
 use super::headers::{IDE_VERSION, IDE_VERSION_CODE};
@@ -68,11 +68,19 @@ pub fn client_id_for(variant: &str) -> &'static str {
 /// 向量里 13 条授权地址用例把这条差别钉住了：把 solo-intl 当成 solo 的
 /// 顺手写法会让登录页少一个参数、多一个参数。
 pub fn auth_from_for(variant: &str) -> &'static str {
-    if variant == "solo" { "solo" } else { "trae" }
+    if variant == "solo" {
+        "solo"
+    } else {
+        "trae"
+    }
 }
 
 pub fn platform_code_for(variant: &str) -> &'static str {
-    if variant == "solo" { "SOLO_PC" } else { "IDE_PC" }
+    if variant == "solo" {
+        "SOLO_PC"
+    } else {
+        "IDE_PC"
+    }
 }
 
 pub fn hide_saas_login_for(variant: &str) -> bool {
@@ -107,7 +115,8 @@ pub struct LoginContext {
 impl LoginContext {
     /// 生成一轮登录的上下文。`port` 是**已经绑定成功**的那个 loopback 端口。
     pub fn new(variant: &str, port: u16, started_at_ms: i64) -> Result<Self, String> {
-        let key_pair = generate_device_key_pair().ok_or("生成设备密钥对失败（系统随机源不可用）")?;
+        let key_pair =
+            generate_device_key_pair().ok_or("生成设备密钥对失败（系统随机源不可用）")?;
         let (code_verifier, code_challenge) = pkce_pair()?;
         Ok(Self {
             login_trace_id: uuid_v4()?,
@@ -129,7 +138,8 @@ impl LoginContext {
 /// 方法是 `S256`（Trae 用官方 PKCE 名，不像 codearts 那边写的是 `SHA-256`）。
 pub fn pkce_pair() -> Result<(String, String), String> {
     let mut bytes = [0u8; 48];
-    getrandom::getrandom(&mut bytes).map_err(|_| "随机源不可用（PKCE verifier 生成失败）".to_string())?;
+    getrandom::getrandom(&mut bytes)
+        .map_err(|_| "随机源不可用（PKCE verifier 生成失败）".to_string())?;
     let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
     let verifier = engine.encode(bytes);
     let digest = <sha2::Sha256 as sha2::Digest>::digest(verifier.as_bytes());
@@ -156,7 +166,10 @@ pub fn uuid_v4() -> Result<String, String> {
 pub fn random_digits(length: usize) -> Result<String, String> {
     let mut bytes = vec![0u8; length];
     getrandom::getrandom(&mut bytes).map_err(|_| "随机源不可用".to_string())?;
-    Ok(bytes.iter().map(|byte| ((byte % 10) + b'0') as char).collect())
+    Ok(bytes
+        .iter()
+        .map(|byte| ((byte % 10) + b'0') as char)
+        .collect())
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -171,7 +184,9 @@ pub fn url_encode(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for byte in value.as_bytes() {
         match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(*byte as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*byte as char)
+            }
             b' ' => out.push('+'),
             other => out.push_str(&format!("%{other:02X}")),
         }
@@ -184,18 +199,41 @@ pub fn verification_uri(login_host: &str, context: &LoginContext) -> String {
     let login_host = ensure_https_scheme(login_host);
     let mut query = Vec::new();
     let push = |query: &mut Vec<String>, key: &str, value: String, encode: bool| {
-        query.push(format!("{key}={}", if encode { url_encode(&value) } else { value }));
+        query.push(format!(
+            "{key}={}",
+            if encode { url_encode(&value) } else { value }
+        ));
     };
     push(&mut query, "login_version", "1".into(), false);
-    push(&mut query, "auth_from", auth_from_for(&context.variant).into(), false);
+    push(
+        &mut query,
+        "auth_from",
+        auth_from_for(&context.variant).into(),
+        false,
+    );
     push(&mut query, "login_channel", "native_ide".into(), false);
     push(&mut query, "plugin_version", PLUGIN_VERSION.into(), true);
     push(&mut query, "auth_type", "local".into(), false);
-    push(&mut query, "client_id", client_id_for(&context.variant).into(), false);
+    push(
+        &mut query,
+        "client_id",
+        client_id_for(&context.variant).into(),
+        false,
+    );
     push(&mut query, "redirect", "0".into(), false);
-    push(&mut query, "login_trace_id", context.login_trace_id.clone(), true);
+    push(
+        &mut query,
+        "login_trace_id",
+        context.login_trace_id.clone(),
+        true,
+    );
     // 刻意不编码：官方页面对它做正则匹配。
-    push(&mut query, "auth_callback_url", context.callback_url.clone(), false);
+    push(
+        &mut query,
+        "auth_callback_url",
+        context.callback_url.clone(),
+        false,
+    );
     push(&mut query, "machine_id", context.machine_id.clone(), true);
     push(&mut query, "device_id", context.device_id.clone(), true);
     push(&mut query, "x_device_id", context.device_id.clone(), true);
@@ -206,12 +244,21 @@ pub fn verification_uri(login_host: &str, context: &LoginContext) -> String {
     push(&mut query, "x_env", ENV.into(), true);
     push(&mut query, "x_app_version", IDE_VERSION.into(), true);
     push(&mut query, "x_app_type", APP_TYPE.into(), true);
-    push(&mut query, "code_challenge", context.code_challenge.clone(), true);
+    push(
+        &mut query,
+        "code_challenge",
+        context.code_challenge.clone(),
+        true,
+    );
     push(&mut query, "code_challenge_method", "S256".into(), false);
     if hide_saas_login_for(&context.variant) {
         push(&mut query, "hide_saas_login", "true".into(), false);
     }
-    format!("{}/authorization?{}", login_host.trim_end_matches('/'), query.join("&"))
+    format!(
+        "{}/authorization?{}",
+        login_host.trim_end_matches('/'),
+        query.join("&")
+    )
 }
 
 /// guidance 返回的是裸域名（`www.trae.cn`），不加 scheme 会被浏览器当成
@@ -231,7 +278,11 @@ pub fn ensure_https_scheme(raw: &str) -> String {
 ///
 /// 第三条 `www.trae.cn` 是兜底源，别当成噪音删掉：回调没带回 loginHost 时
 /// （生产里真出现过），前两把都在 TLB 边缘回过 404，只有它能换通。
-const CN_DEFAULT_ORIGINS: [&str; 3] = ["https://api.trae.cn", "https://api.trae.com.cn", "https://www.trae.cn"];
+const CN_DEFAULT_ORIGINS: [&str; 3] = [
+    "https://api.trae.cn",
+    "https://api.trae.com.cn",
+    "https://www.trae.cn",
+];
 
 /// 去掉 scheme / 路径，只留 host（参考实现 `hostOnly`）。
 fn host_only(url: &str) -> String {
@@ -239,7 +290,10 @@ fn host_only(url: &str) -> String {
         Some((_, rest)) => rest,
         None => url,
     };
-    rest.split(['/', '?', '#']).next().unwrap_or_default().to_string()
+    rest.split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default()
+        .to_string()
 }
 
 /// 取 scheme，没有就按 `https`（参考实现 `schemeOf`：`i > 0` 才认，
@@ -286,8 +340,16 @@ pub fn candidate_api_origins(login_host: &str) -> Vec<String> {
 /// 所以它只能垫在后面当兜底，参考实现 v0.12.24 为此专门定过一条）。
 pub fn auth_code_exchange_urls(login_host: &str) -> Vec<String> {
     let onto = |origin: &str| format!("{}{AUTH_CODE_EXCHANGE_PATH}", origin.trim_end_matches('/'));
-    let mut urls: Vec<String> = ACCOUNT_API_ORIGINS.iter().map(|origin| onto(origin)).collect();
-    urls.extend(candidate_api_origins(login_host).iter().map(String::as_str).map(onto));
+    let mut urls: Vec<String> = ACCOUNT_API_ORIGINS
+        .iter()
+        .map(|origin| onto(origin))
+        .collect();
+    urls.extend(
+        candidate_api_origins(login_host)
+            .iter()
+            .map(String::as_str)
+            .map(onto),
+    );
     dedup_keep_order(urls)
 }
 
@@ -334,7 +396,11 @@ impl Callback {
         let lookup = |keys: &[&str]| -> String {
             keys.iter()
                 .find_map(|key| {
-                    pairs.iter().find(|(name, _)| name == key).map(|(_, value)| value.clone()).filter(|value| !value.is_empty())
+                    pairs
+                        .iter()
+                        .find(|(name, _)| name == key)
+                        .map(|(_, value)| value.clone())
+                        .filter(|value| !value.is_empty())
                 })
                 .unwrap_or_default()
         };
@@ -348,18 +414,46 @@ impl Callback {
                     .map(|(name, value)| format!("{name}={value}"))
             });
         if let Some(error) = error_key {
-            return Self { error: format!("oauth callback error: {error}"), ..Default::default() };
+            return Self {
+                error: format!("oauth callback error: {error}"),
+                ..Default::default()
+            };
         }
         if lookup(&["isRedirect"]) == "false" {
-            return Self { error: "oauth callback: isRedirect=false".to_string(), ..Default::default() };
+            return Self {
+                error: "oauth callback: isRedirect=false".to_string(),
+                ..Default::default()
+            };
         }
-        let login_host = lookup(&["loginHost", "login_host", "LoginHost", "host", "consoleHost"]);
+        let login_host = lookup(&[
+            "loginHost",
+            "login_host",
+            "LoginHost",
+            "host",
+            "consoleHost",
+        ]);
         let user_tag = lookup(&["userTag", "user_tag", "UserTag"]);
-        let refresh_token = lookup(&["refreshToken", "refresh_token", "RefreshToken", "refresh-token"]);
-        let mut auth_code = lookup(&["authCode", "auth_code", "AuthCode", "authorization_code", "code"]);
+        let refresh_token = lookup(&[
+            "refreshToken",
+            "refresh_token",
+            "RefreshToken",
+            "refresh-token",
+        ]);
+        let mut auth_code = lookup(&[
+            "authCode",
+            "auth_code",
+            "AuthCode",
+            "authorization_code",
+            "code",
+        ]);
         if auth_code.is_empty() {
             for key in ["authCodeInfo", "auth_code_info", "AuthCodeInfo"] {
-                let Some(raw) = pairs.iter().find(|(name, _)| name == key).map(|(_, value)| value.clone()).filter(|value| !value.is_empty()) else {
+                let Some(raw) = pairs
+                    .iter()
+                    .find(|(name, _)| name == key)
+                    .map(|(_, value)| value.clone())
+                    .filter(|value| !value.is_empty())
+                else {
                     continue;
                 };
                 if let Some(code) = extract_auth_code(&raw) {
@@ -368,7 +462,13 @@ impl Callback {
                 }
             }
         }
-        Self { auth_code, refresh_token, login_host, user_tag, error: String::new() }
+        Self {
+            auth_code,
+            refresh_token,
+            login_host,
+            user_tag,
+            error: String::new(),
+        }
     }
 
     /// 这次回调是否把登录推进到了可判定的状态。
@@ -386,7 +486,11 @@ fn extract_auth_code(raw: &str) -> Option<String> {
     fn walk(value: &Value, keys: &[&str]) -> Option<String> {
         if let Value::Object(map) = value {
             for key in keys {
-                if let Some(text) = map.get(*key).and_then(Value::as_str).filter(|text| !text.trim().is_empty()) {
+                if let Some(text) = map
+                    .get(*key)
+                    .and_then(Value::as_str)
+                    .filter(|text| !text.trim().is_empty())
+                {
                     return Some(text.to_string());
                 }
             }
@@ -477,23 +581,39 @@ pub async fn exchange_auth_code(
     });
     let headers = vec![
         ("x-cloudide-token", String::new()),
-        ("User-Agent", format!("Trae/{PLUGIN_VERSION} antigravity-cockpit-tools")),
+        (
+            "User-Agent",
+            format!("Trae/{PLUGIN_VERSION} antigravity-cockpit-tools"),
+        ),
     ];
     let urls = auth_code_exchange_urls(login_host);
     let mut errors = Vec::new();
     for url in &urls {
         match post_json(url, &body, &headers, Duration::from_secs(30), proxy).await {
-            Ok(reply) if reply.status >= 400 => errors.push(format!("{} => HTTP {} {}", url, reply.status, reply.body.chars().take(120).collect::<String>())),
+            Ok(reply) if reply.status >= 400 => errors.push(format!(
+                "{} => HTTP {} {}",
+                url,
+                reply.status,
+                reply.body.chars().take(120).collect::<String>()
+            )),
             Ok(reply) => match parse_refresh_response(&reply.body) {
                 Ok((access_token, refresh_token, expires_at_ms)) => {
-                    return Ok(Exchanged { access_token, refresh_token, expires_at_ms, raw: reply.body });
+                    return Ok(Exchanged {
+                        access_token,
+                        refresh_token,
+                        expires_at_ms,
+                        raw: reply.body,
+                    });
                 }
                 Err(reason) => errors.push(format!("{} => {reason}", url)),
             },
             Err(error) => errors.push(format!("{} => {}", url, error.message)),
         }
     }
-    Err(GatewayError::with_status(502, describe_candidates(&urls, &errors)))
+    Err(GatewayError::with_status(
+        502,
+        describe_candidates(&urls, &errors),
+    ))
 }
 
 /// `DeviceInfo`：官方客户端形状。`DevicePublicKey` 空值会被判成设备绑定拒绝。
@@ -517,7 +637,10 @@ pub fn device_info(context: &LoginContext) -> Value {
 /// 问上游"该去哪个登录页"。全挂时兜到默认 host（CN 不因它阻塞登录流程）。
 pub async fn request_login_guidance(proxy: Option<&ResolvedProxy>) -> String {
     let body = json!({"loginTraceID": "", "login_trace_id": ""});
-    let headers = vec![("User-Agent", format!("Trae/{PLUGIN_VERSION} antigravity-cockpit-tools"))];
+    let headers = vec![(
+        "User-Agent",
+        format!("Trae/{PLUGIN_VERSION} antigravity-cockpit-tools"),
+    )];
     for url in GUIDANCE_URLS_CN {
         // 5 秒：这条请求**同步**发生在"点登录"到"给出链接"之间，
         // 三个候选各等 15 秒会让面板先超时（参考实现 v0.12.9 的教训）。
@@ -540,11 +663,24 @@ pub async fn request_login_guidance(proxy: Option<&ResolvedProxy>) -> String {
 /// 类型，一个 `" "` 会被它原样带回。
 pub fn extract_login_host(body: &str) -> Option<String> {
     let parsed: Value = serde_json::from_str(body).ok()?;
-    const KEYS: [&str; 5] = ["LoginHost", "loginHost", "LoginURL", "loginUrl", "login_url"];
+    const KEYS: [&str; 5] = [
+        "LoginHost",
+        "loginHost",
+        "LoginURL",
+        "loginUrl",
+        "login_url",
+    ];
     let pick = |value: &Value| {
-        KEYS.iter().find_map(|key| value.get(*key).and_then(Value::as_str).filter(|text| !text.is_empty()).map(str::to_string))
+        KEYS.iter().find_map(|key| {
+            value
+                .get(*key)
+                .and_then(Value::as_str)
+                .filter(|text| !text.is_empty())
+                .map(str::to_string)
+        })
     };
-    let layer = |value: &Value, key: &str| value.get(key).filter(|nested| nested.is_object()).cloned();
+    let layer =
+        |value: &Value, key: &str| value.get(key).filter(|nested| nested.is_object()).cloned();
     let (result, nested_result, data, data_result, data_nested) = (
         layer(&parsed, "Result"),
         layer(&parsed, "result"),
@@ -552,9 +688,16 @@ pub fn extract_login_host(body: &str) -> Option<String> {
         layer(&parsed, "data").and_then(|data| layer(&data, "Result")),
         layer(&parsed, "data").and_then(|data| layer(&data, "result")),
     );
-    for candidate in [Some(&parsed), result.as_ref(), nested_result.as_ref(), data.as_ref(), data_result.as_ref(), data_nested.as_ref()]
-        .into_iter()
-        .flatten()
+    for candidate in [
+        Some(&parsed),
+        result.as_ref(),
+        nested_result.as_ref(),
+        data.as_ref(),
+        data_result.as_ref(),
+        data_nested.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
     {
         if let Some(found) = pick(candidate) {
             return Some(found);
@@ -604,21 +747,36 @@ mod tests {
         for case in cases {
             let context = context_from(case);
             let got = verification_uri(case["loginHost"].as_str().unwrap(), &context);
-            assert_eq!(case["output"].as_str().unwrap(), got.as_str(), "用例：{}", case["name"].as_str().unwrap_or("?"));
+            assert_eq!(
+                case["output"].as_str().unwrap(),
+                got.as_str(),
+                "用例：{}",
+                case["name"].as_str().unwrap_or("?")
+            );
         }
     }
 
     #[test]
     fn the_callback_url_is_never_percent_encoded() {
         // 官方页面对它做正则匹配，编码后就匹配不上 → 登录页连出现的机会都没有。
-        let uri = verification_uri("www.trae.cn", &context_from(&document()["verificationURI"][0]));
-        assert!(uri.contains("auth_callback_url=http://127.0.0.1:41890/authorize&"), "{uri}");
+        let uri = verification_uri(
+            "www.trae.cn",
+            &context_from(&document()["verificationURI"][0]),
+        );
+        assert!(
+            uri.contains("auth_callback_url=http://127.0.0.1:41890/authorize&"),
+            "{uri}"
+        );
     }
 
     #[test]
     fn query_escaping_follows_go_not_javascript() {
         assert_eq!("Windows+11+Pro", url_encode("Windows 11 Pro"));
-        assert_eq!("a%2Ab", url_encode("a*b"), "Go 转义 `*`，encodeURIComponent 不转 —— 别抄错");
+        assert_eq!(
+            "a%2Ab",
+            url_encode("a*b"),
+            "Go 转义 `*`，encodeURIComponent 不转 —— 别抄错"
+        );
         assert_eq!("~-_.".to_string(), url_encode("~-_."));
         assert_eq!("%7B%22a%22%3A1%7D", url_encode(r#"{"a":1}"#));
     }
@@ -629,15 +787,46 @@ mod tests {
             let query = case["query"].as_str().unwrap();
             let got = Callback::from_query(query);
             let want = &case["out"];
-            assert_eq!(want["authCode"].as_str().unwrap_or_default(), got.auth_code, "query={query}");
-            assert_eq!(want["refreshToken"].as_str().unwrap_or_default(), got.refresh_token, "query={query}");
-            assert_eq!(want["loginHost"].as_str().unwrap_or_default(), got.login_host, "query={query}");
-            assert_eq!(want["userTag"].as_str().unwrap_or_default(), got.user_tag, "query={query}");
-            assert_eq!(case["resolved"].as_bool().unwrap(), got.resolves_login(), "resolved 判错：query={query}");
-            if want["error"].as_str().map(|text| !text.is_empty()).unwrap_or(false) {
-                assert!(!got.error.is_empty(), "上游报了错误却没被认出来：query={query}");
+            assert_eq!(
+                want["authCode"].as_str().unwrap_or_default(),
+                got.auth_code,
+                "query={query}"
+            );
+            assert_eq!(
+                want["refreshToken"].as_str().unwrap_or_default(),
+                got.refresh_token,
+                "query={query}"
+            );
+            assert_eq!(
+                want["loginHost"].as_str().unwrap_or_default(),
+                got.login_host,
+                "query={query}"
+            );
+            assert_eq!(
+                want["userTag"].as_str().unwrap_or_default(),
+                got.user_tag,
+                "query={query}"
+            );
+            assert_eq!(
+                case["resolved"].as_bool().unwrap(),
+                got.resolves_login(),
+                "resolved 判错：query={query}"
+            );
+            if want["error"]
+                .as_str()
+                .map(|text| !text.is_empty())
+                .unwrap_or(false)
+            {
+                assert!(
+                    !got.error.is_empty(),
+                    "上游报了错误却没被认出来：query={query}"
+                );
             } else {
-                assert!(got.error.is_empty(), "不该有错误：query={query} → {}", got.error);
+                assert!(
+                    got.error.is_empty(),
+                    "不该有错误：query={query} → {}",
+                    got.error
+                );
             }
         }
     }
@@ -649,7 +838,10 @@ mod tests {
         assert!(!Callback::from_query("").resolves_login());
         assert!(!Callback::from_query("consoleHost=www.trae.cn").resolves_login());
         assert!(Callback::from_query("authCode=AC-1").resolves_login());
-        assert!(Callback::from_query("error=access_denied").resolves_login(), "错误也要收尾");
+        assert!(
+            Callback::from_query("error=access_denied").resolves_login(),
+            "错误也要收尾"
+        );
     }
 
     #[test]
@@ -661,8 +853,14 @@ mod tests {
 
     #[test]
     fn the_auth_code_can_hide_inside_a_json_payload() {
-        assert_eq!("AC-JSON", extract_auth_code(r#"{"authCode":"AC-JSON"}"#).unwrap());
-        assert_eq!("AC-DEEP", extract_auth_code(r#"{"Result":{"auth_code_info":{"authCode":"AC-DEEP"}}}"#).unwrap());
+        assert_eq!(
+            "AC-JSON",
+            extract_auth_code(r#"{"authCode":"AC-JSON"}"#).unwrap()
+        );
+        assert_eq!(
+            "AC-DEEP",
+            extract_auth_code(r#"{"Result":{"auth_code_info":{"authCode":"AC-DEEP"}}}"#).unwrap()
+        );
         assert!(extract_auth_code("not json").is_none());
         assert!(extract_auth_code(r#"{"other":"x"}"#).is_none());
     }
@@ -677,13 +875,20 @@ mod tests {
     /// 向量里的字符串数组 → `Vec<String>`（`as_str` 给 Option，直接比会和
     /// `Vec<&str>` 类型对不上；本家实现侧是 String，比 String 最省事）。
     fn string_list(value: &Value) -> Vec<String> {
-        value.as_array().expect("应是数组").iter().map(|item| item.as_str().unwrap_or_default().to_string()).collect()
+        value
+            .as_array()
+            .expect("应是数组")
+            .iter()
+            .map(|item| item.as_str().unwrap_or_default().to_string())
+            .collect()
     }
 
     #[test]
     fn the_exchange_candidate_list_matches_the_answer_sheet() {
         let sheet = document();
-        let cases = sheet["exchangeCandidates"].as_array().expect("exchangeCandidates 段存在");
+        let cases = sheet["exchangeCandidates"]
+            .as_array()
+            .expect("exchangeCandidates 段存在");
         assert!(!cases.is_empty(), "段被清空时这个测试会假装通过");
         for case in cases {
             let login_host = case["loginHost"].as_str().unwrap_or("?");
@@ -702,8 +907,15 @@ mod tests {
         let sheet = document();
         let origins = &sheet["candidateOrigins"];
         // 反空跑：两段用例数组都必须是**非空**的，否则"比相等"会退化成"两边都空"。
-        assert_eq!(3, string_list(&origins["cnNoHost"]).len(), "卷里 cnNoHost 应有三把源");
-        assert!(!origins["cnWithHost"].as_array().expect("cnWithHost 是数组").is_empty());
+        assert_eq!(
+            3,
+            string_list(&origins["cnNoHost"]).len(),
+            "卷里 cnNoHost 应有三把源"
+        );
+        assert!(!origins["cnWithHost"]
+            .as_array()
+            .expect("cnWithHost 是数组")
+            .is_empty());
         assert_eq!(
             string_list(&origins["cnNoHost"]),
             candidate_api_origins(""),
@@ -717,7 +929,10 @@ mod tests {
         // `intlWithHost` **故意不实现**：本家只接 SOLO CN 那条通道，Intl 是
         // `chat_sessions` 两步协议（另一套 host、另一个 Origin 校验）。
         // 这条断言的作用是把"这段没被测"变成"这段被测过、且明确不该被实现"。
-        assert!(sheet["candidateOrigins"]["intlWithHost"].is_array(), "卷里 Intl 那一段要保持可见（未接，见模块头）");
+        assert!(
+            sheet["candidateOrigins"]["intlWithHost"].is_array(),
+            "卷里 Intl 那一段要保持可见（未接，见模块头）"
+        );
     }
 
     #[test]
@@ -726,10 +941,16 @@ mod tests {
         let guidance = &sheet["guidanceURLs"];
         assert_eq!(
             string_list(&guidance["cn"]),
-            GUIDANCE_URLS_CN.iter().map(|url| url.to_string()).collect::<Vec<String>>(),
+            GUIDANCE_URLS_CN
+                .iter()
+                .map(|url| url.to_string())
+                .collect::<Vec<String>>(),
             "guidance 的三次尝试顺序就是语义"
         );
-        assert!(guidance["intl"].is_array(), "Intl 那一段同样要保持可见：本家未接，界面上也就没有 Intl 入口");
+        assert!(
+            guidance["intl"].is_array(),
+            "Intl 那一段同样要保持可见：本家未接，界面上也就没有 Intl 入口"
+        );
     }
 
     #[test]
@@ -771,7 +992,10 @@ mod tests {
             let slice = &value[1..3];
             std::hint::black_box(slice.len())
         });
-        assert!(outcome.is_err(), "旧写法应当会 panic —— 若不 panic，说明本用例的输入没构造对");
+        assert!(
+            outcome.is_err(),
+            "旧写法应当会 panic —— 若不 panic，说明本用例的输入没构造对"
+        );
         // 而现在的实现：不炸，且把认不出的 `%` 原样留着（与"这不是转义"同语义）
         assert_eq!("%你", percent_decode(value));
         // 认不出十六进制时：`%` 原样留着，**后面的字符也照原样跟着走**
@@ -785,15 +1009,27 @@ mod tests {
     fn pkce_and_device_identifiers_have_the_expected_shape() {
         let (verifier, challenge) = pkce_pair().expect("PKCE 要能生成");
         assert_eq!(64, verifier.len(), "48 字节 base64url 无填充 = 64 字符");
-        assert_eq!(43, challenge.len(), "SHA-256 摘要 base64url 无填充 = 43 字符");
-        assert!(verifier.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_'));
+        assert_eq!(
+            43,
+            challenge.len(),
+            "SHA-256 摘要 base64url 无填充 = 43 字符"
+        );
+        assert!(verifier
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_'));
         let trace = uuid_v4().expect("trace id");
         assert_eq!(36, trace.len());
         assert_eq!('4', trace.as_bytes()[14] as char, "version 位必须是 4");
-        assert!(matches!(trace.as_bytes()[19] as char, '8' | '9' | 'a' | 'b'));
+        assert!(matches!(
+            trace.as_bytes()[19] as char,
+            '8' | '9' | 'a' | 'b'
+        ));
         let device = random_digits(16).expect("device id");
         assert_eq!(16, device.len());
-        assert!(device.chars().all(|c| c.is_ascii_digit()), "device_id 是纯数字串：{device}");
+        assert!(
+            device.chars().all(|c| c.is_ascii_digit()),
+            "device_id 是纯数字串：{device}"
+        );
         assert_ne!(device, random_digits(16).unwrap());
     }
 
@@ -813,8 +1049,12 @@ mod tests {
         context.machine_id = "m-1".into();
         context.device_public_pem = "PUBPEM".into();
         let got = device_info(&context);
-        let want: Value = serde_json::from_str(document["deviceInfo"].as_str().unwrap()).expect("向量是 JSON");
-        assert_eq!(want, got, "DeviceInfo 每个字段都要对上（DeviceBrand 与 DeviceModel 是两个不同的值）");
+        let want: Value =
+            serde_json::from_str(document["deviceInfo"].as_str().unwrap()).expect("向量是 JSON");
+        assert_eq!(
+            want, got,
+            "DeviceInfo 每个字段都要对上（DeviceBrand 与 DeviceModel 是两个不同的值）"
+        );
     }
 
     #[test]
@@ -823,18 +1063,31 @@ mod tests {
         // 是 ensure_https_scheme 的活 —— 混在一起会让登录链接出现两层包装。
         for (body, want) in [
             (r#"{"LoginHost":"www.trae.cn"}"#, "www.trae.cn"),
-            (r#"{"Result":{"loginHost":"https://www.trae.cn/"}}"#, "https://www.trae.cn/"),
+            (
+                r#"{"Result":{"loginHost":"https://www.trae.cn/"}}"#,
+                "https://www.trae.cn/",
+            ),
             (r#"{"result":{"LoginURL":"www.trae.cn"}}"#, "www.trae.cn"),
             (r#"{"data":{"LoginHost":"www.trae.ai"}}"#, "www.trae.ai"),
-            (r#"{"data":{"Result":{"loginHost":"api.trae.cn"}}}"#, "api.trae.cn"),
+            (
+                r#"{"data":{"Result":{"loginHost":"api.trae.cn"}}}"#,
+                "api.trae.cn",
+            ),
         ] {
             assert_eq!(want, extract_login_host(body).unwrap(), "{body}");
         }
         assert!(extract_login_host("{}").is_none());
-        assert!(extract_login_host(r#"{"LoginHost":""}"#).is_none(), "空串不算命中，继续往下找");
+        assert!(
+            extract_login_host(r#"{"LoginHost":""}"#).is_none(),
+            "空串不算命中，继续往下找"
+        );
         assert!(extract_login_host("not json").is_none());
         assert_eq!("https://www.trae.cn", ensure_https_scheme("www.trae.cn"));
-        assert_eq!("http://a", ensure_https_scheme("http://a"), "已带 scheme 的不要动");
+        assert_eq!(
+            "http://a",
+            ensure_https_scheme("http://a"),
+            "已带 scheme 的不要动"
+        );
         assert_eq!("", ensure_https_scheme("   "));
     }
 
@@ -844,17 +1097,30 @@ mod tests {
         assert_eq!(constants["cn"].as_str().unwrap(), client_id_for("cn"));
         assert_eq!(constants["solo"].as_str().unwrap(), client_id_for("solo"));
         assert_eq!(constants["intl"].as_str().unwrap(), client_id_for("intl"));
-        assert_eq!(constants["soloIntl"].as_str().unwrap(), client_id_for("solo-intl"));
+        assert_eq!(
+            constants["soloIntl"].as_str().unwrap(),
+            client_id_for("solo-intl")
+        );
         let platforms = &document()["constants"]["platformCodes"];
         assert_eq!(platforms["cn"].as_str().unwrap(), platform_code_for("cn"));
-        assert_eq!(platforms["solo"].as_str().unwrap(), platform_code_for("solo"));
-        assert_eq!("IDE_PC", platform_code_for("solo-intl"), "solo-intl 不算 solo（variant.go 比的是 == variantSolo）");
+        assert_eq!(
+            platforms["solo"].as_str().unwrap(),
+            platform_code_for("solo")
+        );
+        assert_eq!(
+            "IDE_PC",
+            platform_code_for("solo-intl"),
+            "solo-intl 不算 solo（variant.go 比的是 == variantSolo）"
+        );
         assert_eq!("trae", auth_from_for("solo-intl"));
         assert_eq!("solo", auth_from_for("solo"));
         assert_eq!("trae", auth_from_for("cn"));
         assert!(hide_saas_login_for("solo"));
         assert!(!hide_saas_login_for("cn"));
-        assert!(!hide_saas_login_for("solo-intl"), "hide_saas_login 同理只认 solo");
+        assert!(
+            !hide_saas_login_for("solo-intl"),
+            "hide_saas_login 同理只认 solo"
+        );
         assert_eq!("Microsoft", device_brand_for_context("windows"));
         assert_eq!("Apple", device_brand_for_context("mac"));
     }
@@ -885,11 +1151,20 @@ mod tests {
     async fn a_generated_context_produces_a_clickable_loopback_url() {
         let context = LoginContext::new("solo", 41890, 0).expect("上下文要能生成");
         let uri = verification_uri("www.trae.cn", &context);
-        assert!(uri.starts_with("https://www.trae.cn/authorization?"), "{uri}");
-        assert!(uri.contains(&format!("auth_callback_url=http://127.0.0.1:{}{CALLBACK_PATH}", 41890)));
+        assert!(
+            uri.starts_with("https://www.trae.cn/authorization?"),
+            "{uri}"
+        );
+        assert!(uri.contains(&format!(
+            "auth_callback_url=http://127.0.0.1:{}{CALLBACK_PATH}",
+            41890
+        )));
         assert!(uri.contains("code_challenge_method=S256"));
         assert!(uri.contains("hide_saas_login=true"));
-        assert!(!context.device_public_pem.is_empty(), "公钥为空会被上游判成设备绑定拒绝");
+        assert!(
+            !context.device_public_pem.is_empty(),
+            "公钥为空会被上游判成设备绑定拒绝"
+        );
         assert!(!context.device_private_pem.is_empty(), "私钥要跟着凭据落盘");
     }
 }

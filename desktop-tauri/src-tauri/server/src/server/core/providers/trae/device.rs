@@ -45,9 +45,15 @@ pub fn generate_device_key_pair() -> Option<DeviceKeyPair> {
         // 只转到 `elliptic-curve/pem`，没打开它），而 Go 侧 `encoding/pem` 的
         // 行宽是写死的 64 字符 + 结尾换行 —— 手拼反而把这份格式钉在代码里，
         // 两边产物字节级可互读。
-        let public = pem("PUBLIC KEY", key.verifying_key().to_public_key_der().ok()?.as_bytes());
+        let public = pem(
+            "PUBLIC KEY",
+            key.verifying_key().to_public_key_der().ok()?.as_bytes(),
+        );
         let private = pem("PRIVATE KEY", key.to_pkcs8_der().ok()?.as_bytes());
-        return Some(DeviceKeyPair { public_pem: public, private_pem: private });
+        return Some(DeviceKeyPair {
+            public_pem: public,
+            private_pem: private,
+        });
     }
     None
 }
@@ -79,19 +85,41 @@ mod tests {
     fn the_public_key_is_a_spki_pem_the_server_can_read() {
         let pair = generate_device_key_pair().expect("生成应当成功");
         assert!(pair.public_pem.starts_with("-----BEGIN PUBLIC KEY-----\n"));
-        assert!(pair.public_pem.trim_end().ends_with("-----END PUBLIC KEY-----"));
-        assert!(pair.private_pem.starts_with("-----BEGIN PRIVATE KEY-----\n"), "PKCS#8 而不是 SEC1");
+        assert!(pair
+            .public_pem
+            .trim_end()
+            .ends_with("-----END PUBLIC KEY-----"));
+        assert!(
+            pair.private_pem
+                .starts_with("-----BEGIN PRIVATE KEY-----\n"),
+            "PKCS#8 而不是 SEC1"
+        );
         // P-256 的 SPKI DER 固定 91 字节 → base64 124 字符 → 按 64 折成两行
         // （64 + 60）。公钥 PEM 本身就会折行，所以"只测单行"验不到折行分支。
-        let lines: Vec<&str> = pair.public_pem.lines().filter(|line| !line.starts_with("-----")).collect();
+        let lines: Vec<&str> = pair
+            .public_pem
+            .lines()
+            .filter(|line| !line.starts_with("-----"))
+            .collect();
         let widths: Vec<usize> = lines.iter().map(|line| line.len()).collect();
         assert_eq!(vec![64usize, 60], widths, "SPKI 应当正好折成 64+60 两行");
         let body: String = lines.concat();
-        let der = base64::engine::general_purpose::STANDARD.decode(&body).expect("base64 可解");
-        assert_eq!(91, der.len(), "P-256 SPKI DER 长度变了说明编码方式漂了：{}", der.len());
+        let der = base64::engine::general_purpose::STANDARD
+            .decode(&body)
+            .expect("base64 可解");
+        assert_eq!(
+            91,
+            der.len(),
+            "P-256 SPKI DER 长度变了说明编码方式漂了：{}",
+            der.len()
+        );
         // prime256v1 = 1.2.840.10045.3.1 → DER 里是 2a 86 48 ce 3d 03 01 07。
         // （先前抄成了"公钥算法 OID + 0x03"，那是把两个相邻的 ASN.1 段拼成一段了。）
-        assert!(der.windows(8).any(|window| window == b"\x2a\x86\x48\xce\x3d\x03\x01\x07"), "曲线 OID 应当在里面（prime256v1）");
+        assert!(
+            der.windows(8)
+                .any(|window| window == b"\x2a\x86\x48\xce\x3d\x03\x01\x07"),
+            "曲线 OID 应当在里面（prime256v1）"
+        );
     }
 
     #[test]
@@ -106,9 +134,20 @@ mod tests {
     #[test]
     fn pem_lines_are_wrapped_at_sixty_four_characters() {
         let pair = generate_device_key_pair().expect("生成应当成功");
-        for line in pair.private_pem.lines().filter(|line| !line.starts_with("-----")) {
-            assert!(line.len() <= 64, "Go 的 pem 按 64 折行，超了就不是同一份字节：{}", line.len());
+        for line in pair
+            .private_pem
+            .lines()
+            .filter(|line| !line.starts_with("-----"))
+        {
+            assert!(
+                line.len() <= 64,
+                "Go 的 pem 按 64 折行，超了就不是同一份字节：{}",
+                line.len()
+            );
         }
-        assert!(pair.private_pem.lines().count() > 3, "私钥 DER 足够长，必然出现折行");
+        assert!(
+            pair.private_pem.lines().count() > 3,
+            "私钥 DER 足够长，必然出现折行"
+        );
     }
 }

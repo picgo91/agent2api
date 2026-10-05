@@ -70,7 +70,10 @@ pub async fn claim_checkin(State(state): State<ServerState>) -> Response {
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
     if !success {
-        let detail = result.get("msg").and_then(serde_json::Value::as_str).unwrap_or("");
+        let detail = result
+            .get("msg")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
         logging::log("[Billing]", &format!("签到未领取（{detail}）"));
     }
     // 状态码与 body 的 success 都由结果决定，不能用 ok_json（它恒为 200/true）
@@ -79,7 +82,11 @@ pub async fn claim_checkin(State(state): State<ServerState>) -> Response {
     } else {
         axum::http::StatusCode::CONFLICT
     };
-    (status, axum::Json(json!({ "success": success, "data": result }))).into_response()
+    (
+        status,
+        axum::Json(json!({ "success": success, "data": result })),
+    )
+        .into_response()
 }
 
 /// POST /api/checkin/claim-and-report —— 签到 + 查余额

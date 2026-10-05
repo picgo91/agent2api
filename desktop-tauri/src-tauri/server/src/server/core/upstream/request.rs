@@ -237,7 +237,10 @@ pub fn new_request_id() -> String {
         .unwrap_or(0);
     let pid = std::process::id() as u64;
     let first = mix(b"wb-request-id-a", nanos ^ pid);
-    let second = mix(b"wb-request-id-b", counter.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+    let second = mix(
+        b"wb-request-id-b",
+        counter.wrapping_mul(0x9E37_79B9_7F4A_7C15),
+    );
     bytes[..8].copy_from_slice(&first.to_be_bytes());
     bytes[8..].copy_from_slice(&second.to_be_bytes());
     // 版本位 4 + 变体位 10xx（RFC 4122）

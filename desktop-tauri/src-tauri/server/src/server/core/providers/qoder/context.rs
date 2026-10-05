@@ -173,9 +173,14 @@ pub fn resolve(
                         return None;
                     }
                     Some((
-                        tier.get("name").and_then(Value::as_str).unwrap_or("").to_string(),
+                        tier.get("name")
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                            .to_string(),
                         tokens,
-                        tier.get("isDefault").map(super::protocol::truthy).unwrap_or(false),
+                        tier.get("isDefault")
+                            .map(super::protocol::truthy)
+                            .unwrap_or(false),
                     ))
                 })
                 .collect()
@@ -214,7 +219,12 @@ pub fn resolve(
             (name.clone(), *tokens, "auto:largest")
         }
     };
-    Some(Tier { name, tokens, estimated, reason })
+    Some(Tier {
+        name,
+        tokens,
+        estimated,
+        reason,
+    })
 }
 
 /// 把选中的档位写进请求体（三个位置，见模块头）。
@@ -234,12 +244,20 @@ pub fn apply(payload: &mut Value, tier: &Tier) {
             json!({ "max_input_tokens": tier.tokens }),
         );
     }
-    if let Some(config) = payload.get_mut("model_config").and_then(Value::as_object_mut) {
+    if let Some(config) = payload
+        .get_mut("model_config")
+        .and_then(Value::as_object_mut)
+    {
         config.insert("max_input_tokens".to_string(), Value::from(tier.tokens));
     }
 }
 
 /// 给日志用的一行摘要（如 `400K（估计 268k token，auto:fits）`）
 pub fn describe(tier: &Tier) -> String {
-    format!("{}（估计 {}k token，{}）", tier.name, tier.estimated / 1000, tier.reason)
+    format!(
+        "{}（估计 {}k token，{}）",
+        tier.name,
+        tier.estimated / 1000,
+        tier.reason
+    )
 }

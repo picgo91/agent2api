@@ -201,10 +201,7 @@ pub fn normalize(body: &mut Value) {
     }
     // 首条不是：补一条只带前缀的 system 消息。**不改**后面那些 system 消息的
     // 位置 —— 重排消息序列的风险（破坏客户端的轮次结构）远大于收益。
-    messages.insert(
-        0,
-        json!({ "role": "system", "content": IDENTITY_PREFIX }),
-    );
+    messages.insert(0, json!({ "role": "system", "content": IDENTITY_PREFIX }));
 }
 
 /// 给一条消息的 `content` 前置身份前缀（已经以身份句开头则不动）。
@@ -252,18 +249,14 @@ fn prepend_prefix(message: &mut Value) {
                     // `index` 是上面按 `as_str().is_some()` 选出来的，所以这里的
                     // `get_mut` 必然是字符串 —— `if let` 不是「可能静默跳过」的
                     // 分支，而是没有 `as_str_mut` 可用时的取值写法。
-                    if let Some(Value::String(text)) = parts
-                        .get_mut(index)
-                        .and_then(|part| part.get_mut("text"))
+                    if let Some(Value::String(text)) =
+                        parts.get_mut(index).and_then(|part| part.get_mut("text"))
                     {
                         let next = join_prefix(text);
                         *text = next;
                     }
                 }
-                None => parts.insert(
-                    0,
-                    json!({ "type": "text", "text": IDENTITY_PREFIX }),
-                ),
+                None => parts.insert(0, json!({ "type": "text", "text": IDENTITY_PREFIX })),
             }
         }
         other => {

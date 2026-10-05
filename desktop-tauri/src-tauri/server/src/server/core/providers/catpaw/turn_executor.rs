@@ -58,12 +58,12 @@ use crate::server::core::upstream::usage::RequestTelemetry;
 use crate::server::logging;
 
 use super::conversation::{short_id, CatPawCredentials};
-use super::upstream_http::{report_terminal, stop_turn};
 use super::fingerprint::message_fingerprint;
 use super::models::CatPawError;
 use super::openai::{SseEvent, SseReader, TurnResult, TurnTranslator, DONE_FRAME};
 use super::registry::{SessionRecord, SessionRegistry};
 use super::tools::ToolChoice;
+use super::upstream_http::{report_terminal, stop_turn};
 
 /// 一次 turn 的执行上下文（`conversation.rs` 装配好交给本文件）
 #[derive(Clone)]
@@ -252,8 +252,14 @@ impl Drop for FinishGuard {
             ),
         );
         handle.spawn(async move {
-            stop_turn(&base_url, &credentials, proxy.as_ref(), &conversation_id, &turn_request_id)
-                .await;
+            stop_turn(
+                &base_url,
+                &credentials,
+                proxy.as_ref(),
+                &conversation_id,
+                &turn_request_id,
+            )
+            .await;
             report_terminal(
                 &base_url,
                 &credentials,
@@ -360,7 +366,10 @@ pub(super) async fn drive_stream(
     let mut downstream = true;
     // 收尾未完成时的兜底（见 `InterruptedNote`）：读流期间被 Drop 时，
     // 收尾里的 note_stream_error 不会执行，客户端只会看到一次 EOF
-    let mut interrupted = InterruptedNote { telemetry: ctx.telemetry.clone(), armed: true };
+    let mut interrupted = InterruptedNote {
+        telemetry: ctx.telemetry.clone(),
+        armed: true,
+    };
 
     let mut reader = SseReader::new();
     let mut stream = response.bytes_stream();
@@ -410,7 +419,16 @@ pub(super) async fn drive_stream(
     if outcome.is_ok() || !downstream {
         interrupted.armed = false;
     }
-    finish_stream(&ctx, &mut guard, &history, outcome, &sender, &mut pending, &mut downstream).await;
+    finish_stream(
+        &ctx,
+        &mut guard,
+        &history,
+        outcome,
+        &sender,
+        &mut pending,
+        &mut downstream,
+    )
+    .await;
     interrupted.armed = false;
 }
 
@@ -562,7 +580,11 @@ async fn finish_stream(
                 "[CatPaw]",
                 &format!(
                     "轮次中断（{}）: {}",
-                    if canceled { "客户端断开" } else { "上游/翻译失败" },
+                    if canceled {
+                        "客户端断开"
+                    } else {
+                        "上游/翻译失败"
+                    },
                     error.message,
                 ),
             );
@@ -641,7 +663,11 @@ fn write_back(
     let pending = call_ids(&result.tool_calls);
     // 并发冲突时走的是独立 conversation：**不写映射**（写进去会让下一个同
     // session 请求错误地续接到这条并行历史），与无状态请求同待遇
-    let session_id = if ctx.persistent { ctx.session_id.clone() } else { String::new() };
+    let session_id = if ctx.persistent {
+        ctx.session_id.clone()
+    } else {
+        String::new()
+    };
     if session_id.is_empty() && pending.is_empty() {
         return;
     }
@@ -662,7 +688,11 @@ fn write_back(
         session_id,
         // 等工具结果时要带上「哪个 turn 在跑」：下一轮若发现会话仍在等待，
         // 要先 stop 掉它才能 round（§9.3 第二处 turn/stop 用途）
-        turn_request_id: if pending.is_empty() { None } else { Some(guard.turn_request_id.clone()) },
+        turn_request_id: if pending.is_empty() {
+            None
+        } else {
+            Some(guard.turn_request_id.clone())
+        },
         pending_call_ids: pending,
     });
 }

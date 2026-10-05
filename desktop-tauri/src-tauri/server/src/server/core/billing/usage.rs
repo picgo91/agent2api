@@ -10,14 +10,15 @@
 
 use serde_json::{json, Map, Value};
 
-use crate::server::core::endpoints::RESPONSE_CODE_OK;
 use crate::server::core::account_store::state::json_number;
+use crate::server::core::endpoints::RESPONSE_CODE_OK;
 
-use super::commodity::{self, codes, is_bonus, is_daily_credit, is_plan_base, label_of, plan_priority};
+use super::commodity::{
+    self, codes, is_bonus, is_daily_credit, is_plan_base, label_of, plan_priority,
+};
 use super::request::{
-    js_int_string, js_truthy, number_or_zero, parse_time, time_or_null, to_int,
-    timestamp_json, CallOptions, BILLING_DOSAGE_NOTIFY, BILLING_ENTERPRISE_USAGE,
-    BILLING_USER_RESOURCE,
+    js_int_string, js_truthy, number_or_zero, parse_time, time_or_null, timestamp_json, to_int,
+    CallOptions, BILLING_DOSAGE_NOTIFY, BILLING_ENTERPRISE_USAGE, BILLING_USER_RESOURCE,
 };
 use super::{BillingError, BillingService};
 
@@ -59,7 +60,11 @@ impl BillingService {
         let result = self
             .call_billing(
                 BILLING_USER_RESOURCE,
-                CallOptions { session: Some(session), locale, ..Default::default() },
+                CallOptions {
+                    session: Some(session),
+                    locale,
+                    ..Default::default()
+                },
             )
             .await?;
         // 结果路径：data.Response.Data.Accounts[]
@@ -153,9 +158,17 @@ impl BillingService {
             if diff != 0 {
                 return diff.cmp(&0);
             }
-            let sort_a = a.get("__expireSort").and_then(Value::as_f64).unwrap_or(f64::INFINITY);
-            let sort_b = b.get("__expireSort").and_then(Value::as_f64).unwrap_or(f64::INFINITY);
-            sort_a.partial_cmp(&sort_b).unwrap_or(std::cmp::Ordering::Equal)
+            let sort_a = a
+                .get("__expireSort")
+                .and_then(Value::as_f64)
+                .unwrap_or(f64::INFINITY);
+            let sort_b = b
+                .get("__expireSort")
+                .and_then(Value::as_f64)
+                .unwrap_or(f64::INFINITY);
+            sort_a
+                .partial_cmp(&sort_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         // 去掉内部排序辅助字段（它不属于契约）
         for item in plan_resources.iter_mut() {
@@ -260,7 +273,10 @@ impl BillingService {
         let result = self
             .call_billing(
                 BILLING_ENTERPRISE_USAGE,
-                CallOptions { session: Some(session), ..Default::default() },
+                CallOptions {
+                    session: Some(session),
+                    ..Default::default()
+                },
             )
             .await?;
         // Node: `result.raw ?? {}` → `data?.data || data || result.data || responseData`
@@ -270,7 +286,11 @@ impl BillingService {
             .and_then(|value| value.get("data"))
             .or_else(|| response_data.get("data"))
             .or_else(|| {
-                if result.data.is_null() { None } else { Some(&result.data) }
+                if result.data.is_null() {
+                    None
+                } else {
+                    Some(&result.data)
+                }
             })
             .cloned()
             .unwrap_or_else(|| response_data.clone());
@@ -298,9 +318,7 @@ impl BillingService {
             // 注意：判断的是**原始值**的真值，然后才 parseTime（可能得 0）——
             // 所以有值但解析失败时给的是 0，不是 null
             let refresh_at = match usage_data.get("cycleResetTime") {
-                Some(value) if js_truthy(value) => {
-                    Value::from(parse_time(Some(value)))
-                }
+                Some(value) if js_truthy(value) => Value::from(parse_time(Some(value))),
                 _ => Value::Null,
             };
             if limit_num == -1.0 {
@@ -353,7 +371,11 @@ impl BillingService {
         session: Option<&Value>,
     ) -> Result<Option<i64>, BillingError> {
         let usage = self.query_usage(session, None).await?;
-        if usage.get("unlimited").and_then(Value::as_bool).unwrap_or(false) {
+        if usage
+            .get("unlimited")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
             return Ok(None);
         }
         match usage.get("usageLeft").and_then(to_int) {
@@ -374,9 +396,15 @@ impl BillingService {
         locale: Option<&str>,
     ) -> Result<Value, BillingError> {
         let usage = self.query_usage(session, locale).await?;
-        let kind = usage.get("kind").and_then(Value::as_str).unwrap_or("personal");
+        let kind = usage
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or("personal");
         if kind == "enterprise" {
-            let unlimited = usage.get("unlimited").and_then(Value::as_bool).unwrap_or(false);
+            let unlimited = usage
+                .get("unlimited")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
             return Ok(json!({
                 "kind": "enterprise",
                 "unlimited": unlimited,
@@ -421,7 +449,11 @@ impl BillingService {
         let result = self
             .call_billing(
                 BILLING_DOSAGE_NOTIFY,
-                CallOptions { session, expect_code_ok: false, ..Default::default() },
+                CallOptions {
+                    session,
+                    expect_code_ok: false,
+                    ..Default::default()
+                },
             )
             .await?;
         if result.code == Some(RESPONSE_CODE_OK) {

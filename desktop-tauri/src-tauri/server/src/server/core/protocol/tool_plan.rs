@@ -124,7 +124,10 @@ fn expand_namespace(plan: &mut ToolPlan, namespace: &Value) {
         if string_field(child, "type").eq_ignore_ascii_case(NAMESPACE_TOOL) {
             logging::log(
                 "[Responses]",
-                &format!("⚠️ 嵌套 namespace 无法展开，已跳过：{}", string_field(child, "name")),
+                &format!(
+                    "⚠️ 嵌套 namespace 无法展开，已跳过：{}",
+                    string_field(child, "name")
+                ),
             );
             continue;
         }
@@ -151,8 +154,7 @@ fn expand_namespace(plan: &mut ToolPlan, namespace: &Value) {
         }
         record_custom(plan, &decl);
         if !ns_name.is_empty() {
-            plan.namespaced
-                .insert(flat, (ns_name.clone(), child_name));
+            plan.namespaced.insert(flat, (ns_name.clone(), child_name));
         }
         plan.declarations.push(decl);
     }
@@ -214,7 +216,11 @@ pub fn tool_kind_label(tool: &Value) -> String {
     let name = string_field(tool, "name");
     let kind = string_field(tool, "type");
     if name.is_empty() {
-        if kind.is_empty() { "未命名工具".to_string() } else { kind }
+        if kind.is_empty() {
+            "未命名工具".to_string()
+        } else {
+            kind
+        }
     } else if kind.is_empty() || kind.eq_ignore_ascii_case("function") {
         name
     } else {

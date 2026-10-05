@@ -69,10 +69,16 @@ fn add_on(raw: &Value, fallback_unit: &str) -> (Vec<Value>, Option<f64>) {
     let total = number(bucket.get("total"));
     let used = number(bucket.get("used"));
     let remaining = number(bucket.get("remaining"));
-    if [total, used, remaining].iter().all(|value| value.unwrap_or(0.0) <= 0.0) {
+    if [total, used, remaining]
+        .iter()
+        .all(|value| value.unwrap_or(0.0) <= 0.0)
+    {
         return (Vec::new(), None);
     }
-    let unit = bucket.get("unit").and_then(Value::as_str).unwrap_or(fallback_unit);
+    let unit = bucket
+        .get("unit")
+        .and_then(Value::as_str)
+        .unwrap_or(fallback_unit);
     let mut wallets = Vec::new();
     if let Some(value) = used {
         wallets.push(wallet("addon_used", "资源包已用", value, unit));
@@ -106,8 +112,15 @@ async fn plan_name(credentials: &Credentials, proxy: Option<&ResolvedProxy>) -> 
         None,
         &endpoints::open_api_headers(Some(&credentials.access_token)),
         proxy,
-    ).await.ok()?;
-    let name = response.payload?.get("plan_tier_name")?.as_str()?.trim().to_string();
+    )
+    .await
+    .ok()?;
+    let name = response
+        .payload?
+        .get("plan_tier_name")?
+        .as_str()?
+        .trim()
+        .to_string();
     if name.is_empty() {
         None
     } else {
@@ -125,7 +138,8 @@ pub async fn query(store: &AccountStore, account_id: &str) -> Result<Value, Gate
         None,
         &endpoints::open_api_headers(Some(&credentials.access_token)),
         proxy.as_ref(),
-    ).await?;
+    )
+    .await?;
     if response.status == 401 && credentials.can_refresh() {
         credentials = refresh::ensure_fresh(store, account_id, true).await?;
         response = auth::request(
@@ -134,14 +148,18 @@ pub async fn query(store: &AccountStore, account_id: &str) -> Result<Value, Gate
             None,
             &endpoints::open_api_headers(Some(&credentials.access_token)),
             proxy.as_ref(),
-        ).await?;
+        )
+        .await?;
     }
     let raw = auth::payload(response, "额度查询")?;
     let quota = raw.get("userQuota");
     let remaining = quota.and_then(|quota| number(quota.get("remaining")));
     let total = quota.and_then(|quota| number(quota.get("total")));
     let used = quota.and_then(|quota| number(quota.get("used")));
-    let unit = quota.and_then(|quota| quota.get("unit")).and_then(Value::as_str).unwrap_or("额度");
+    let unit = quota
+        .and_then(|quota| quota.get("unit"))
+        .and_then(Value::as_str)
+        .unwrap_or("额度");
     let mut wallets = Vec::new();
     if let Some(value) = used {
         wallets.push(json!({ "type": "user_used", "displayName": "个人已用", "balance": value }));

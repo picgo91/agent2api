@@ -111,10 +111,7 @@ async fn fetch_me(token: &str) -> Result<String, GatewayError> {
         .unwrap_or("")
         .to_string();
     if id.is_empty() {
-        return Err(GatewayError::with_status(
-            502,
-            "Cline 账号信息响应缺少 id",
-        ));
+        return Err(GatewayError::with_status(502, "Cline 账号信息响应缺少 id"));
     }
     Ok(id)
 }
@@ -140,10 +137,7 @@ async fn fetch_balance(token: &str, user_id: &str) -> Result<Value, GatewayError
 async fn fetch_plan(token: &str) -> Option<Value> {
     let url = format!("{}/users/me/plan", credentials::API_BASE_URL);
     match get_json_allow_status(&url, token, &[404]).await {
-        Ok(Some(payload)) => payload
-            .get("data")
-            .filter(|data| !data.is_null())
-            .cloned(),
+        Ok(Some(payload)) => payload.get("data").filter(|data| !data.is_null()).cloned(),
         Ok(None) => None, // 404：没有订阅
         Err(error) => {
             logging::verbose(
@@ -159,7 +153,10 @@ async fn fetch_plan(token: &str) -> Option<Value> {
 async fn get_json(url: &str, token: &str) -> Result<Value, GatewayError> {
     match get_json_allow_status(url, token, &[]).await? {
         Some(payload) => Ok(payload),
-        None => Err(GatewayError::with_status(502, "Cline 接口返回了非预期状态码")),
+        None => Err(GatewayError::with_status(
+            502,
+            "Cline 接口返回了非预期状态码",
+        )),
     }
 }
 
@@ -182,7 +179,10 @@ async fn get_json_allow_status(
         .map_err(|error| {
             GatewayError::with_status(
                 502,
-                format!("Cline 接口请求失败: {}", egress::describe_error_detail(&error)),
+                format!(
+                    "Cline 接口请求失败: {}",
+                    egress::describe_error_detail(&error)
+                ),
             )
         })?;
     let status = response.status().as_u16();
@@ -213,8 +213,9 @@ async fn get_json_allow_status(
             format!("Cline 接口返回 {status}: {detail}"),
         ));
     }
-    let payload: Value = serde_json::from_str(&text)
-        .map_err(|error| GatewayError::with_status(502, format!("Cline 接口响应不是 JSON: {error}")))?;
+    let payload: Value = serde_json::from_str(&text).map_err(|error| {
+        GatewayError::with_status(502, format!("Cline 接口响应不是 JSON: {error}"))
+    })?;
     Ok(Some(payload))
 }
 

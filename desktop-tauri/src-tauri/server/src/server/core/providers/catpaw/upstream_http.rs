@@ -63,7 +63,10 @@ fn request_headers(credentials: &CatPawCredentials, accept: &str) -> Vec<(String
         ("M-APPKEY".to_string(), APP_KEY.to_string()),
         ("gray-set".to_string(), "new-agent-sdk".to_string()),
         ("enableHeartBeat".to_string(), "true".to_string()),
-        ("X-Agent-Version".to_string(), DEFAULT_CLIENT_VERSION.to_string()),
+        (
+            "X-Agent-Version".to_string(),
+            DEFAULT_CLIENT_VERSION.to_string(),
+        ),
     ];
     if !credentials.token.trim().is_empty() {
         headers.push((
@@ -169,7 +172,10 @@ pub(super) async fn report_status(
     if let Some(error) = error {
         // 失败原因与业务码一起回报（原实现 `reportStatus` 的 data 字段：
         // failReason / failCode / unifyCode）
-        data.insert("failReason".to_string(), Value::String(error.message.clone()));
+        data.insert(
+            "failReason".to_string(),
+            Value::String(error.message.clone()),
+        );
         if let Some(code) = error.code {
             data.insert("failCode".to_string(), Value::from(code));
         }
@@ -267,7 +273,10 @@ pub(super) async fn turn_request(
     ctx: &TurnContext,
     body: &Value,
 ) -> Result<reqwest::Response, CatPawError> {
-    let url = format!("{}/api/agent/conversation/turn", request.base_url.trim_end_matches('/'));
+    let url = format!(
+        "{}/api/agent/conversation/turn",
+        request.base_url.trim_end_matches('/')
+    );
     let payload = serde_json::to_string(body)
         .map_err(|error| CatPawError::upstream(format!("请求体序列化失败: {error}")))?;
     let client = egress::client_for(request.proxy.as_ref());
@@ -290,7 +299,10 @@ pub(super) async fn turn_request(
         let text = response.text().await.unwrap_or_default();
         logging::log(
             "[CatPaw]",
-            &format!("上游 turn HTTP {status} conversationId={}", short_id(&ctx.conversation_id)),
+            &format!(
+                "上游 turn HTTP {status} conversationId={}",
+                short_id(&ctx.conversation_id)
+            ),
         );
         let detail: String = text.trim().chars().take(500).collect();
         return Err(CatPawError::http(

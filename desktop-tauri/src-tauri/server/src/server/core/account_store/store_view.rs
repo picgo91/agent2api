@@ -20,7 +20,9 @@ use serde_json::{json, Map, Value};
 
 use crate::server::core::account_store::state::{AccountState, StoredAccount};
 use crate::server::core::account_store::store::{forwards_requests, AccountStore};
-use crate::server::core::account_store::store_util::{js_truthy, max_concurrent_public, value_or, value_or_nullish};
+use crate::server::core::account_store::store_util::{
+    js_truthy, max_concurrent_public, value_or, value_or_nullish,
+};
 use crate::server::core::endpoints::{resolve_edition, EditionInfo};
 use crate::server::core::proxies::describe_account_proxy;
 
@@ -39,10 +41,7 @@ impl AccountStore {
         public.insert("id".to_string(), Value::String(record.id().to_string()));
         // 所属提供商（Agent2API 改造新增字段）：缺失时按 workbuddy 兜底，
         // 保证界面拿到的每条账号都能直接分组，不必自己判断「没有 provider = 老数据」
-        public.insert(
-            "provider".to_string(),
-            Value::String(record.provider()),
-        );
+        public.insert("provider".to_string(), Value::String(record.provider()));
         // name 无兜底：原样透出（含非字符串的脏值），缺失时不出现该键
         if let Some(value) = fields.get("name") {
             public.insert("name".to_string(), value.clone());
@@ -77,12 +76,7 @@ impl AccountStore {
         );
         public.insert(
             "hasRefreshToken".to_string(),
-            Value::Bool(
-                fields
-                    .get("refreshToken")
-                    .map(js_truthy)
-                    .unwrap_or(false),
-            ),
+            Value::Bool(fields.get("refreshToken").map(js_truthy).unwrap_or(false)),
         );
         public.insert(
             "prefixPath".to_string(),
@@ -294,10 +288,8 @@ impl AccountStore {
     /// 计数在已读出的账号列表上跑（不再次访问数据库、不再取锁）——
     /// `snapshot` 的调用方已经持锁，且已经把那份列表读在手上了。
     fn provider_summary(&self, state: &AccountState) -> Value {
-        let counts: Vec<(String, usize)> = state
-            .accounts
-            .iter()
-            .fold(Vec::new(), |mut acc, record| {
+        let counts: Vec<(String, usize)> =
+            state.accounts.iter().fold(Vec::new(), |mut acc, record| {
                 let provider = record.provider();
                 match acc.iter_mut().find(|(id, _)| *id == provider) {
                     Some((_, count)) => *count += 1,
@@ -381,7 +373,10 @@ impl AccountStore {
         public.insert("enabled".to_string(), Value::Bool(record.enabled()));
         public.insert("addedAt".to_string(), Value::from(record.added_at()));
         public.insert("updatedAt".to_string(), Value::from(record.updated_at()));
-        public.insert("proxy".to_string(), describe_account_proxy(Some(&record.proxy())));
+        public.insert(
+            "proxy".to_string(),
+            describe_account_proxy(Some(&record.proxy())),
+        );
         public.insert("available".to_string(), Value::Bool(true));
         // 单账号并发上限（与 to_public_account 同口径，兜底共用
         // `max_concurrent_public`）：0 = 不限，缺键同样输出 0

@@ -122,7 +122,10 @@ fn cache_key(proxy: Option<&ResolvedProxy>, timeouts: &TimeoutSettings) -> Strin
             "{}://{}:{}",
             proxy.protocol,
             proxy.host,
-            proxy.port.map(|port| port.to_string()).unwrap_or_else(|| "?".to_string())
+            proxy
+                .port
+                .map(|port| port.to_string())
+                .unwrap_or_else(|| "?".to_string())
         ),
     };
     // 两项传输层超时进键：见上面的说明
@@ -151,7 +154,11 @@ fn build_proxy_url(proxy: &ResolvedProxy) -> String {
     } else if proxy.password.is_empty() {
         format!("{}@", urlencoding(&proxy.username))
     } else {
-        format!("{}:{}@", urlencoding(&proxy.username), urlencoding(&proxy.password))
+        format!(
+            "{}:{}@",
+            urlencoding(&proxy.username),
+            urlencoding(&proxy.password)
+        )
     };
     let needs_brackets = proxy.host.contains(':') && !proxy.host.starts_with('[');
     let host = if needs_brackets {
@@ -159,7 +166,11 @@ fn build_proxy_url(proxy: &ResolvedProxy) -> String {
     } else {
         proxy.host.clone()
     };
-    let scheme = if proxy.protocol == "socks5" { "socks5h" } else { &proxy.protocol };
+    let scheme = if proxy.protocol == "socks5" {
+        "socks5h"
+    } else {
+        &proxy.protocol
+    };
     format!("{}://{}{}:{}", scheme, auth, host, proxy.port.unwrap_or(0))
 }
 
@@ -172,7 +183,8 @@ fn urlencoding(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for byte in value.as_bytes() {
         let ch = *byte as char;
-        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '!' | '~' | '*' | '\'' | '(' | ')')
+        if ch.is_ascii_alphanumeric()
+            || matches!(ch, '-' | '_' | '.' | '!' | '~' | '*' | '\'' | '(' | ')')
         {
             out.push(ch);
         } else {
@@ -200,7 +212,10 @@ fn describe_proxy(proxy: &ResolvedProxy) -> &str {
 /// 反过来，构造**直连** Client 时必须显式 `.no_proxy()`：reqwest 默认会去读
 /// 环境变量里的代理设置，不关掉的话用户机器上设了 `HTTPS_PROXY` 就会
 /// 「配置为直连却走了代理」。
-fn build_client(proxy: Option<&ResolvedProxy>, timeouts: &TimeoutSettings) -> Result<reqwest::Client, String> {
+fn build_client(
+    proxy: Option<&ResolvedProxy>,
+    timeouts: &TimeoutSettings,
+) -> Result<reqwest::Client, String> {
     let mut builder = reqwest::Client::builder()
         .connect_timeout(Duration::from_millis(timeouts.connect_ms()))
         // 单次读取超时（等响应头 + 数据块间隔的传输层后备，取两项设置的大者）；
@@ -221,7 +236,10 @@ fn build_client(proxy: Option<&ResolvedProxy>, timeouts: &TimeoutSettings) -> Re
             let port = proxy
                 .port
                 .ok_or_else(|| format!("代理端口非法（{}）", describe_proxy(proxy)))?;
-            let url = build_proxy_url(&ResolvedProxy { port: Some(port), ..proxy.clone() });
+            let url = build_proxy_url(&ResolvedProxy {
+                port: Some(port),
+                ..proxy.clone()
+            });
             // Proxy::all 返回 Result：release 是 panic=abort，绝不能用 unwrap
             let parsed = reqwest::Proxy::all(&url)
                 .map_err(|error| format!("代理地址无效（{}）: {error}", describe_proxy(proxy)))?;
@@ -295,7 +313,13 @@ pub fn client_for(proxy: Option<&ResolvedProxy>) -> Arc<reqwest::Client> {
                 };
                 cache.entries.remove(&oldest);
             }
-            cache.entries.insert(key, CacheEntry { used_at: now, client: client.clone() });
+            cache.entries.insert(
+                key,
+                CacheEntry {
+                    used_at: now,
+                    client: client.clone(),
+                },
+            );
             client
         }
     };
@@ -346,7 +370,11 @@ impl ConnectivityResult {
 ///
 /// 单独打 ipify 而不是从上游响应里读 —— 上游不回显客户端 IP；
 /// 查不到不代表出口不可用，所以这里的错误一律吞掉。
-async fn read_exit_ip(client: &reqwest::Client, proxy: Option<&ResolvedProxy>, timeout_ms: u64) -> String {
+async fn read_exit_ip(
+    client: &reqwest::Client,
+    proxy: Option<&ResolvedProxy>,
+    timeout_ms: u64,
+) -> String {
     let _ = proxy; // 出口已由 client 决定；保留参数是为了调用处可读
     let request = client
         .get(IP_ECHO_URL)
@@ -415,7 +443,10 @@ pub async fn test_connectivity(
             duration_ms: logging::now_ms() - started,
             error: Some(if error.is_timeout() {
                 // 照抄 Node 的文案（秒数四舍五入到整秒）
-                format!("连接超时（{} 秒）", (timeout_ms as f64 / 1000.0).round() as i64)
+                format!(
+                    "连接超时（{} 秒）",
+                    (timeout_ms as f64 / 1000.0).round() as i64
+                )
             } else {
                 describe_error_detail(&error)
             }),

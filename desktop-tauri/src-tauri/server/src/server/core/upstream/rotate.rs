@@ -48,8 +48,9 @@ use crate::server::core::routing;
 use crate::server::errors::{self, GatewayError};
 use crate::server::logging;
 
-use super::{account_display, format_reset_text, has_access_token, priority_of, RouteTarget,
-            UpstreamService};
+use super::{
+    account_display, format_reset_text, has_access_token, priority_of, RouteTarget, UpstreamService,
+};
 
 /// 取指定账号的会话；`account_id` 为 None 时回落到**该 provider 的**默认登录态。
 ///
@@ -132,7 +133,12 @@ pub(super) async fn select_target_account(
             break;
         };
         if let Some(entry) = service.store.get_session_by_id(&id) {
-            return Ok(with_proxy_notice(picked, entry.proxy, entry.proxy_error, id));
+            return Ok(with_proxy_notice(
+                picked,
+                entry.proxy,
+                entry.proxy_error,
+                id,
+            ));
         }
         excluded.push(id);
     }
@@ -179,7 +185,11 @@ pub(super) async fn select_target_account(
             continue;
         }
         let reset = routing::rate_limit_reset_at(account, keys, now);
-        let reset = if reset > 0 { reset as f64 } else { f64::INFINITY };
+        let reset = if reset > 0 {
+            reset as f64
+        } else {
+            f64::INFINITY
+        };
         if reset < best_reset {
             best_reset = reset;
             best_effort = Some(account.clone());
@@ -191,7 +201,12 @@ pub(super) async fn select_target_account(
         if let Some(account) = squeeze_by_headroom(&enabled, &counts, tried_ids, keys, now) {
             if let Some(id) = routing::account_id(&account).map(str::to_string) {
                 if let Some(entry) = service.store.get_session_by_id(&id) {
-                    return Ok(with_proxy_notice(account, entry.proxy, entry.proxy_error, id));
+                    return Ok(with_proxy_notice(
+                        account,
+                        entry.proxy,
+                        entry.proxy_error,
+                        id,
+                    ));
                 }
             }
         }
@@ -199,7 +214,12 @@ pub(super) async fn select_target_account(
     if let Some(account) = best_effort {
         if let Some(id) = routing::account_id(&account).map(str::to_string) {
             if let Some(entry) = service.store.get_session_by_id(&id) {
-                return Ok(with_proxy_notice(account, entry.proxy, entry.proxy_error, id));
+                return Ok(with_proxy_notice(
+                    account,
+                    entry.proxy,
+                    entry.proxy_error,
+                    id,
+                ));
             }
         }
     }
@@ -310,7 +330,11 @@ pub(super) fn mark_account_limited(
         model,
         status as i64,
         upstream_code,
-        if parsed > 0 { Some(parsed as f64) } else { None },
+        if parsed > 0 {
+            Some(parsed as f64)
+        } else {
+            None
+        },
         message,
     );
     match entry {
@@ -326,7 +350,11 @@ pub(super) fn mark_account_limited(
 /// 与 Node 的 `limitEntry?.resetAt` 同源（都从账号记录里现读）。
 ///
 /// `model` 是上游真名（见 `mark_account_limited` 的说明），与写入侧同一个键。
-pub(super) fn account_limit_reset_at(service: &UpstreamService, account_id: &str, model: &str) -> i64 {
+pub(super) fn account_limit_reset_at(
+    service: &UpstreamService,
+    account_id: &str,
+    model: &str,
+) -> i64 {
     let snapshot = service.store.list_accounts();
     let accounts = routing::accounts_of(&snapshot);
     accounts
@@ -378,7 +406,11 @@ fn squeeze_by_headroom(
         let limit = routing::max_concurrent_of(account) as i64;
         let headroom = if limit > 0 { limit - count } else { i64::MAX };
         let reset = routing::rate_limit_reset_at(account, keys, now);
-        let reset = if reset > 0 { reset as f64 } else { f64::INFINITY };
+        let reset = if reset > 0 {
+            reset as f64
+        } else {
+            f64::INFINITY
+        };
         if headroom > best_headroom || (headroom == best_headroom && reset < best_reset) {
             best_headroom = headroom;
             best_reset = reset;

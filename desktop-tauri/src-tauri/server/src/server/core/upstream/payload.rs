@@ -215,7 +215,10 @@ pub(super) fn send_body<'a>(
         .to_string();
     if requested.is_empty() {
         // 没有 model 字段：不改写，也没有可用的冷却键（空串，与改造前一致）
-        return SendBody { body, wire_model: requested };
+        return SendBody {
+            body,
+            wire_model: requested,
+        };
     }
     // 一次解析出两个属性：该家要收的名字 + 跟着那条映射走的思考等级
     // （同源，见模块头「思考等级绑定为什么也在这一步」）
@@ -241,7 +244,10 @@ pub(super) fn send_body<'a>(
     // 注入路径已经问过一次适配器，这里再查一次注册表是两次哈希查找，可忽略。
     let upstream_reasoning = injected.or_else(|| outbound_reasoning_of(provider_id, &body));
     ctx.telemetry.note_upstream_reasoning(upstream_reasoning);
-    SendBody { body, wire_model: wire.model }
+    SendBody {
+        body,
+        wire_model: wire.model,
+    }
 }
 
 /// 承载家的 [`ProviderAdapter::outbound_reasoning`]（读发送体里随行的等级）。

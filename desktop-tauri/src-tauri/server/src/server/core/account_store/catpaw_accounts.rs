@@ -157,10 +157,7 @@ impl AccountStore {
             // 原项目的账号记录：id 就是 uid 或 loginName（uid 缺失时才用它兜底）
             object.get("id"),
         ]);
-        let login_name = pick_first_optional(&[
-            object.get("loginName"),
-            account.get("loginName"),
-        ]);
+        let login_name = pick_first_optional(&[object.get("loginName"), account.get("loginName")]);
         let user_key = if !uid_raw.trim().is_empty() {
             uid_raw.trim().to_string()
         } else {
@@ -235,12 +232,18 @@ impl AccountStore {
         let now = logging::now_ms();
         let mut record = Map::new();
         record.insert("id".to_string(), Value::String(id.clone()));
-        record.insert("provider".to_string(), Value::String(catpaw_id().to_string()));
+        record.insert(
+            "provider".to_string(),
+            Value::String(catpaw_id().to_string()),
+        );
         record.insert("name".to_string(), Value::String(record_name.clone()));
         record.insert("uid".to_string(), Value::String(uid));
         record.insert("loginName".to_string(), Value::String(login_name));
         record.insert("accessToken".to_string(), Value::String(token.clone()));
-        record.insert("tokenTail".to_string(), Value::String(token_tail_of(&token)));
+        record.insert(
+            "tokenTail".to_string(),
+            Value::String(token_tail_of(&token)),
+        );
         // 余额查询凭证（`balanceToken`，可选）：网页会话凭证 token2，与转发用的
         // accessToken **不是同一个东西**（见 `providers/catpaw/balance.rs` 模块头）。
         // 手动添加时给两处来源：payload 里的 `balanceToken` / `token2`（用户直接填），
@@ -258,7 +261,12 @@ impl AccountStore {
         record.insert("priority".to_string(), Value::from(priority));
         record.insert(
             "enabled".to_string(),
-            Value::Bool(existing.as_ref().map(StoredAccount::enabled).unwrap_or(true)),
+            Value::Bool(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::enabled)
+                    .unwrap_or(true),
+            ),
         );
         record.insert(
             "addedAt".to_string(),
@@ -316,10 +324,7 @@ impl AccountStore {
     /// 读不到登录态时报 400 并把原因说清楚（原项目 `LocalAuthError` 的文案：
     /// 「请先在 CatPaw 桌面端登录」）—— 这是用户点按钮时的即时反馈，
     /// 静默建一条空记录只会让人以为成功了。
-    pub fn import_catpaw_desktop_account(
-        &self,
-        source: &str,
-    ) -> Result<Value, AccountStoreError> {
+    pub fn import_catpaw_desktop_account(&self, source: &str) -> Result<Value, AccountStoreError> {
         let summary =
             credentials::desktop_summary().map_err(|reason| AccountStoreError::new(reason, 400))?;
         let uid = summary
@@ -373,7 +378,10 @@ impl AccountStore {
         let now = logging::now_ms();
         let mut record = Map::new();
         record.insert("id".to_string(), Value::String(id.clone()));
-        record.insert("provider".to_string(), Value::String(catpaw_id().to_string()));
+        record.insert(
+            "provider".to_string(),
+            Value::String(catpaw_id().to_string()),
+        );
         record.insert("name".to_string(), Value::String(record_name.clone()));
         record.insert("uid".to_string(), Value::String(uid));
         record.insert("loginName".to_string(), Value::String(login_name));
@@ -388,7 +396,12 @@ impl AccountStore {
         record.insert("priority".to_string(), Value::from(priority));
         record.insert(
             "enabled".to_string(),
-            Value::Bool(existing.as_ref().map(StoredAccount::enabled).unwrap_or(true)),
+            Value::Bool(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::enabled)
+                    .unwrap_or(true),
+            ),
         );
         let is_new = existing.is_none();
         record.insert(
@@ -464,9 +477,8 @@ impl AccountStore {
         if account_id.is_empty() || provider != catpaw_id() {
             return 0;
         }
-        let count =
-            crate::server::core::providers::catpaw::conversation::session_registry()
-                .clear_account(account_id);
+        let count = crate::server::core::providers::catpaw::conversation::session_registry()
+            .clear_account(account_id);
         if count > 0 {
             logging::verbose(
                 "[Accounts]",
@@ -505,7 +517,11 @@ impl AccountStore {
         let mut available = true;
         let mut reason = String::new();
         let mut token_tail = stored_tail;
-        let mut uid = record.get("uid").and_then(Value::as_str).unwrap_or("").to_string();
+        let mut uid = record
+            .get("uid")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         let mut login_name = record
             .get("loginName")
             .and_then(Value::as_str)
@@ -548,7 +564,10 @@ impl AccountStore {
         // 但字段照样透出 —— 少一个键会让通用代码在这条分支上多一次特判
         public.insert(
             "rateLimits".to_string(),
-            record.get("rateLimits").cloned().unwrap_or_else(|| Value::Object(Map::new())),
+            record
+                .get("rateLimits")
+                .cloned()
+                .unwrap_or_else(|| Value::Object(Map::new())),
         );
         public.insert("available".to_string(), Value::Bool(available));
         if !reason.is_empty() {
@@ -671,7 +690,10 @@ impl AccountStore {
 /// 而 CatPaw 的登录态可能是嵌套的 `auth.accessToken` 形态（粘贴 auth.json）
 /// 或原项目的 `access_token` 形态 —— 顶层/嵌套两种布局都要认，所以这里把
 /// 「取值」与「校验」分开：本函数只取值，`safe_field` 负责校验。
-fn pick_first_text(candidates: &[Option<&Value>], field_names: &[&str]) -> Result<String, AccountStoreError> {
+fn pick_first_text(
+    candidates: &[Option<&Value>],
+    field_names: &[&str],
+) -> Result<String, AccountStoreError> {
     for value in candidates.iter().flatten() {
         let text = js_string(value);
         let trimmed = text.trim();
@@ -685,10 +707,7 @@ fn pick_first_text(candidates: &[Option<&Value>], field_names: &[&str]) -> Resul
         );
     }
     Err(AccountStoreError::new(
-        format!(
-            "缺少 CatPaw 登录凭证（{}）",
-            field_names.join(" / ")
-        ),
+        format!("缺少 CatPaw 登录凭证（{}）", field_names.join(" / ")),
         400,
     ))
 }
@@ -720,10 +739,7 @@ fn pick_first_optional(candidates: &[Option<&Value>]) -> String {
 ///
 /// 校验走 `safe_field`（与 accessToken 同一套：长度上限 + 禁 CR/LF/分号）——
 /// 这个值最终会拼进 `Cookie` 头，换行是头注入、分号会截断 cookie 串。
-fn pick_balance_token(
-    object: &Map<String, Value>,
-    auth: &Map<String, Value>,
-) -> Option<String> {
+fn pick_balance_token(object: &Map<String, Value>, auth: &Map<String, Value>) -> Option<String> {
     let candidates: Vec<Option<&Value>> = vec![
         object.get("balanceToken"),
         object.get("token2"),
@@ -779,6 +795,10 @@ trait IntoNonEmpty {
 
 impl IntoNonEmpty for String {
     fn into_non_empty(self) -> Option<String> {
-        if self.is_empty() { None } else { Some(self) }
+        if self.is_empty() {
+            None
+        } else {
+            Some(self)
+        }
     }
 }

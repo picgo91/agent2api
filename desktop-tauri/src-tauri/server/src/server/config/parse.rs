@@ -98,7 +98,13 @@ pub(super) fn string_field(map: &Map<String, Value>, key: &str) -> Option<String
 /// 接受 `30.0` 这种整值浮点（与 `parse_days` 同一口径）：JSON 里
 /// `30` 与 `30.0` 都是合法数字，为后者回落到默认值会显得莫名其妙
 /// （用户手改文件时把 30 写成 30.0 是完全可能的事）。
-pub(super) fn bounded_int_field(map: &Map<String, Value>, key: &str, default: i64, min: i64, max: i64) -> i64 {
+pub(super) fn bounded_int_field(
+    map: &Map<String, Value>,
+    key: &str,
+    default: i64,
+    min: i64,
+    max: i64,
+) -> i64 {
     let parsed = map.get(key).and_then(|value| match value {
         Value::Number(number) => number.as_i64().or_else(|| {
             number
@@ -108,7 +114,9 @@ pub(super) fn bounded_int_field(map: &Map<String, Value>, key: &str, default: i6
         }),
         _ => None,
     });
-    parsed.filter(|value| (min..=max).contains(value)).unwrap_or(default)
+    parsed
+        .filter(|value| (min..=max).contains(value))
+        .unwrap_or(default)
 }
 
 /// 从原始 JSON 里取天数（`bounded_int_field` 的保留期特化）
@@ -154,7 +162,9 @@ pub(super) fn interval_field(task: &Map<String, Value>, default: i64, min: i64, 
         }),
         _ => None,
     });
-    parsed.filter(|value| (min..=max).contains(value)).unwrap_or(default)
+    parsed
+        .filter(|value| (min..=max).contains(value))
+        .unwrap_or(default)
 }
 
 /// 从一条任务的子对象里取开关。
@@ -166,7 +176,9 @@ pub(super) fn interval_field(task: &Map<String, Value>, default: i64, min: i64, 
 /// 用户什么也没动，凭证却不再自动续期了。写侧（`PUT /api/scheduled-tasks`）
 /// 则要求显式布尔值。
 pub(super) fn task_enabled(task: &Map<String, Value>, default: bool) -> bool {
-    task.get("enabled").and_then(Value::as_bool).unwrap_or(default)
+    task.get("enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(default)
 }
 
 /// 由原始 JSON 解析六条间隔型任务（缺字段各自用默认值）

@@ -248,10 +248,7 @@ pub(super) fn count_all(conn: &Connection) -> rusqlite::Result<usize> {
 
 /// 命中筛选的条数（`QueryResult.matched`）—— 与 `limit` 无关，
 /// 前端据此算总页数（见 `ui/requests-panel.js` 的 `renderPager`）
-pub(super) fn count_matching(
-    conn: &Connection,
-    plan: &FilterPlan,
-) -> rusqlite::Result<usize> {
+pub(super) fn count_matching(conn: &Connection, plan: &FilterPlan) -> rusqlite::Result<usize> {
     let sql = format!("SELECT COUNT(*) FROM requests{}", plan.where_sql);
     let count: i64 = conn.query_row(&sql, params_from_iter(plan.binds.iter()), |row| row.get(0))?;
     Ok(count.max(0) as usize)
@@ -261,14 +258,14 @@ pub(super) fn count_matching(
 ///
 /// 一条 COUNT：在筛选计划上追加 `status = 0` —— 与列表共用同一份 WHERE，
 /// 「这批筛选里还有几条没跑完」才是列表页徽标要的口径。
-pub(super) fn count_running(
-    conn: &Connection,
-    plan: &FilterPlan,
-) -> rusqlite::Result<usize> {
+pub(super) fn count_running(conn: &Connection, plan: &FilterPlan) -> rusqlite::Result<usize> {
     let sql = if plan.where_sql.is_empty() {
         "SELECT COUNT(*) FROM requests WHERE status = 0".to_string()
     } else {
-        format!("SELECT COUNT(*) FROM requests{} AND status = 0", plan.where_sql)
+        format!(
+            "SELECT COUNT(*) FROM requests{} AND status = 0",
+            plan.where_sql
+        )
     };
     let count: i64 = conn.query_row(&sql, params_from_iter(plan.binds.iter()), |row| row.get(0))?;
     Ok(count.max(0) as usize)
@@ -661,10 +658,7 @@ pub(super) fn insert_request(conn: &Connection, entry: &RequestEntry) -> rusqlit
 ///
 /// **调用方必须先删对应的 request_raw 行**（`delete_raw_matching`，同一份
 /// 筛选计划）—— 明细删完就再也找不到要陪葬的正文 id 了。
-pub(super) fn delete_matching(
-    conn: &Connection,
-    plan: &FilterPlan,
-) -> rusqlite::Result<usize> {
+pub(super) fn delete_matching(conn: &Connection, plan: &FilterPlan) -> rusqlite::Result<usize> {
     let sql = format!("DELETE FROM requests{}", plan.where_sql);
     conn.execute(&sql, params_from_iter(plan.binds.iter()))
 }
@@ -678,10 +672,7 @@ pub(super) fn delete_matching(
 ///
 /// `IN (SELECT id FROM requests …)` 直接下推给 SQLite：不把命中 id 拉回
 /// Rust 再逐个绑定（筛选命中的可能是几千行，两万参数的 SQL 既慢又难看）。
-pub(super) fn delete_raw_matching(
-    conn: &Connection,
-    plan: &FilterPlan,
-) -> rusqlite::Result<usize> {
+pub(super) fn delete_raw_matching(conn: &Connection, plan: &FilterPlan) -> rusqlite::Result<usize> {
     let sql = format!(
         "DELETE FROM request_raw WHERE id IN (SELECT id FROM requests{})",
         plan.where_sql
@@ -778,7 +769,8 @@ pub(super) fn select_raw(
     conn: &Connection,
     id: &str,
 ) -> rusqlite::Result<Option<(String, String, String)>> {
-    let mut stmt = conn.prepare("SELECT id, request_body, response_body FROM request_raw WHERE id = ?1")?;
+    let mut stmt =
+        conn.prepare("SELECT id, request_body, response_body FROM request_raw WHERE id = ?1")?;
     let mut rows = stmt.query(params![id])?;
     match rows.next()? {
         Some(row) => Ok(Some((row.get(0)?, row.get(1)?, row.get(2)?))),
@@ -813,10 +805,7 @@ pub(super) fn trim_raw_capacity(conn: &Connection, max: usize) -> rusqlite::Resu
 ///
 /// 「带正文」= request_raw 里有对应行 —— 表的约定是「有行 ⇔ 有正文」
 /// （写入侧两侧全空时不写行），所以不需要逐列判空。
-pub(super) fn count_raw_matching(
-    conn: &Connection,
-    plan: &FilterPlan,
-) -> rusqlite::Result<usize> {
+pub(super) fn count_raw_matching(conn: &Connection, plan: &FilterPlan) -> rusqlite::Result<usize> {
     let sql = format!(
         "SELECT COUNT(*) FROM request_raw WHERE id IN (SELECT id FROM requests{})",
         plan.where_sql

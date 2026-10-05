@@ -14,8 +14,8 @@ use std::sync::OnceLock;
 use serde_json::{json, Value};
 
 use crate::server::core::account_store::{AccountStore, CredentialWrite};
-use crate::server::core::proxies::ResolvedProxy;
 use crate::server::core::providers::refresh_flight::{self, Join, Table};
+use crate::server::core::proxies::ResolvedProxy;
 use crate::server::errors::GatewayError;
 use crate::server::logging;
 
@@ -25,8 +25,12 @@ use super::endpoints;
 
 static FLIGHTS: OnceLock<Table<Credentials>> = OnceLock::new();
 
-pub fn snapshot(store: &AccountStore, account_id: &str) -> Result<(Value, Credentials), GatewayError> {
-    let record = store.qoder_account_record(account_id)
+pub fn snapshot(
+    store: &AccountStore,
+    account_id: &str,
+) -> Result<(Value, Credentials), GatewayError> {
+    let record = store
+        .qoder_account_record(account_id)
         .ok_or_else(|| GatewayError::with_status(404, "Qoder 账号不存在，请先添加账号"))?;
     let mut credentials = Credentials::from_payload(&record)?;
     credentials.complete_identity()?;
@@ -43,10 +47,19 @@ pub async fn ensure_fresh(
         return Ok(credentials);
     }
     if !credentials.can_refresh() {
-        return Err(GatewayError::with_status(400, "Qoder 账号没有刷新凭证，请重新登录或添加 PAT"));
+        return Err(GatewayError::with_status(
+            400,
+            "Qoder 账号没有刷新凭证，请重新登录或添加 PAT",
+        ));
     }
-    let key = format!("{}:{}:{}:{}:{}", store.file_string(), account_id, credentials.region.id(),
-        refresh_flight::fingerprint(&credentials.access_token), refresh_flight::fingerprint(&credentials.refresh_token));
+    let key = format!(
+        "{}:{}:{}:{}:{}",
+        store.file_string(),
+        account_id,
+        credentials.region.id(),
+        refresh_flight::fingerprint(&credentials.access_token),
+        refresh_flight::fingerprint(&credentials.refresh_token)
+    );
     match FLIGHTS.get_or_init(Table::new).join(&key) {
         Join::Waiter(waiter) => waiter.wait().await,
         Join::Leader(leader) => {
@@ -73,9 +86,13 @@ async fn refresh_and_save(
     };
     fresh.complete_identity()?;
     if fresh.user_id != credentials.user_id || fresh.region != credentials.region {
-        return Err(GatewayError::with_status(400, "Qoder 续期返回了不同账号，旧凭证未被覆盖"));
+        return Err(GatewayError::with_status(
+            400,
+            "Qoder 续期返回了不同账号，旧凭证未被覆盖",
+        ));
     }
-    match store.update_qoder_credentials_if_current(record, &fresh)
+    match store
+        .update_qoder_credentials_if_current(record, &fresh)
         .map_err(|error| GatewayError::with_status(error.status_code, error.message))?
     {
         CredentialWrite::Written => Ok(fresh),
@@ -105,7 +122,10 @@ async fn refresh_via_open_api(
 ) -> Result<Credentials, GatewayError> {
     let refresh = credentials.oauth_refresh();
     if refresh.is_empty() {
-        return Err(GatewayError::with_status(400, "Qoder 账号没有刷新凭证，请重新登录或添加 PAT"));
+        return Err(GatewayError::with_status(
+            400,
+            "Qoder 账号没有刷新凭证，请重新登录或添加 PAT",
+        ));
     }
     let path = if refresh.starts_with("jrt-") {
         endpoints::JOB_REFRESH_PATH
@@ -120,7 +140,8 @@ async fn refresh_via_open_api(
         Some(&json!({ "refresh_token": refresh })),
         &endpoints::refresh_headers(),
         proxy,
-    ).await?;
+    )
+    .await?;
     // 401/403 在续期语义下只有一个含义：这把刷新令牌已经不能用了（过期、
     // 被轮换掉，或与所选地区不符 —— 两站令牌不通用）。给一句能照做的提示，
     // 而不是把上游的 `Request discarded` 原样透出去。
@@ -136,26 +157,48 @@ async fn refresh_via_open_api(
     // **只认 `user_id` 这几个键**：设备响应的 `id` 是设备会话号而非账号
     // （对照实现专门标注过这个坑）。
     let returned_user = credentials::text(&data, &["user_id", "uid", "userId"]);
-    if !returned_user.is_empty() && !credentials.user_id.is_empty() && returned_user != credentials.user_id {
-        return Err(GatewayError::with_status(502, "Qoder 续期返回了不同账号，旧凭证未被覆盖"));
+    if !returned_user.is_empty()
+        && !credentials.user_id.is_empty()
+        && returned_user != credentials.user_id
+    {
+        return Err(GatewayError::with_status(
+            502,
+            "Qoder 续期返回了不同账号，旧凭证未被覆盖",
+        ));
     }
     // 访问令牌的键名不固定：设备端点回 `device_token`，作业端点回 `token`。
     // `secret` 按给定顺序取第一个非空值，命中即用。
-    let token = credentials::secret(&data, &["device_token", "deviceToken", "token", "access_token"])?;
+    let token = credentials::secret(
+        &data,
+        &["device_token", "deviceToken", "token", "access_token"],
+    )?;
     if token.is_empty() {
-        return Err(GatewayError::with_status(502, "Qoder 续期响应缺少令牌，旧凭证未被覆盖"));
+        return Err(GatewayError::with_status(
+            502,
+            "Qoder 续期响应缺少令牌，旧凭证未被覆盖",
+        ));
     }
     let refresh_token = credentials::secret(&data, &["refresh_token", "refreshToken"])?;
     if refresh_token.contains('|') {
-        return Err(GatewayError::with_status(502, "Qoder 续期响应的 refresh_token 格式无效"));
+        return Err(GatewayError::with_status(
+            502,
+            "Qoder 续期响应的 refresh_token 格式无效",
+        ));
     }
     let mut fresh = credentials.clone();
     fresh.access_token = token;
     // 续期响应没带新刷新令牌时保留旧值：上游按「轮换」语义工作，此处只做兜底，
     // 免得把仍然有效的那一半洗成空（空刷新令牌会让账号再也刷不动）。
-    fresh.refresh_token = format!("{}|{}|{}",
-        if refresh_token.is_empty() { refresh } else { &refresh_token },
-        credentials.user_id, credentials.machine_id);
+    fresh.refresh_token = format!(
+        "{}|{}|{}",
+        if refresh_token.is_empty() {
+            refresh
+        } else {
+            &refresh_token
+        },
+        credentials.user_id,
+        credentials.machine_id
+    );
     // 只认绝对时间字段。**不要**回落到 `expires_in`：同一份协议里它的单位
     // 在两家参考实现中被分别当成秒和毫秒（实测设备端点回 2591999994，
     // 按毫秒算正好 30 天），猜错会写出一个几十年后的过期时间，让自动续期

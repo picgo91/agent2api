@@ -22,7 +22,7 @@
 //! `GET {base}/snap-manager/v1/login/ticket` 换。注意这条通道**不返回 refresh token**，
 //! 经它落账的账号约一小时后就得重新登录，文案要说清（见 `oauth::poll_ticket`）。
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::server::core::account_store::AccountStore;
 use crate::server::core::providers::codearts::oauth;
@@ -46,9 +46,22 @@ pub enum Callback {
 impl LoginService {
     /// 处理一次 CodeArts 回调。`params` 是回调查询串（`code` / `secret` / `redirect` /
     /// 可选的 `ticket_id`）；**手工粘贴那条路也走这里**（把粘来的 URL 的查询串交上来）。
-    pub async fn finish_codearts_login(&self, params: &std::collections::HashMap<String, String>) -> Callback {
-        let get = |key: &str| params.get(key).map(|value| value.trim().to_string()).unwrap_or_default();
-        let (code, secret, redirect, ticket) = (get("code"), get("secret"), get("redirect"), get("ticket_id"));
+    pub async fn finish_codearts_login(
+        &self,
+        params: &std::collections::HashMap<String, String>,
+    ) -> Callback {
+        let get = |key: &str| {
+            params
+                .get(key)
+                .map(|value| value.trim().to_string())
+                .unwrap_or_default()
+        };
+        let (code, secret, redirect, ticket) = (
+            get("code"),
+            get("secret"),
+            get("redirect"),
+            get("ticket_id"),
+        );
 
         // 每次回调都落一行**只说形状、不带秘密**的日志。没有这一行，「浏览器没跳回来」
         // 与「跳回来了但我们不认」在面板上长得一模一样（都是账号没出现），
@@ -60,7 +73,11 @@ impl LoginService {
                 !code.is_empty(),
                 !secret.is_empty(),
                 !redirect.is_empty(),
-                if ticket.is_empty() { "—".to_string() } else { short(&ticket) },
+                if ticket.is_empty() {
+                    "—".to_string()
+                } else {
+                    short(&ticket)
+                },
                 oauth::candidates().len(),
             ),
         );
@@ -73,7 +90,10 @@ impl LoginService {
             // 不是我们自己生成的）。没带配对信息时整表都记一遍 —— 与 code 通道
             // 同一套「认不出是哪一轮就逐个试」的退化处理。
             let ids: Vec<String> = match ticket.is_empty() {
-                true => oauth::candidates().into_iter().map(|item| item.ticket_id).collect(),
+                true => oauth::candidates()
+                    .into_iter()
+                    .map(|item| item.ticket_id)
+                    .collect(),
                 false => vec![ticket.clone()],
             };
             let mut attached = false;
@@ -81,7 +101,13 @@ impl LoginService {
                 attached |= oauth::attach_ticket_secret(id, &secret);
             }
             if !attached {
-                return Callback::Failed(404, format!("这一轮登录已超过 {} 分钟被作废（或已被取消），请回到面板重新发起", oauth::LOGIN_TIMEOUT_MS / 60_000));
+                return Callback::Failed(
+                    404,
+                    format!(
+                        "这一轮登录已超过 {} 分钟被作废（或已被取消），请回到面板重新发起",
+                        oauth::LOGIN_TIMEOUT_MS / 60_000
+                    ),
+                );
             }
             if !redirect.is_empty() {
                 // 第一趟必须原样转出去：这一跳是 portal 登录链路的一部分，不跳就没有下一步。
@@ -103,7 +129,10 @@ impl LoginService {
                     .to_string(),
             );
         }
-        Callback::Failed(400, "回调里没有授权码也没有 secret：请把浏览器地址栏里那条回调地址完整粘贴过来".to_string())
+        Callback::Failed(
+            400,
+            "回调里没有授权码也没有 secret：请把浏览器地址栏里那条回调地址完整粘贴过来".to_string(),
+        )
     }
 
     /// 授权码通道：先按 ticket 精确试，再按「最近发起」逐个试。
@@ -111,33 +140,53 @@ impl LoginService {
         let mut ordered: Vec<oauth::PendingLogin> = Vec::new();
         let candidates = oauth::candidates();
         if !ticket.is_empty() {
-            ordered.extend(candidates.iter().filter(|item| item.ticket_id == ticket).cloned());
+            ordered.extend(
+                candidates
+                    .iter()
+                    .filter(|item| item.ticket_id == ticket)
+                    .cloned(),
+            );
         }
         // 其余候选按「最近发起」排在后面（先试最可能是的那一轮）
         for item in candidates.iter().filter(|item| item.ticket_id != ticket) {
             ordered.push(item.clone());
         }
         if ordered.is_empty() {
-            return Callback::Failed(404, format!("这一轮登录已作废（超过 {} 分钟或已被取消），请回到面板重新发起", oauth::LOGIN_TIMEOUT_MS / 60_000));
+            return Callback::Failed(
+                404,
+                format!(
+                    "这一轮登录已作废（超过 {} 分钟或已被取消），请回到面板重新发起",
+                    oauth::LOGIN_TIMEOUT_MS / 60_000
+                ),
+            );
         }
         let mut last = String::new();
         for candidate in ordered {
             // **只看不取**：换码失败时这一轮必须留在表里。`/oauth/callback` 是一条
             // 免鉴权的公开路由，任何人打一次「随便编个 code」就能把用户正在进行的
             // 登录全部作废 —— 取走式写法等于把「取消别人的登录」做成免费服务。
-            let Some(pending) = oauth::peek_pending(&candidate.ticket_id) else { continue };
+            let Some(pending) = oauth::peek_pending(&candidate.ticket_id) else {
+                continue;
+            };
             match exchange_and_store(&self.store, &pending, code).await {
                 Ok(account_id) => {
                     // 成功才取走：授权码与 verifier 都是一次性的，留着只会被再试一次
                     oauth::take_pending(&candidate.ticket_id);
                     let handle = self.tasks.get(&candidate.ticket_id);
                     mark_done(handle.as_ref(), &account_id);
-                    return Callback::Accepted(Some(account_id), "登录成功，账号已加入列表，可以关闭此页面。".to_string());
+                    return Callback::Accepted(
+                        Some(account_id),
+                        "登录成功，账号已加入列表，可以关闭此页面。".to_string(),
+                    );
                 }
                 Err(error) => {
                     logging::log(
                         "[Login]",
-                        &format!("CodeArts 换码候选 {} 未通过：{}", short(&candidate.ticket_id), error.message),
+                        &format!(
+                            "CodeArts 换码候选 {} 未通过：{}",
+                            short(&candidate.ticket_id),
+                            error.message
+                        ),
                     );
                     last = error.message;
                 }
@@ -158,37 +207,57 @@ impl LoginService {
     /// 为什么在后台而不是就地等：portal 那边用户可能还没点完，这条通道会连着 404 一阵；
     /// 把它压进一次 HTTP 请求，浏览器先超时，用户看到的是「请求失败」而不是「还在等」。
     fn start_ticket_poll(&self, tickets: &[String]) {
-        let Some(ticket_id) = tickets.first().cloned() else { return };
+        let Some(ticket_id) = tickets.first().cloned() else {
+            return;
+        };
         // 一轮只允许一个轮询循环（免鉴权路由上可被反复触发，见 PendingLogin 的注释）
         if !oauth::claim_ticket_poll(&ticket_id) {
             return;
         }
-        let Some(handle) = self.tasks.get(&ticket_id) else { return };
+        let Some(handle) = self.tasks.get(&ticket_id) else {
+            return;
+        };
         let store = self.store.clone();
         crate::spawn_task(async move {
             let deadline = logging::now_ms() + oauth::LOGIN_TIMEOUT_MS as i64;
             loop {
                 // 只读一份来轮：换成功才从表里取走，失败时授权码通道还要能认得出这一轮
-                let Some(pending) = oauth::peek_pending(&ticket_id) else { return };
+                let Some(pending) = oauth::peek_pending(&ticket_id) else {
+                    return;
+                };
                 if logging::now_ms() >= deadline {
-                    logging::log("[Login]", "CodeArts ticket 通道超时：仍未换取到凭证，请重新发起登录");
-                    super::finish_task_error(&handle, "登录超时：ticket 通道没能换取到凭证，请重新发起");
+                    logging::log(
+                        "[Login]",
+                        "CodeArts ticket 通道超时：仍未换取到凭证，请重新发起登录",
+                    );
+                    super::finish_task_error(
+                        &handle,
+                        "登录超时：ticket 通道没能换取到凭证，请重新发起",
+                    );
                     return;
                 }
                 match oauth::poll_ticket(
                     crate::server::core::providers::codearts::models::DEFAULT_BASE_URL,
                     &pending,
                     None,
-                ).await {
+                )
+                .await
+                {
                     Ok(mut credential) => {
-                        let Some(_claimed) = oauth::take_pending(&ticket_id) else { return };
+                        let Some(_claimed) = oauth::take_pending(&ticket_id) else {
+                            return;
+                        };
                         // ticket 通道不返回 refresh token / 上下文，这里把**本轮**生成的
                         // PKCE 与 DPoP 补进去：虽然上游没给 refresh token 因而续不了，
                         // 但上下文与凭据同源，留着它至少不会让「凭据形状」看起来缺半块
                         credential.oauth_context = Some(pending.context.clone());
                         match store.add_codearts_account(&credential, None, "web-login") {
                             Ok(public) => {
-                                let id = public.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+                                let id = public
+                                    .get("id")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or_default()
+                                    .to_string();
                                 logging::log(
                                     "[Login]",
                                     "CodeArts 经 ticket 通道落账（该通道不带 refresh token，约一小时后需重新登录）",
@@ -198,7 +267,13 @@ impl LoginService {
                             }
                             Err(error) => {
                                 super::finish_task_error(&handle, &error.message);
-                                logging::log("[Login]", &format!("❌ CodeArts ticket 凭据落账号失败：{}", error.message));
+                                logging::log(
+                                    "[Login]",
+                                    &format!(
+                                        "❌ CodeArts ticket 凭据落账号失败：{}",
+                                        error.message
+                                    ),
+                                );
                                 return;
                             }
                         }
@@ -206,7 +281,10 @@ impl LoginService {
                     Err(error) => {
                         // 408 是这条链的常态（portal 那边还没就绪），其余才值得记一句
                         if error.status_code != 408 {
-                            logging::log("[Login]", &format!("CodeArts ticket 通道：{}", error.message));
+                            logging::log(
+                                "[Login]",
+                                &format!("CodeArts ticket 通道：{}", error.message),
+                            );
                         }
                     }
                 }
@@ -223,12 +301,20 @@ impl LoginService {
 
 /// 用授权码换凭据并落账号 —— 与「粘贴凭据」共用 `add_codearts_account`，
 /// 不另写一份落盘逻辑（两条路各写一份，账号形状迟早会分叉）。
-async fn exchange_and_store(store: &AccountStore, pending: &oauth::PendingLogin, code: &str) -> Result<String, GatewayError> {
+async fn exchange_and_store(
+    store: &AccountStore,
+    pending: &oauth::PendingLogin,
+    code: &str,
+) -> Result<String, GatewayError> {
     let credential = oauth::exchange_for(pending, code, None).await?;
     let public = store
         .add_codearts_account(&credential, None, "web-login")
         .map_err(|error| GatewayError::with_status(error.status_code, error.message))?;
-    Ok(public.get("id").and_then(Value::as_str).unwrap_or_default().to_string())
+    Ok(public
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string())
 }
 
 /// 把任务句柄标成完成（界面的 `/wait` 靠它收尾）。
@@ -250,7 +336,9 @@ fn mark_done(handle: Option<&LoginTaskHandle>, account_id: &str) {
 /// 这种写法能骗过后缀匹配之外的所有朴素写法。端口不参与判定（portal 回跳带端口
 /// 的情况没见过，但即便有也不是安全边界）。
 fn trusted_redirect(url: &str) -> bool {
-    let Ok(parsed) = url::Url::parse(url) else { return false };
+    let Ok(parsed) = url::Url::parse(url) else {
+        return false;
+    };
     if !matches!(parsed.scheme(), "https" | "http") {
         return false;
     }
@@ -283,7 +371,10 @@ mod tests {
     use super::*;
 
     fn params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
     }
 
     /// 每个测试一个临时库。**必须**带进程内序号：只用时间戳的话，并行跑的
@@ -295,14 +386,17 @@ mod tests {
         let id = SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!("codearts-login-{}-{id}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
-        let store = AccountStore::with_db(Some(Db::open(&dir.join("agent2api.db")).expect("临时库应当能建起来")));
+        let store = AccountStore::with_db(Some(
+            Db::open(&dir.join("agent2api.db")).expect("临时库应当能建起来"),
+        ));
         LoginService::new(AuthService::for_store(store.clone()), store)
     }
 
     /// 发起一轮登录并返回它的 ticket（= 任务 state）。
     fn begin() -> String {
         oauth::set_loopback_port(13_999);
-        let (_url, pending) = oauth::begin_login("snap_vscode", "26.9.101", "en-us").expect("端口已设，应当能发起");
+        let (_url, pending) =
+            oauth::begin_login("snap_vscode", "26.9.101", "en-us").expect("端口已设，应当能发起");
         pending.ticket_id
     }
 
@@ -328,12 +422,22 @@ mod tests {
         let login = service();
         let ticket = begin();
         let outcome = login
-            .finish_codearts_login(&params(&[("secret", "portal-secret"), ("redirect", "https://codearts.huaweicloud.com/portal/done"), ("ticket_id", &ticket)]))
+            .finish_codearts_login(&params(&[
+                ("secret", "portal-secret"),
+                ("redirect", "https://codearts.huaweicloud.com/portal/done"),
+                ("ticket_id", &ticket),
+            ]))
             .await;
-        assert!(matches_ref(&outcome, "continue"), "第一趟必须把浏览器转回 portal，否则永远等不到 code");
+        assert!(
+            matches_ref(&outcome, "continue"),
+            "第一趟必须把浏览器转回 portal，否则永远等不到 code"
+        );
         // 转出去之后这一轮还在表里，且 secret 已经记上（ticket 通道的钥匙）
         let kept = oauth::peek_pending(&ticket).expect("这一轮不该被取走");
-        assert_eq!("portal-secret", kept.secret, "portal 下发的 secret 要记到它那一轮");
+        assert_eq!(
+            "portal-secret", kept.secret,
+            "portal 下发的 secret 要记到它那一轮"
+        );
     }
 
     #[tokio::test]
@@ -342,7 +446,10 @@ mod tests {
         let outcome = login
             .finish_codearts_login(&params(&[("secret", "s"), ("ticket_id", "no-such-ticket")]))
             .await;
-        assert!(matches_ref(&outcome, "404"), "认不出的 ticket 要说「重新发起」，不能凭空建一轮");
+        assert!(
+            matches_ref(&outcome, "404"),
+            "认不出的 ticket 要说「重新发起」，不能凭空建一轮"
+        );
     }
 
     #[tokio::test]
@@ -358,21 +465,41 @@ mod tests {
         // 用一个几乎不可能撞上的 ticket，且表里此时可能有别家测试的轮次 ——
         // 因此这条只验「按 ticket 找不到、且逐个候选都换码失败」的形状：
         // 候选为空时才是 404；不为空时会去打 STS（本测试不覆盖那条，见模块头）。
-        let outcome = login.finish_codearts_login(&params(&[("code", "x"), ("ticket_id", "zz-unknown")])).await;
+        let outcome = login
+            .finish_codearts_login(&params(&[("code", "x"), ("ticket_id", "zz-unknown")]))
+            .await;
         let shape = match outcome {
             Callback::Failed(status, _) => status,
             Callback::Accepted(..) => 200,
             Callback::ContinueTo(_) => 307,
         };
-        assert!([404, 502].contains(&shape), "没有待办就该 404，有则去换码（换不动是 502），实际 {shape}");
+        assert!(
+            [404, 502].contains(&shape),
+            "没有待办就该 404，有则去换码（换不动是 502），实际 {shape}"
+        );
     }
 
     #[test]
     fn ticket_response_is_read_in_the_official_shape() {
         let full = r#"{"credential":{"access":"AK1","secret":"SK1","securitytoken":"STS1","expires_at":"2026-09-27T16:17:00.327Z"},"domain_id":"d","user_id":"u","user_name":"n","login_type":"WEB"}"#;
         let parsed = oauth::parse_ticket_credential(full).expect("官方形状应当能解");
-        assert_eq!(("AK1", "SK1", "STS1"), (parsed.access_key_id.as_str(), parsed.secret_access_key.as_str(), parsed.security_token.as_str()));
-        assert_eq!(("d", "u", "n", "WEB"), (parsed.domain_id.as_str(), parsed.user_id.as_str(), parsed.user_name.as_str(), parsed.login_type.as_str()));
+        assert_eq!(
+            ("AK1", "SK1", "STS1"),
+            (
+                parsed.access_key_id.as_str(),
+                parsed.secret_access_key.as_str(),
+                parsed.security_token.as_str()
+            )
+        );
+        assert_eq!(
+            ("d", "u", "n", "WEB"),
+            (
+                parsed.domain_id.as_str(),
+                parsed.user_id.as_str(),
+                parsed.user_name.as_str(),
+                parsed.login_type.as_str()
+            )
+        );
         // 这条通道**不给** refresh token —— 不是解析漏了，是上游就没有（见函数注释）
         assert!(parsed.refresh_token.is_empty());
         assert!(parsed.oauth_context.is_none());
@@ -382,7 +509,10 @@ mod tests {
             ("临时凭据不完整", r#"{"credential":{"access":"AK"}}"#),
             ("不是 JSON", "not json"),
         ] {
-            assert!(oauth::parse_ticket_credential(body).is_err(), "{name} 必须判失败");
+            assert!(
+                oauth::parse_ticket_credential(body).is_err(),
+                "{name} 必须判失败"
+            );
         }
     }
 
@@ -399,13 +529,23 @@ mod tests {
             started_at_ms: 0,
             poll_claimed: false,
         };
-        let error = oauth::poll_ticket(&base, &pending, None).await.expect_err("404 应当是错误");
-        assert_eq!(408, error.status_code, "没就绪要翻成可重试的 408，实际 {}", error.status_code);
+        let error = oauth::poll_ticket(&base, &pending, None)
+            .await
+            .expect_err("404 应当是错误");
+        assert_eq!(
+            408, error.status_code,
+            "没就绪要翻成可重试的 408，实际 {}",
+            error.status_code
+        );
 
         // secret 还没拿到时**不发请求**（本地就能判，省一次无谓的上游调用）
         let mut bare = pending.clone();
         bare.secret = String::new();
-        assert!(oauth::poll_ticket(&base, &bare, None).await.unwrap_err().message.contains("secret"));
+        assert!(oauth::poll_ticket(&base, &bare, None)
+            .await
+            .unwrap_err()
+            .message
+            .contains("secret"));
     }
 
     /// 起一个假的 ticket 端点，返回它的 base（`{base}/snap-manager/v1/login/ticket`）。
@@ -414,7 +554,9 @@ mod tests {
         use axum::response::IntoResponse;
         let app = axum::Router::new().route(
             "/snap-manager/v1/login/ticket",
-            axum::routing::get(move || async move { (StatusCode::from_u16(status).unwrap(), body).into_response() }),
+            axum::routing::get(move || async move {
+                (StatusCode::from_u16(status).unwrap(), body).into_response()
+            }),
         );
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();

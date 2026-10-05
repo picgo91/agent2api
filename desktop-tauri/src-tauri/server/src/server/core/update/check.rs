@@ -131,15 +131,25 @@ impl UpdateManager {
         self.check_with_mode(current_version, false).await
     }
 
-    async fn check_with_mode(&self, current_version: &str, manual: bool) -> Result<Value, UpdateError> {
+    async fn check_with_mode(
+        &self,
+        current_version: &str,
+        manual: bool,
+    ) -> Result<Value, UpdateError> {
         let key = self.check_key();
         let interval = config::scheduled_settings().update_check.interval * 60_000;
         let started = logging::now_ms();
         // 手动检查仍受失败冷却约束（ManualBackoff::Respect）：这里的冷却记的是
         // GitHub 配额桶的恢复时刻，提前打只会再吃一次 403。换令牌 / 换线路那条
         // 口子走 clear_check_cooldown（见上）。
-        let guard = match task_state::claim(&key, interval, manual, task_state::ManualBackoff::Respect, MIN_CHECK_GAP_MS)
-            .map_err(|error| UpdateError::new(error))?
+        let guard = match task_state::claim(
+            &key,
+            interval,
+            manual,
+            task_state::ManualBackoff::Respect,
+            MIN_CHECK_GAP_MS,
+        )
+        .map_err(|error| UpdateError::new(error))?
         {
             Claim::Acquired(guard) => guard,
             Claim::Deferred(mut state) => {
@@ -150,7 +160,9 @@ impl UpdateManager {
                     state = task_state::read(&key).map_err(|error| UpdateError::new(error))?;
                 }
                 // 等到了结果就复用；仍在跑（或正处于失败冷却）就如实报原因。
-                if state.running() || (state.last_error.is_some() && state.retry_at > logging::now_ms()) {
+                if state.running()
+                    || (state.last_error.is_some() && state.retry_at > logging::now_ms())
+                {
                     return Err(UpdateError::new(state.waiting_message()));
                 }
                 if state.last_success_at > 0 {
@@ -166,16 +178,33 @@ impl UpdateManager {
                 self.lock().latest = release.clone();
                 let result = self.build_check_result(current_version);
                 let summary = if result.get("hasUpdate").and_then(Value::as_bool) == Some(true) {
-                    format!("发现新版本 {}", result["latestVersion"].as_str().unwrap_or(""))
+                    format!(
+                        "发现新版本 {}",
+                        result["latestVersion"].as_str().unwrap_or("")
+                    )
                 } else {
                     "已完成版本检查".to_string()
                 };
-                let state = guard.finish(true, summary, Some(json!({ "release": release })), retry_at, interval)
+                let state = guard
+                    .finish(
+                        true,
+                        summary,
+                        Some(json!({ "release": release })),
+                        retry_at,
+                        interval,
+                    )
                     .map_err(|error| UpdateError::new(error))?;
                 Ok(self.checked_result(current_version, &state))
             }
             Err((error, retry_at)) => {
-                guard.finish(false, format!("检查失败：{}", error.message), None, retry_at, interval)
+                guard
+                    .finish(
+                        false,
+                        format!("检查失败：{}", error.message),
+                        None,
+                        retry_at,
+                        interval,
+                    )
                     .map_err(|error| UpdateError::new(error))?;
                 Err(error)
             }
@@ -196,8 +225,10 @@ impl UpdateManager {
     async fn fetch_release(&self) -> Result<(Option<Value>, i64), (UpdateError, i64)> {
         let repository = self.repository();
         let url = format!("{GITHUB_API}/repos/{repository}/releases/latest");
-        let response = client::fetch_with_egress(&url, &client::github_headers(), Some(REQUEST_TIMEOUT_MS))
-            .await.map_err(|error| (error, 0))?;
+        let response =
+            client::fetch_with_egress(&url, &client::github_headers(), Some(REQUEST_TIMEOUT_MS))
+                .await
+                .map_err(|error| (error, 0))?;
         let status = response.status().as_u16();
         let retry_at = retry_deadline(response.headers(), status);
         if status == 404 {
@@ -209,26 +240,45 @@ impl UpdateManager {
             ), retry_at));
         }
         if !response.status().is_success() {
-            return Err((UpdateError::new(format!("GitHub 返回 HTTP {status}")), retry_at));
+            return Err((
+                UpdateError::new(format!("GitHub 返回 HTTP {status}")),
+                retry_at,
+            ));
         }
-        let payload: Value = response.json().await
-            .map_err(|error| (UpdateError::new(format!("解析 GitHub 响应失败: {error}")), retry_at))?;
-        let text = |key: &str| payload.get(key).and_then(Value::as_str).unwrap_or("").to_string();
+        let payload: Value = response.json().await.map_err(|error| {
+            (
+                UpdateError::new(format!("解析 GitHub 响应失败: {error}")),
+                retry_at,
+            )
+        })?;
+        let text = |key: &str| {
+            payload
+                .get(key)
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string()
+        };
         let raw_tag = text("tag_name");
-        let tag = raw_tag.strip_prefix('v').or_else(|| raw_tag.strip_prefix('V'))
-            .unwrap_or(&raw_tag).to_string();
+        let tag = raw_tag
+            .strip_prefix('v')
+            .or_else(|| raw_tag.strip_prefix('V'))
+            .unwrap_or(&raw_tag)
+            .to_string();
         let name = text("name");
         let page_url = text("html_url");
         let published_at = text("published_at");
-        Ok((Some(json!({
-            "tag": tag,
-            "name": if name.is_empty() { raw_tag } else { name },
-            "notes": text("body").chars().take(4000).collect::<String>(),
-            "publishedAt": if published_at.is_empty() { text("created_at") } else { published_at },
-            "pageUrl": if page_url.is_empty() { format!("https://github.com/{repository}/releases") } else { page_url },
-            "prerelease": payload.get("prerelease").and_then(Value::as_bool) == Some(true),
-            "asset": pick_installer(payload.get("assets")),
-        })), retry_at))
+        Ok((
+            Some(json!({
+                "tag": tag,
+                "name": if name.is_empty() { raw_tag } else { name },
+                "notes": text("body").chars().take(4000).collect::<String>(),
+                "publishedAt": if published_at.is_empty() { text("created_at") } else { published_at },
+                "pageUrl": if page_url.is_empty() { format!("https://github.com/{repository}/releases") } else { page_url },
+                "prerelease": payload.get("prerelease").and_then(Value::as_bool) == Some(true),
+                "asset": pick_installer(payload.get("assets")),
+            })),
+            retry_at,
+        ))
     }
 }
 
@@ -245,14 +295,31 @@ impl UpdateManager {
 fn retry_deadline(headers: &reqwest::header::HeaderMap, status: u16) -> i64 {
     let now = logging::now_ms();
     let header = |name: &str| headers.get(name).and_then(|value| value.to_str().ok());
-    let retry = header("retry-after").and_then(|value| {
-        value.parse::<i64>().ok().map(|seconds| now.saturating_add(seconds.max(0).saturating_mul(1000)))
-            .or_else(|| chrono::DateTime::parse_from_rfc2822(value).ok().map(|date| date.timestamp_millis()))
-    }).unwrap_or(0);
+    let retry = header("retry-after")
+        .and_then(|value| {
+            value
+                .parse::<i64>()
+                .ok()
+                .map(|seconds| now.saturating_add(seconds.max(0).saturating_mul(1000)))
+                .or_else(|| {
+                    chrono::DateTime::parse_from_rfc2822(value)
+                        .ok()
+                        .map(|date| date.timestamp_millis())
+                })
+        })
+        .unwrap_or(0);
     let reset = if header("x-ratelimit-remaining") == Some("0") {
-        header("x-ratelimit-reset").and_then(|value| value.parse::<i64>().ok())
-            .map(|seconds| seconds.saturating_mul(1000).saturating_add(1000)).unwrap_or(0)
-    } else { 0 };
-    let minimum = if status == 403 || status == 429 { now + 60_000 } else { 0 };
+        header("x-ratelimit-reset")
+            .and_then(|value| value.parse::<i64>().ok())
+            .map(|seconds| seconds.saturating_mul(1000).saturating_add(1000))
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    let minimum = if status == 403 || status == 429 {
+        now + 60_000
+    } else {
+        0
+    };
     retry.max(reset).max(minimum)
 }

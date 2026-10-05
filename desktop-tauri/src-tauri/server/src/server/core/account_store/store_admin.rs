@@ -261,7 +261,10 @@ impl AccountStore {
         // ② 锁外判定：这个键在该家是不是真名（判据见函数头）
         let mut plan: Vec<(String, String, Vec<String>)> = Vec::new();
         for account in &accounts {
-            let Some(id) = account.get("id").and_then(Value::as_str).filter(|id| !id.is_empty())
+            let Some(id) = account
+                .get("id")
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty())
             else {
                 continue;
             };
@@ -282,9 +285,7 @@ impl AccountStore {
                     }
                     // 键名当请求名问一次：发出去的不是它自己 → 它不是真名
                     let wire = crate::server::core::providers::catalog::wire_target_for_provider(
-                        key,
-                        &provider,
-                        None,
+                        key, &provider, None,
                     )
                     .model;
                     !wire.eq_ignore_ascii_case(key)
@@ -436,11 +437,7 @@ impl AccountStore {
         // 它改的是 id，而 ②③ 的整队要按**旧** id 分组看
         let cline_renamed = Self::migrate_cline_accounts(&mut state);
 
-        if provider_added == 0
-            && assignments.is_empty()
-            && !scope_migrated
-            && cline_renamed == 0
-        {
+        if provider_added == 0 && assignments.is_empty() && !scope_migrated && cline_renamed == 0 {
             return json!({
                 "providerAdded": 0,
                 "priorityChanged": false,
@@ -473,12 +470,19 @@ impl AccountStore {
                 "[Accounts]",
                 &format!(
                     "🔢 优先级已{}（{} 个账号重新编号，转发顺序保持不变）",
-                    if scope_migrated { "合并为全局一条队列" } else { "去重" },
+                    if scope_migrated {
+                        "合并为全局一条队列"
+                    } else {
+                        "去重"
+                    },
                     assignments.len()
                 ),
             );
         } else if scope_migrated {
-            logging::log("[Accounts]", "🔢 优先级已标记为全局一条队列（号码无需调整）");
+            logging::log(
+                "[Accounts]",
+                "🔢 优先级已标记为全局一条队列（号码无需调整）",
+            );
         }
         json!({
             "providerAdded": provider_added,
@@ -592,7 +596,9 @@ impl AccountStore {
                 .iter()
                 .find(|(id, _)| *id == provider)
                 .map(|(_, rank)| *rank)
-                .unwrap_or_else(|| (provider_index(&provider).unwrap_or(usize::MAX / 2) as u32 + 1) * 10)
+                .unwrap_or_else(|| {
+                    (provider_index(&provider).unwrap_or(usize::MAX / 2) as u32 + 1) * 10
+                })
         };
         let mut sorted = state.accounts.clone();
         if legacy_order {
@@ -608,7 +614,10 @@ impl AccountStore {
         // 只回写「确实改变」的账号：原本就没有 priority 字段的账号迁移后依然没有
         // （生效值仍是默认 100），不会凭空多出一批字段
         for assignment in &assignments {
-            if let Some(record) = sorted.iter_mut().find(|record| record.id() == assignment.id) {
+            if let Some(record) = sorted
+                .iter_mut()
+                .find(|record| record.id() == assignment.id)
+            {
                 record.set_priority(assignment.to);
             }
         }

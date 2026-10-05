@@ -134,8 +134,8 @@ fn append_unique(target: &mut Vec<ModelConfig>, incoming: Vec<ModelConfig>) {
 ///
 /// `enable` **显式 false 才跳过**（缺字段当可用）。
 pub fn parse_builtin(body: &str) -> Result<Vec<ModelConfig>, String> {
-    let payload: Value =
-        serde_json::from_str(body).map_err(|error| format!("builtin 目录不是合法 JSON：{error}"))?;
+    let payload: Value = serde_json::from_str(body)
+        .map_err(|error| format!("builtin 目录不是合法 JSON：{error}"))?;
     let entries = payload
         .get("builtinModels")
         .and_then(Value::as_array)
@@ -147,17 +147,32 @@ pub fn parse_builtin(body: &str) -> Result<Vec<ModelConfig>, String> {
         }
         let model_id = text(entry, "model_id");
         let model_name = text(&entry, "model_name");
-        let id = if model_id.is_empty() { model_name.clone() } else { model_id };
+        let id = if model_id.is_empty() {
+            model_name.clone()
+        } else {
+            model_id
+        };
         if id.is_empty() {
             continue;
         }
         models.push(ModelConfig {
-            name: if model_name.is_empty() { id.clone() } else { model_name.clone() },
-            display_name: if model_name.is_empty() { id.clone() } else { model_name },
+            name: if model_name.is_empty() {
+                id.clone()
+            } else {
+                model_name.clone()
+            },
+            display_name: if model_name.is_empty() {
+                id.clone()
+            } else {
+                model_name
+            },
             description: text(entry, "model_desc"),
             context_length: number(entry, "context_window"),
             max_output_tokens: number(entry, "max_tokens"),
-            supports_images: entry.get("supports_images").and_then(Value::as_bool).unwrap_or(false),
+            supports_images: entry
+                .get("supports_images")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             credit_display: credit_display_of(entry),
             id,
             source: ModelSource::Builtin,
@@ -171,16 +186,23 @@ pub fn parse_builtin(body: &str) -> Result<Vec<ModelConfig>, String> {
 /// 两条过滤都照参考实现：`enabled` 显式 false 跳过；**`display_enabled` 缺失也算
 /// 不可见**（`display_enabled == nil → skip`）—— 实测 trial 账号的 detail 就长这样。
 pub fn parse_agent_detail(body: &str, language: &str) -> Result<Vec<ModelConfig>, String> {
-    let payload: Value =
-        serde_json::from_str(body).map_err(|error| format!("agent detail 不是合法 JSON：{error}"))?;
+    let payload: Value = serde_json::from_str(body)
+        .map_err(|error| format!("agent detail 不是合法 JSON：{error}"))?;
     let gpts = payload
         .get("gpts")
         .ok_or_else(|| "agent detail 没有 gpts 目录（该账号可能没有可用模型）".to_string())?;
-    let entries = gpts.get("models").and_then(Value::as_array).cloned().unwrap_or_default();
+    let entries = gpts
+        .get("models")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let english = language.trim().to_ascii_lowercase().starts_with("en");
     let mut models = Vec::new();
     for entry in entries {
-        let parameters = entry.get("model_parameters").cloned().unwrap_or(Value::Null);
+        let parameters = entry
+            .get("model_parameters")
+            .cloned()
+            .unwrap_or(Value::Null);
         if parameters.get("enabled").and_then(Value::as_bool) == Some(false) {
             continue;
         }
@@ -197,18 +219,35 @@ pub fn parse_agent_detail(body: &str, language: &str) -> Result<Vec<ModelConfig>
             continue;
         }
         let description = if english {
-            first_non_empty(&[text(&parameters, "model_desc_en"), text(&parameters, "model_desc")])
+            first_non_empty(&[
+                text(&parameters, "model_desc_en"),
+                text(&parameters, "model_desc"),
+            ])
         } else {
-            first_non_empty(&[text(&parameters, "model_desc"), text(&parameters, "model_desc_en")])
+            first_non_empty(&[
+                text(&parameters, "model_desc"),
+                text(&parameters, "model_desc_en"),
+            ])
         };
         let model_name = text(&entry, "model_name");
         models.push(ModelConfig {
-            name: if model_name.is_empty() { id.clone() } else { model_name.clone() },
-            display_name: if model_name.is_empty() { id.clone() } else { model_name },
+            name: if model_name.is_empty() {
+                id.clone()
+            } else {
+                model_name.clone()
+            },
+            display_name: if model_name.is_empty() {
+                id.clone()
+            } else {
+                model_name
+            },
             description,
             context_length: number(&parameters, "context_window"),
             max_output_tokens: number(&parameters, "max_tokens"),
-            supports_images: parameters.get("supports_images").and_then(Value::as_bool).unwrap_or(false),
+            supports_images: parameters
+                .get("supports_images")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             credit_display: credit_display_of(&entry),
             id,
             source: ModelSource::Agent,
@@ -300,7 +339,10 @@ pub fn parse_benefit(body: &str) -> Result<Vec<ModelConfig>, String> {
 }
 
 /// 合并 agent + builtin（**先 agent**：agent 报过的 id 保留 agent 那条路由）。
-pub fn merge_agent_and_builtin(agent: Vec<ModelConfig>, builtin: Vec<ModelConfig>) -> Vec<ModelConfig> {
+pub fn merge_agent_and_builtin(
+    agent: Vec<ModelConfig>,
+    builtin: Vec<ModelConfig>,
+) -> Vec<ModelConfig> {
     let mut merged = agent;
     append_unique(&mut merged, builtin);
     merged
@@ -337,7 +379,11 @@ pub async fn discover(endpoints: &CatalogEndpoints<'_>, credential: &Credential)
         Ok(ids) => {
             for id in ids {
                 match fetch_signed(
-                    &format!("{}/v1/agent-center/agents/detail?agent_id={}", trim(endpoints.base_url), form_escape(&id)),
+                    &format!(
+                        "{}/v1/agent-center/agents/detail?agent_id={}",
+                        trim(endpoints.base_url),
+                        form_escape(&id)
+                    ),
                     "AgentCenter",
                     endpoints,
                     credential,
@@ -380,7 +426,10 @@ pub async fn discover(endpoints: &CatalogEndpoints<'_>, credential: &Credential)
     };
     let mut models = merge_agent_and_builtin(agent_models, builtin);
 
-    if let Some(gateway) = endpoints.benefit_gateway_url.filter(|url| !url.trim().is_empty()) {
+    if let Some(gateway) = endpoints
+        .benefit_gateway_url
+        .filter(|url| !url.trim().is_empty())
+    {
         match fetch_benefit(endpoints, credential, gateway).await {
             Ok(Some(benefit)) => models = merge_benefit(models, benefit),
             Ok(None) => {}
@@ -388,14 +437,19 @@ pub async fn discover(endpoints: &CatalogEndpoints<'_>, credential: &Credential)
         }
     }
     if models.is_empty() {
-        catalog.warnings.push("该账号没有返回任何可用模型".to_string());
+        catalog
+            .warnings
+            .push("该账号没有返回任何可用模型".to_string());
     }
     catalog.models = models;
     catalog
 }
 
 /// agent id 列表（分页，照参考实现的 100/页、最多 100 页）。
-async fn fetch_agent_ids(endpoints: &CatalogEndpoints<'_>, credential: &Credential) -> Result<Vec<String>, String> {
+async fn fetch_agent_ids(
+    endpoints: &CatalogEndpoints<'_>,
+    credential: &Credential,
+) -> Result<Vec<String>, String> {
     const PAGE: usize = 100;
     let mut ids = Vec::new();
     for page in 0..100usize {
@@ -405,7 +459,10 @@ async fn fetch_agent_ids(endpoints: &CatalogEndpoints<'_>, credential: &Credenti
             form_escape(endpoints.plugin_version)
         );
         let body = fetch_signed(
-            &format!("{}/v1/agent-center/agents/useragents?{query}", trim(endpoints.base_url)),
+            &format!(
+                "{}/v1/agent-center/agents/useragents?{query}",
+                trim(endpoints.base_url)
+            ),
             "AgentCenter",
             endpoints,
             credential,
@@ -475,22 +532,34 @@ async fn fetch_signed(
         ("Content-Type".to_string(), "application/json".to_string()),
         ("Accept".to_string(), "application/json".to_string()),
         ("X-Language".to_string(), endpoints.language.to_string()),
-        ("plugin-name".to_string(), super::chat::DEFAULT_PLUGIN_NAME.to_string()),
-        ("plugin-version".to_string(), endpoints.plugin_version.to_string()),
-        ("client_version".to_string(), format!("Vscode_{}", endpoints.plugin_version)),
+        (
+            "plugin-name".to_string(),
+            super::chat::DEFAULT_PLUGIN_NAME.to_string(),
+        ),
+        (
+            "plugin-version".to_string(),
+            endpoints.plugin_version.to_string(),
+        ),
+        (
+            "client_version".to_string(),
+            format!("Vscode_{}", endpoints.plugin_version),
+        ),
         ("is_confidential".to_string(), "false".to_string()),
     ];
     if !agent_type.is_empty() {
         headers.push(("Agent-Type".to_string(), agent_type.to_string()));
     }
     let signed = signer::sign("GET", url, &headers, b"", &signing, host_signed)?;
-    let mut request = egress::client_for(None).get(url).timeout(Duration::from_secs(30));
+    let mut request = egress::client_for(None)
+        .get(url)
+        .timeout(Duration::from_secs(30));
     for (name, value) in signed {
         request = request.header(name.as_str(), value.as_str());
     }
-    let response = request.send().await.map_err(|error| {
-        format!("请求失败：{}", egress::describe_error_detail(&error))
-    })?;
+    let response = request
+        .send()
+        .await
+        .map_err(|error| format!("请求失败：{}", egress::describe_error_detail(&error)))?;
     let status = response.status().as_u16();
     let body = response.text().await.unwrap_or_default();
     if status != 200 {
@@ -532,7 +601,8 @@ fn credit_display_of(entry: &Value) -> String {
     };
     let mut fallback = String::new();
     for tier in tiers {
-        if matches!(tier.get("status").and_then(Value::as_str), Some(value) if value.trim() != "0") {
+        if matches!(tier.get("status").and_then(Value::as_str), Some(value) if value.trim() != "0")
+        {
             continue;
         }
         let display = text(tier, "ratio_display");
@@ -583,7 +653,8 @@ fn form_escape(value: &str) -> String {
 /// 该账号一个模型都没返回时，缓存就是空的 —— `list_models()` 返回空清单，
 /// 上层据此报"账号没有可用模型"。**绝不**塞静态兜底：那会广告出一批
 /// "列出来但一调就 400"的幽灵模型（§3.4 的坑，CPA 侧删掉静态列表才治好）。
-static CACHED: std::sync::OnceLock<std::sync::Mutex<Option<CachedCatalog>>> = std::sync::OnceLock::new();
+static CACHED: std::sync::OnceLock<std::sync::Mutex<Option<CachedCatalog>>> =
+    std::sync::OnceLock::new();
 
 struct CachedCatalog {
     catalog: Catalog,
@@ -608,10 +679,19 @@ pub fn store_catalog(catalog: Catalog) -> Catalog {
     let now = crate::server::logging::now_ms();
     let entries = entries_of(&catalog);
     {
-        let mut slot = cache_slot().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        *slot = Some(CachedCatalog { catalog: catalog.clone(), fetched_at_ms: now });
+        let mut slot = cache_slot()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *slot = Some(CachedCatalog {
+            catalog: catalog.clone(),
+            fetched_at_ms: now,
+        });
     }
-    crate::server::core::providers::catalog_cache::save(crate::server::core::providers::catalog_cache::SCOPE_CODEARTS, &entries, now);
+    crate::server::core::providers::catalog_cache::save(
+        crate::server::core::providers::catalog_cache::SCOPE_CODEARTS,
+        &entries,
+        now,
+    );
     catalog
 }
 
@@ -625,7 +705,9 @@ pub fn store_catalog(catalog: Catalog) -> Catalog {
 /// 才能恢复，而网关看起来完全正常。审计抓出来的，测试也补在文件末尾。
 pub fn cached_catalog() -> Option<Catalog> {
     let from_memory = {
-        let slot = cache_slot().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let slot = cache_slot()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         slot.as_ref().map(|entry| entry.catalog.clone())
     };
     from_memory.or_else(catalog_from_persisted)
@@ -636,10 +718,19 @@ pub fn cached_catalog() -> Option<Catalog> {
 /// 只重建转发与广告真正要用的字段；`source` 认不出来就整条丢掉而不是猜一个 ——
 /// 福利模型要不要带 `maas_type` 头**由这个字段决定**，猜错等于发一个上游不认的请求。
 fn catalog_from_persisted() -> Option<Catalog> {
-    let entries = crate::server::core::providers::catalog_cache::load(crate::server::core::providers::catalog_cache::SCOPE_CODEARTS).map(|cached| cached.models)?;
+    let entries = crate::server::core::providers::catalog_cache::load(
+        crate::server::core::providers::catalog_cache::SCOPE_CODEARTS,
+    )
+    .map(|cached| cached.models)?;
     let mut catalog = Catalog::default();
     for entry in entries {
-        let text = |key: &str| entry.get(key).and_then(Value::as_str).unwrap_or("").to_string();
+        let text = |key: &str| {
+            entry
+                .get(key)
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string()
+        };
         let id = text("id");
         if id.is_empty() {
             continue;
@@ -648,24 +739,43 @@ fn catalog_from_persisted() -> Option<Catalog> {
             continue;
         };
         catalog.models.push(ModelConfig {
-            display_name: if text("name").is_empty() { id.clone() } else { text("name") },
+            display_name: if text("name").is_empty() {
+                id.clone()
+            } else {
+                text("name")
+            },
             description: text("description"),
-            context_length: entry.get("contextWindow").and_then(Value::as_i64).unwrap_or(0),
-            max_output_tokens: entry.get("maxOutputTokens").and_then(Value::as_i64).unwrap_or(0),
-            supports_images: entry.get("supportsImages").and_then(Value::as_bool).unwrap_or(false),
+            context_length: entry
+                .get("contextWindow")
+                .and_then(Value::as_i64)
+                .unwrap_or(0),
+            max_output_tokens: entry
+                .get("maxOutputTokens")
+                .and_then(Value::as_i64)
+                .unwrap_or(0),
+            supports_images: entry
+                .get("supportsImages")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             credit_display: text("credits"),
             name: id.clone(),
             source,
             id,
         });
     }
-    if catalog.models.is_empty() { None } else { Some(catalog) }
+    if catalog.models.is_empty() {
+        None
+    } else {
+        Some(catalog)
+    }
 }
 
 /// 只给测试用：把内存槽清空，模拟进程重启（持久化那份不动）。
 #[cfg(test)]
 pub(crate) fn forget_memory_cache_for_tests() {
-    let mut slot = cache_slot().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut slot = cache_slot()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     *slot = None;
 }
 
@@ -674,7 +784,11 @@ pub(crate) fn forget_memory_cache_for_tests() {
 /// 正常 5 分钟；**带告警时 30 秒** —— 少一个源时更该快点重试，而不是把不完整的
 /// 清单钉住五分钟。
 pub fn ttl_for(catalog: &Catalog) -> i64 {
-    if catalog.warnings.is_empty() { CACHE_TTL_MS } else { CACHE_TTL_WARNING_MS }
+    if catalog.warnings.is_empty() {
+        CACHE_TTL_MS
+    } else {
+        CACHE_TTL_WARNING_MS
+    }
 }
 
 /// 是否远程刷出来过（界面「来源」列与「更新日期」列要区分"远程拿到的"与
@@ -685,13 +799,17 @@ pub fn remote_refreshed() -> bool {
 
 /// 上一次成功刷新的时刻（毫秒）；从没刷过回 0（与其余十家同一口径）。
 pub fn last_refreshed_at() -> i64 {
-    let slot = cache_slot().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let slot = cache_slot()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     slot.as_ref().map(|entry| entry.fetched_at_ms).unwrap_or(0)
 }
 
 /// 缓存是否已过期（刷新链路据此决定要不要再拉一次）。
 pub fn cache_expired(now_ms: i64) -> bool {
-    let slot = cache_slot().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let slot = cache_slot()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     match slot.as_ref() {
         None => true,
         Some(entry) => now_ms - entry.fetched_at_ms >= ttl_for(&entry.catalog),
@@ -700,9 +818,11 @@ pub fn cache_expired(now_ms: i64) -> bool {
 
 /// 从持久化缓存读回上次的清单（内存缓存为空时的回落）。
 fn persisted_entries() -> Vec<Value> {
-    crate::server::core::providers::catalog_cache::load(crate::server::core::providers::catalog_cache::SCOPE_CODEARTS)
-        .map(|cached| cached.models)
-        .unwrap_or_default()
+    crate::server::core::providers::catalog_cache::load(
+        crate::server::core::providers::catalog_cache::SCOPE_CODEARTS,
+    )
+    .map(|cached| cached.models)
+    .unwrap_or_default()
 }
 
 /// 缓存清单转成适配器契约要的条目形状（camelCase，与 accio 的 `list()` 一致）。
@@ -726,26 +846,50 @@ fn entries_of(catalog: &Catalog) -> Vec<Value> {
         .map(|model| {
             let mut entry = serde_json::Map::new();
             entry.insert("id".to_string(), Value::String(model.id.clone()));
-            entry.insert("name".to_string(), Value::String(model.display_name.clone()));
+            entry.insert(
+                "name".to_string(),
+                Value::String(model.display_name.clone()),
+            );
             entry.insert("providerModel".to_string(), Value::String(model.id.clone()));
-            entry.insert("supportsImages".to_string(), Value::Bool(model.supports_images));
+            entry.insert(
+                "supportsImages".to_string(),
+                Value::Bool(model.supports_images),
+            );
             entry.insert("supportsToolCall".to_string(), Value::Bool(true));
-            entry.insert("source".to_string(), Value::String(model.source.as_str().to_string()));
-            entry.insert("benefit".to_string(), Value::Bool(model.source.needs_benefit_header()));
+            entry.insert(
+                "source".to_string(),
+                Value::String(model.source.as_str().to_string()),
+            );
+            entry.insert(
+                "benefit".to_string(),
+                Value::Bool(model.source.needs_benefit_header()),
+            );
             if model.context_length > 0 {
-                entry.insert("contextWindow".to_string(), Value::from(model.context_length));
+                entry.insert(
+                    "contextWindow".to_string(),
+                    Value::from(model.context_length),
+                );
             }
             if model.max_output_tokens > 0 {
-                entry.insert("maxOutputTokens".to_string(), Value::from(model.max_output_tokens));
+                entry.insert(
+                    "maxOutputTokens".to_string(),
+                    Value::from(model.max_output_tokens),
+                );
             }
             if !model.description.is_empty() {
-                entry.insert("description".to_string(), Value::String(model.description.clone()));
+                entry.insert(
+                    "description".to_string(),
+                    Value::String(model.description.clone()),
+                );
             }
             // 倍率列：`credits` 是本仓跨家共用的键（前端 `formatCredits` 认 `x…` 形态，
             // 认不出就原样显示），上游给的 `0.7x` 属于后者 —— 与 AutoClaw 的档位文案
             // 走同一条渲染分支。空串不写这个键，界面显示 `—`（"没读到"而不是"0 倍"）。
             if !model.credit_display.is_empty() {
-                entry.insert("credits".to_string(), Value::String(model.credit_display.clone()));
+                entry.insert(
+                    "credits".to_string(),
+                    Value::String(model.credit_display.clone()),
+                );
             }
             Value::Object(entry)
         })
@@ -754,7 +898,12 @@ fn entries_of(catalog: &Catalog) -> Vec<Value> {
 
 /// 把目录清单转成给编排层的 `GatewayError`（模型不在清单里时用）。
 pub fn unknown_model_error(requested: &str, catalog: &Catalog) -> GatewayError {
-    let mut hint: Vec<&str> = catalog.models.iter().take(6).map(|model| model.id.as_str()).collect();
+    let mut hint: Vec<&str> = catalog
+        .models
+        .iter()
+        .take(6)
+        .map(|model| model.id.as_str())
+        .collect();
     if catalog.models.len() > hint.len() {
         hint.push("…");
     }
@@ -790,7 +939,10 @@ mod tests {
         let ids: Vec<&str> = models.iter().map(|model| model.id.as_str()).collect();
         assert!(ids.contains(&"GLM-5.2"));
         // 多模态只在这个源里出现 —— 这条是"别丢 builtin 源"的实证
-        let vision = models.iter().find(|model| model.id == "Qwen3-VL-235B").expect("多模态模型应当在内置源");
+        let vision = models
+            .iter()
+            .find(|model| model.id == "Qwen3-VL-235B")
+            .expect("多模态模型应当在内置源");
         assert!(vision.supports_images, "Qwen3-VL-235B 必须标成支持图片");
         assert_eq!(ModelSource::Builtin, vision.source);
         let glm = models.iter().find(|model| model.id == "GLM-5.2").unwrap();
@@ -806,12 +958,15 @@ mod tests {
 
     #[test]
     fn agent_detail_source_parses_the_real_response() {
-        let models = parse_agent_detail(AGENT_DETAIL, "en-us").expect("真实 agent detail 应当能解析");
+        let models =
+            parse_agent_detail(AGENT_DETAIL, "en-us").expect("真实 agent detail 应当能解析");
         let ids: Vec<&str> = models.iter().map(|model| model.id.as_str()).collect();
         assert_eq!(4, ids.len(), "实测该账号 4 个可见模型：{ids:?}");
         assert!(ids.contains(&"GLM-5.2"));
         assert!(ids.contains(&"openpangu-2.0-pro"));
-        assert!(models.iter().all(|model| model.source == ModelSource::Agent));
+        assert!(models
+            .iter()
+            .all(|model| model.source == ModelSource::Agent));
         // `model_id` 在顶层是 null，靠 model_alias 与嵌套 model_parameters.model_id 兜住
         assert!(models.iter().all(|model| !model.id.is_empty()));
     }
@@ -823,7 +978,8 @@ mod tests {
     /// 而不是 0 —— 0 在倍率列的语义是"免费"，那是编出来的。
     #[test]
     fn the_multiplier_column_comes_from_ratio_display() {
-        let models = parse_agent_detail(AGENT_DETAIL, "en-us").expect("真实 agent detail 应当能解析");
+        let models =
+            parse_agent_detail(AGENT_DETAIL, "en-us").expect("真实 agent detail 应当能解析");
         let display_of = |id: &str| {
             models
                 .iter()
@@ -831,15 +987,27 @@ mod tests {
                 .map(|model| model.credit_display.as_str())
                 .unwrap_or("<没有这一条>")
         };
-        assert_eq!("0.7x", display_of("GLM-5.2"), "上游 ratio 是 0.05，倍率徽章是 0.7x —— 两个量纲");
+        assert_eq!(
+            "0.7x",
+            display_of("GLM-5.2"),
+            "上游 ratio 是 0.05，倍率徽章是 0.7x —— 两个量纲"
+        );
         assert_eq!("0.32x", display_of("openpangu-2.0-flash"));
         assert_eq!("0.7x", display_of("openpangu-2.0-pro"), "分档模型取基础档");
 
         let builtin = parse_builtin(BUILTIN).expect("真实 builtin 响应应当能解析");
-        let vision = builtin.iter().find(|model| model.id == "Qwen3-VL-235B").expect("多模态条目应当在");
-        assert!(vision.credit_display.is_empty(), "该模型上游根本没给 credit 数组，不能凭空写 0");
+        let vision = builtin
+            .iter()
+            .find(|model| model.id == "Qwen3-VL-235B")
+            .expect("多模态条目应当在");
         assert!(
-            builtin.iter().any(|model| model.id == "GLM-5.2" && model.credit_display == "0.7x"),
+            vision.credit_display.is_empty(),
+            "该模型上游根本没给 credit 数组，不能凭空写 0"
+        );
+        assert!(
+            builtin
+                .iter()
+                .any(|model| model.id == "GLM-5.2" && model.credit_display == "0.7x"),
             "两个源都带 credit 时都要解析出来"
         );
     }
@@ -859,12 +1027,30 @@ mod tests {
              "credit":[{"input_from":32001,"ratio_display":"1.8x","status":"0"}]}
         ]}}"#;
         let models = parse_agent_detail(body, "en-us").unwrap();
-        let display_of = |id: &str| models.iter().find(|m| m.id == id).map(|m| m.credit_display.as_str()).unwrap();
-        assert_eq!("0.5x", display_of("base-first"), "两条档都要，取 input_from==0 那条（数组顺序不可信）");
+        let display_of = |id: &str| {
+            models
+                .iter()
+                .find(|m| m.id == id)
+                .map(|m| m.credit_display.as_str())
+                .unwrap()
+        };
+        assert_eq!(
+            "0.5x",
+            display_of("base-first"),
+            "两条档都要，取 input_from==0 那条（数组顺序不可信）"
+        );
         assert_eq!("0.3x", display_of("only-off"), "status 非 0 的档跳过");
-        assert_eq!("1.2x", display_of("no-status"), "缺 status 当生效，别因为上游删字段就整列空掉");
+        assert_eq!(
+            "1.2x",
+            display_of("no-status"),
+            "缺 status 当生效，别因为上游删字段就整列空掉"
+        );
         assert_eq!("", display_of("no-credit"), "没有 credit = 没读到");
-        assert_eq!("1.8x", display_of("upper-only"), "只有高档时退回它，而不是回空");
+        assert_eq!(
+            "1.8x",
+            display_of("upper-only"),
+            "只有高档时退回它，而不是回空"
+        );
     }
 
     /// 两条过滤规则：`enabled == false` 与 **`display_enabled` 缺失**都要跳过。
@@ -889,7 +1075,8 @@ mod tests {
     #[test]
     fn a_detail_without_models_reports_no_catalog_instead_of_inventing() {
         let empty = r#"{"gpts":{"prompts":[]}}"#;
-        let models = parse_agent_detail(empty, "en-us").expect("gpts 存在但没有 models 数组 → 空清单，不是错误");
+        let models = parse_agent_detail(empty, "en-us")
+            .expect("gpts 存在但没有 models 数组 → 空清单，不是错误");
         assert!(models.is_empty());
         // 连 gpts 都没有 → 明确报错（调用方据此记 warning，而不是兜底硬编码）
         assert!(parse_agent_detail(r#"{"code":"0"}"#, "en-us").is_err());
@@ -908,19 +1095,45 @@ mod tests {
     fn benefit_source_reads_the_envelope_code_not_the_http_status() {
         let models = parse_benefit(BENEFIT_CONFIG).expect("真实福利目录应当能解析");
         let ids: Vec<&str> = models.iter().map(|model| model.id.as_str()).collect();
-        assert_eq!(vec!["deepseek-v4-flash-0731", "glm-5.3-flash", "deepseek-v4-pro-0813", "deepseek-v4.1-flash"], ids, "按 sort 升序");
-        assert!(models.iter().all(|model| model.source == ModelSource::Benefit));
+        assert_eq!(
+            vec![
+                "deepseek-v4-flash-0731",
+                "glm-5.3-flash",
+                "deepseek-v4-pro-0813",
+                "deepseek-v4.1-flash"
+            ],
+            ids,
+            "按 sort 升序"
+        );
+        assert!(models
+            .iter()
+            .all(|model| model.source == ModelSource::Benefit));
         // error_code 不是 0000 → 失败（即使 HTTP 是 200）
-        assert!(parse_benefit(r#"{"error_code":"9999","result":{"models":[{"model_id":"x"}]}}"#).is_err());
-        assert!(parse_benefit(r#"{"error_code":"0000"}"#).is_err(), "没有 result 也算失败");
-        assert!(parse_benefit(r#"{"error_code":"0000","result":{"models":[]}}"#).is_err(), "空清单算失败");
+        assert!(
+            parse_benefit(r#"{"error_code":"9999","result":{"models":[{"model_id":"x"}]}}"#)
+                .is_err()
+        );
+        assert!(
+            parse_benefit(r#"{"error_code":"0000"}"#).is_err(),
+            "没有 result 也算失败"
+        );
+        assert!(
+            parse_benefit(r#"{"error_code":"0000","result":{"models":[]}}"#).is_err(),
+            "空清单算失败"
+        );
     }
 
     #[test]
     fn benefit_gate_reports_absence_without_erroring() {
-        assert!(parse_benefit_gate(BENEFIT_GATE).unwrap(), "实测这个部署开着福利网关");
+        assert!(
+            parse_benefit_gate(BENEFIT_GATE).unwrap(),
+            "实测这个部署开着福利网关"
+        );
         assert!(!parse_benefit_gate(r#"{"enabled":false}"#).unwrap());
-        assert!(parse_benefit_gate(r#"{}"#).is_err(), "没有 enabled 字段是错误");
+        assert!(
+            parse_benefit_gate(r#"{}"#).is_err(),
+            "没有 enabled 字段是错误"
+        );
     }
 
     /// 三源合并：先 agent、再 builtin、最后 benefit，按 id 先到先得。
@@ -930,26 +1143,60 @@ mod tests {
         let agent = parse_agent_detail(AGENT_DETAIL, "en-us").unwrap();
         let builtin = parse_builtin(BUILTIN).unwrap();
         let merged = merge_agent_and_builtin(agent, builtin);
-        assert_eq!(6, merged.len(), "4 个 agent + builtin 补 2 个（两个多模态）");
+        assert_eq!(
+            6,
+            merged.len(),
+            "4 个 agent + builtin 补 2 个（两个多模态）"
+        );
         // agent 报过的 GLM-5.2 保留 agent 路由，不能被 builtin 覆盖
         let glm = merged.iter().find(|model| model.id == "GLM-5.2").unwrap();
         assert_eq!(ModelSource::Agent, glm.source, "先到先得：agent 的路由优先");
         // 多模态来自 builtin
-        let vision = merged.iter().find(|model| model.id == "Qwen3-VL-235B").unwrap();
+        let vision = merged
+            .iter()
+            .find(|model| model.id == "Qwen3-VL-235B")
+            .unwrap();
         assert_eq!(ModelSource::Builtin, vision.source);
         assert!(vision.supports_images);
 
         // 上下文窗口来自 agent 源（builtin 不带这两个字段）
-        assert!(glm.context_length > 0 && glm.max_output_tokens > 0, "合并后 GLM-5.2 应当带上 agent 源的上下文窗口");
+        assert!(
+            glm.context_length > 0 && glm.max_output_tokens > 0,
+            "合并后 GLM-5.2 应当带上 agent 源的上下文窗口"
+        );
 
         let full = merge_benefit(merged, parse_benefit(BENEFIT_CONFIG).unwrap());
-        assert_eq!(10, full.len(), "再并入 4 个福利模型 = 10，与 CPA 广告的数量一致");
-        let benefit = full.iter().find(|model| model.id == "glm-5.3-flash").unwrap();
-        assert!(benefit.source.needs_benefit_header(), "福利模型要带 maas_type");
-        assert!(!full.iter().find(|model| model.id == "GLM-5.2").unwrap().source.needs_benefit_header());
+        assert_eq!(
+            10,
+            full.len(),
+            "再并入 4 个福利模型 = 10，与 CPA 广告的数量一致"
+        );
+        let benefit = full
+            .iter()
+            .find(|model| model.id == "glm-5.3-flash")
+            .unwrap();
+        assert!(
+            benefit.source.needs_benefit_header(),
+            "福利模型要带 maas_type"
+        );
+        assert!(!full
+            .iter()
+            .find(|model| model.id == "GLM-5.2")
+            .unwrap()
+            .source
+            .needs_benefit_header());
         // 倍率随条目一起活过合并；福利源没有 credit，保持空串
-        assert_eq!("0.7x", full.iter().find(|model| model.id == "GLM-5.2").unwrap().credit_display);
-        assert!(benefit.credit_display.is_empty(), "福利网关不给倍率，界面那列就该是 —");
+        assert_eq!(
+            "0.7x",
+            full.iter()
+                .find(|model| model.id == "GLM-5.2")
+                .unwrap()
+                .credit_display
+        );
+        assert!(
+            benefit.credit_display.is_empty(),
+            "福利网关不给倍率，界面那列就该是 —"
+        );
     }
 
     /// 大小写归一：客户端习惯小写，上游真名是 `GLM-5.2`。
@@ -959,9 +1206,15 @@ mod tests {
             models: parse_builtin(BUILTIN).unwrap(),
             warnings: Vec::new(),
         };
-        assert_eq!("GLM-5.2", catalog.resolve("glm-5.2").expect("小写也要能找到").id);
+        assert_eq!(
+            "GLM-5.2",
+            catalog.resolve("glm-5.2").expect("小写也要能找到").id
+        );
         assert_eq!("GLM-5.2", catalog.resolve("GLM-5.2").unwrap().id);
-        assert_eq!("qwen3-vl-235b", catalog.resolve("qwen3-vl-235b").unwrap().id.to_lowercase());
+        assert_eq!(
+            "qwen3-vl-235b",
+            catalog.resolve("qwen3-vl-235b").unwrap().id.to_lowercase()
+        );
         assert!(catalog.resolve("not-a-model").is_none());
         assert!(!catalog.contains("not-a-model"));
         // 不在清单里时的报错要给出可用清单的一截，便于排障
@@ -978,7 +1231,9 @@ mod tests {
     /// 倍率走共用的 `credits` 键（空串不写 = 界面 `—`，而不是"0 倍"）。
     #[test]
     fn cache_to_list_uses_the_adapter_entry_shape() {
-        let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = CACHE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let catalog = Catalog {
             models: vec![
                 ModelConfig {
@@ -1017,7 +1272,10 @@ mod tests {
         // 倍率列：非空才写 `credits`（前端 `formatCredits` 认不出 `0.7x` 这种形态时
         // 会原样显示，与 AutoClaw 的「低/中/高」同一条分支）
         assert_eq!("0.7x", entries[0]["credits"]);
-        assert!(entries[1].get("credits").is_none(), "上游没给倍率就不要编一个 0");
+        assert!(
+            entries[1].get("credits").is_none(),
+            "上游没给倍率就不要编一个 0"
+        );
         // 0 不写这个键（"未知" 与 "没有上下文" 含义不同）
         assert!(entries[1].get("contextWindow").is_none());
         assert_eq!(true, entries[1]["supportsImages"]);
@@ -1027,7 +1285,9 @@ mod tests {
     /// 福利模型在条目里要标出来（上层据此决定注入 `maas_type`）。
     #[test]
     fn benefit_models_are_flagged_in_the_entry() {
-        let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = CACHE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store_catalog(Catalog {
             models: parse_benefit(BENEFIT_CONFIG).unwrap(),
             warnings: Vec::new(),
@@ -1040,8 +1300,14 @@ mod tests {
     /// TTL 规则用纯函数测 —— 进程级缓存被多个测试共用，拿它做时间断言会互相覆盖。
     #[test]
     fn cache_ttl_shrinks_when_there_are_warnings() {
-        let clean = Catalog { models: Vec::new(), warnings: Vec::new() };
-        let warned = Catalog { models: Vec::new(), warnings: vec!["少了一个源".to_string()] };
+        let clean = Catalog {
+            models: Vec::new(),
+            warnings: Vec::new(),
+        };
+        let warned = Catalog {
+            models: Vec::new(),
+            warnings: vec!["少了一个源".to_string()],
+        };
         assert_eq!(CACHE_TTL_MS, ttl_for(&clean));
         assert_eq!(CACHE_TTL_WARNING_MS, ttl_for(&warned));
         assert!(ttl_for(&warned) < ttl_for(&clean), "带告警必须更快重试");
@@ -1063,11 +1329,20 @@ mod tests {
         };
         let merged = merge_agent_and_builtin(
             vec![make("A", ModelSource::Agent), make("B", ModelSource::Agent)],
-            vec![make("B", ModelSource::Builtin), make("C", ModelSource::Builtin)],
+            vec![
+                make("B", ModelSource::Builtin),
+                make("C", ModelSource::Builtin),
+            ],
         );
         assert_eq!(3, merged.len());
-        assert_eq!(ModelSource::Agent, merged.iter().find(|m| m.id == "B").unwrap().source);
-        assert_eq!(ModelSource::Builtin, merged.iter().find(|m| m.id == "C").unwrap().source);
+        assert_eq!(
+            ModelSource::Agent,
+            merged.iter().find(|m| m.id == "B").unwrap().source
+        );
+        assert_eq!(
+            ModelSource::Builtin,
+            merged.iter().find(|m| m.id == "C").unwrap().source
+        );
     }
 }
 
@@ -1085,9 +1360,12 @@ mod restart_tests {
     fn the_forward_path_sees_the_persisted_catalog_after_a_restart() {
         static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let id = SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let dir = std::env::temp_dir().join(format!("codearts-catalog-{}-{id}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("codearts-catalog-{}-{id}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        catalog_cache::install(Some(Db::open(&dir.join("agent2api.db")).expect("临时库应当能建起来")));
+        catalog_cache::install(Some(
+            Db::open(&dir.join("agent2api.db")).expect("临时库应当能建起来"),
+        ));
 
         let catalog = Catalog {
             models: vec![
@@ -1124,14 +1402,23 @@ mod restart_tests {
         assert!(cache_slot().lock().unwrap().is_none(), "内存槽应当已空");
         let restored = cached_catalog().expect("转发路径必须能从持久化那份重建");
         assert_eq!(2, restored.models.len());
-        let glm = restored.resolve("glm-5.2").expect("大小写归一后仍要能解析出来");
+        let glm = restored
+            .resolve("glm-5.2")
+            .expect("大小写归一后仍要能解析出来");
         assert_eq!(ModelSource::Agent, glm.source);
         assert_eq!(200_000, glm.context_length, "上下文长度不能在建回来时丢掉");
         let vl = restored.resolve("Qwen3-VL-235B").expect("内置源要在");
-        assert!(vl.supports_images, "多模态位只有 builtin 源有，重建时丢了就等于关掉视觉");
+        assert!(
+            vl.supports_images,
+            "多模态位只有 builtin 源有，重建时丢了就等于关掉视觉"
+        );
         assert!(!vl.source.needs_benefit_header());
         // `list()` 与转发读的是同一份真相 —— 这条断言就是当初那个 bug 的反面
-        assert_eq!(restored.models.len(), list().len(), "广告与转发可解析的集合必须一致");
+        assert_eq!(
+            restored.models.len(),
+            list().len(),
+            "广告与转发可解析的集合必须一致"
+        );
     }
 
     #[test]
@@ -1160,7 +1447,8 @@ mod restart_tests {
         let entries = entries_of(&catalog);
         let mut out = Catalog::default();
         for entry in entries {
-            let source = ModelSource::from_label(entry["source"].as_str().unwrap_or("")).expect("自己写的标签要能读回");
+            let source = ModelSource::from_label(entry["source"].as_str().unwrap_or(""))
+                .expect("自己写的标签要能读回");
             out.models.push(ModelConfig {
                 id: "m".into(),
                 name: "m".into(),

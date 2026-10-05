@@ -122,8 +122,7 @@ impl AccountStore {
         };
 
         let _guard = self.guard();
-        let id = account_id_for(&api_key)
-            .map_err(|error| AccountStoreError::new(error, 500))?;
+        let id = account_id_for(&api_key).map_err(|error| AccountStoreError::new(error, 500))?;
         // 撞 id 保护（与 cline 同一考虑）：hash 空间巧合或手改数据都会撞上
         // 别家的记录，覆写会把那条记录的凭证一起弄丢
         let existing = self.record_by_id(&_guard, &id);
@@ -218,7 +217,12 @@ impl AccountStore {
         fields.insert("priority".to_string(), Value::from(priority));
         fields.insert(
             "enabled".to_string(),
-            Value::Bool(existing.as_ref().map(StoredAccount::enabled).unwrap_or(true)),
+            Value::Bool(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::enabled)
+                    .unwrap_or(true),
+            ),
         );
         fields.insert(
             "addedAt".to_string(),
@@ -241,10 +245,13 @@ impl AccountStore {
             &format!(
                 "{} 自定义账号{}: {}（{}）",
                 if existing.is_some() { "🔄" } else { "✅" },
-                if existing.is_some() { "已更新" } else { "已添加" },
+                if existing.is_some() {
+                    "已更新"
+                } else {
+                    "已添加"
+                },
                 record_name,
-                custom_providers::label_of(provider_id)
-                    .unwrap_or_else(|| provider_id.to_string()),
+                custom_providers::label_of(provider_id).unwrap_or_else(|| provider_id.to_string()),
             ),
         );
         Ok(self.public_account(&saved))

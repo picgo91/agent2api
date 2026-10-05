@@ -508,7 +508,12 @@ impl AccountStore {
         record.insert("priority".to_string(), Value::from(priority));
         record.insert(
             "enabled".to_string(),
-            Value::Bool(existing.as_ref().map(StoredAccount::enabled).unwrap_or(true)),
+            Value::Bool(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::enabled)
+                    .unwrap_or(true),
+            ),
         );
         let is_new = existing.is_none();
         record.insert(
@@ -631,15 +636,10 @@ impl AccountStore {
             return Ok(CredentialWrite::Stale);
         };
         if record.is_desktop() {
-            return Err(
-                "桌面端账号的凭证不落盘（实时读 auth.json 并解密），无需回写".to_string(),
-            );
+            return Err("桌面端账号的凭证不落盘（实时读 auth.json 并解密），无需回写".to_string());
         }
         if record.provider() != autoclaw_id_for(region) {
-            return Err(format!(
-                "账号 {id} 不是 AutoClaw {}账号",
-                region.label()
-            ));
+            return Err(format!("账号 {id} 不是 AutoClaw {}账号", region.label()));
         }
         // 比较：记录里此刻的凭证必须仍是刷新前那份
         if record.access_token() != expected_access_token
@@ -649,10 +649,7 @@ impl AccountStore {
         }
         if !access_token.is_empty() {
             record.set("accessToken", Value::String(access_token.to_string()));
-            record.set(
-                "tokenTail",
-                Value::String(token_tail_of(access_token)),
-            );
+            record.set("tokenTail", Value::String(token_tail_of(access_token)));
         }
         if !refresh_token.is_empty() {
             record.set("refreshToken", Value::String(refresh_token.to_string()));
@@ -732,9 +729,7 @@ impl AccountStore {
     /// 文件被删、本机不是 Windows 且没有 openclaw.json）时回落记录里的存量值 ——
     /// 于是「登录态消失」表现为字段变空 + `available: false`，而不是整条记录消失。
     pub fn to_autoclaw_public_account(&self, record: &StoredAccount) -> Value {
-        let proxy = crate::server::core::proxies::describe_account_proxy(Some(
-            &record.proxy(),
-        ));
+        let proxy = crate::server::core::proxies::describe_account_proxy(Some(&record.proxy()));
         let stored_tail = record
             .get("tokenTail")
             .and_then(Value::as_str)

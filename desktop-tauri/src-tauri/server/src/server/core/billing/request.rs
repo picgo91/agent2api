@@ -157,10 +157,17 @@ pub(super) fn build_headers(session: &Value, extra: &[(String, String)]) -> Vec<
     let mut headers: Vec<(String, String)> = vec![
         ("Accept".to_string(), "application/json".to_string()),
         ("Content-Type".to_string(), "application/json".to_string()),
-        ("Authorization".to_string(), format!("Bearer {access_token}")),
+        (
+            "Authorization".to_string(),
+            format!("Bearer {access_token}"),
+        ),
         (
             "X-User-Id".to_string(),
-            account.get("uid").and_then(Value::as_str).unwrap_or("").to_string(),
+            account
+                .get("uid")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
         ),
     ];
     // extra 在 Node 里是 `...extra` 插在 X-User-Id 之后的展开，
@@ -400,12 +407,23 @@ pub(super) fn normalize_checkin(data: &Value) -> Value {
     // 累计签到天数
     result.insert(
         "totalDays".to_string(),
-        int_of(&["total_days", "totalDays", "total_checkin_days", "accumulate_days"]),
+        int_of(&[
+            "total_days",
+            "totalDays",
+            "total_checkin_days",
+            "accumulate_days",
+        ]),
     );
     // 本次/今日可领积分
     result.insert(
         "points".to_string(),
-        int_of(&["points", "credit", "reward_points", "rewardPoints", "daily_points"]),
+        int_of(&[
+            "points",
+            "credit",
+            "reward_points",
+            "rewardPoints",
+            "daily_points",
+        ]),
     );
     // 活动周期 / 活动是否在线：同 checkedIn，取不到就不出键
     if let Some(value) = pick(&["start_time", "startTime"]) {

@@ -25,8 +25,8 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use crate::server::core::account_store::{AccountStore, CredentialWrite};
-use crate::server::core::proxies::ResolvedProxy;
 use crate::server::core::providers::refresh_flight::{self, Join, Table};
+use crate::server::core::proxies::ResolvedProxy;
 use crate::server::errors::GatewayError;
 use crate::server::logging;
 
@@ -86,7 +86,10 @@ pub async fn ensure_fresh_credential(
             if !credential.needs_refresh(0, logging::now_ms()) {
                 logging::log(
                     "[CodeArts]",
-                    &format!("提前续期失败（{}），旧凭据尚未过期，本次继续使用", error.message),
+                    &format!(
+                        "提前续期失败（{}），旧凭据尚未过期，本次继续使用",
+                        error.message
+                    ),
                 );
                 return Ok(credential.clone());
             }
@@ -123,10 +126,7 @@ pub async fn refresh_single_flight(
 /// 存在的唯一理由是**可测**：单飞最容易错的地方（并发只打一次、失败不留缓存、
 /// 取消要唤醒等待者）与上游无关，用一段计数闭包就能验；让测试直接驱动这个函数
 /// 就不必为了验证并发行为去连真上游。转发的正常路径走 [`refresh_single_flight`]。
-pub async fn refresh_through<F, Fut>(
-    key: &str,
-    operation: F,
-) -> Result<Credential, GatewayError>
+pub async fn refresh_through<F, Fut>(key: &str, operation: F) -> Result<Credential, GatewayError>
 where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = Result<Credential, GatewayError>>,
@@ -161,10 +161,11 @@ pub async fn ensure_fresh(
     force: bool,
     proxy: Option<&ResolvedProxy>,
 ) -> Result<Credential, GatewayError> {
-    let record = store
-        .codearts_account_record(account_id)
-        .ok_or_else(|| GatewayError::with_status(503, "没有可用的 CodeArts 账号：请在账号页添加并启用账号"))?;
-    let credential = Credential::from_payload(&record).map_err(|reason| GatewayError::with_status(400, reason))?;
+    let record = store.codearts_account_record(account_id).ok_or_else(|| {
+        GatewayError::with_status(503, "没有可用的 CodeArts 账号：请在账号页添加并启用账号")
+    })?;
+    let credential = Credential::from_payload(&record)
+        .map_err(|reason| GatewayError::with_status(400, reason))?;
     if !force && !credential.needs_refresh(REFRESH_LEAD_MS, logging::now_ms()) {
         return Ok(credential);
     }
@@ -213,7 +214,9 @@ pub async fn ensure_fresh(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::core::providers::codearts::credentials::{DpopKeyPair, Jwk, OAuthContext, PkcePair};
+    use crate::server::core::providers::codearts::credentials::{
+        DpopKeyPair, Jwk, OAuthContext, PkcePair,
+    };
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
@@ -232,7 +235,12 @@ mod tests {
                     ..PkcePair::default()
                 },
                 dpop_key_pair: DpopKeyPair {
-                    private_key_jwk: Jwk { kty: "EC".into(), crv: "P-256".into(), d: "AQ".into(), ..Jwk::default() },
+                    private_key_jwk: Jwk {
+                        kty: "EC".into(),
+                        crv: "P-256".into(),
+                        d: "AQ".into(),
+                        ..Jwk::default()
+                    },
                     ..DpopKeyPair::default()
                 },
             }),
@@ -245,11 +253,24 @@ mod tests {
     fn refresh_decision_covers_the_three_states() {
         let credential = refreshable_credential();
         let expiry = credential.expires_at_ms().unwrap();
-        assert!(!should_refresh(&credential, false, expiry - 60 * 60 * 1000), "离到期还有一小时不该刷");
-        assert!(should_refresh(&credential, false, expiry - 5 * 60 * 1000), "只剩五分钟必须刷");
-        assert!(should_refresh(&credential, true, expiry - 60 * 60 * 1000), "force 无条件刷");
+        assert!(
+            !should_refresh(&credential, false, expiry - 60 * 60 * 1000),
+            "离到期还有一小时不该刷"
+        );
+        assert!(
+            should_refresh(&credential, false, expiry - 5 * 60 * 1000),
+            "只剩五分钟必须刷"
+        );
+        assert!(
+            should_refresh(&credential, true, expiry - 60 * 60 * 1000),
+            "force 无条件刷"
+        );
         // 不可续期的凭据：force 也不刷（刷不了，刷只会得到本地错误）
-        let bare = Credential { access_key_id: "AK".into(), secret_access_key: "SK".into(), ..Credential::default() };
+        let bare = Credential {
+            access_key_id: "AK".into(),
+            secret_access_key: "SK".into(),
+            ..Credential::default()
+        };
         assert!(!should_refresh(&bare, true, 0));
     }
 
@@ -303,7 +324,11 @@ mod tests {
         })
         .await;
         assert!(result.is_ok(), "上一轮失败后，下一轮必须是新的一次尝试");
-        assert_eq!(2, calls.load(Ordering::SeqCst), "第二次请求应当真的又打了一次");
+        assert_eq!(
+            2,
+            calls.load(Ordering::SeqCst),
+            "第二次请求应当真的又打了一次"
+        );
     }
 
     /// 不同 key 之间不该互相等待（同一个账号换了一份凭据就是不同 key）。
@@ -316,8 +341,16 @@ mod tests {
         other_token.refresh_token = "another-jwt".to_string();
         let base = refresh_key("acct-1", &first);
         assert_ne!(base, refresh_key("acct-1", &other_account), "换账号要换格");
-        assert_ne!(base, refresh_key("acct-1", &other_token), "换 refresh token 要换格");
-        assert_eq!(base, refresh_key("acct-1", &first.clone()), "同一账号同一凭据要稳定命中");
+        assert_ne!(
+            base,
+            refresh_key("acct-1", &other_token),
+            "换 refresh token 要换格"
+        );
+        assert_eq!(
+            base,
+            refresh_key("acct-1", &first.clone()),
+            "同一账号同一凭据要稳定命中"
+        );
         assert_ne!(base, refresh_key("acct-2", &first), "账号 id 不同要换格");
     }
 

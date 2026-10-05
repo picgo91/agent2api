@@ -20,6 +20,7 @@ use chrono::{Duration as ChronoDuration, NaiveDate};
 use serde_json::{json, Value};
 
 use super::clock::{date_key, day_of, local_midnight_ms};
+use super::legacy;
 use super::record::{DailyEntry, RequestEntry};
 use super::report::{
     build_accounts, build_models, build_providers, build_top_model, cache_rates, cache_trend_24h,
@@ -27,7 +28,6 @@ use super::report::{
     push_provider_accum, range_bounds, range_totals, streak,
 };
 use super::{daily, sql};
-use super::legacy;
 
 /// 模型用量口径订正的完成标记键（`kv` 表）。
 ///
@@ -214,7 +214,12 @@ pub(super) fn fold_into_daily(day: &mut DailyEntry, item: &RequestEntry) {
     day.cache_input_tokens += item.prompt_tokens;
     // 模型维度用「上游真名」当统计键（见 `model_stat_key`）：映射只是代名，
     // 实际请求的仍是上游那一个模型，报表要按它归组
-    push_model_accum(&mut day.model_tokens, model_stat_key(item), item.total_tokens, 1);
+    push_model_accum(
+        &mut day.model_tokens,
+        model_stat_key(item),
+        item.total_tokens,
+        1,
+    );
     // 空 provider 也建组（见 push_provider_accum 的注释）
     push_provider_accum(
         &mut day.provider_stats,

@@ -40,9 +40,9 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 
 use crate::server::core::proxies::ResolvedProxy;
+use crate::server::core::upstream::request::new_request_id;
 use crate::server::errors::GatewayError;
 use crate::server::logging;
-use crate::server::core::upstream::request::new_request_id;
 
 use super::auth;
 use super::credentials::{self, Credentials};
@@ -70,14 +70,21 @@ pub fn set_loopback_port(port: u16) {
 
 /// 本机回调基址（端口未知时 None —— 那时的错误由上层文案说清）
 pub fn loopback_base() -> Option<String> {
-    LOOPBACK_PORT.get().map(|port| format!("http://127.0.0.1:{port}"))
+    LOOPBACK_PORT
+        .get()
+        .map(|port| format!("http://127.0.0.1:{port}"))
 }
 
 /// 授权页地址（`{loginBase}/login?...`）。
 ///
 /// `return_url` 走 ours：`{loopback}{CALLBACK_PATH}`。桌面端把 trace 参数也塞
 /// 进 return_url（`login_trace_id` 等），那是它的埋点需要，本网关不带。
-pub fn build_authorize_url(region: Region, state: &str, challenge: &str, return_url: &str) -> String {
+pub fn build_authorize_url(
+    region: Region,
+    state: &str,
+    challenge: &str,
+    return_url: &str,
+) -> String {
     format!(
         "{}/login?return_url={}&state={}&code_challenge={}&code_challenge_method=S256&client_id={}",
         region.login_base(),
@@ -124,7 +131,9 @@ pub fn begin_login(region: Region, return_url: &str) -> (String, String) {
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
     let state = new_request_id().replace('-', "");
     let auth_url = build_authorize_url(region, &state, &challenge, return_url);
-    let mut table = pending_table().lock().unwrap_or_else(|error| error.into_inner());
+    let mut table = pending_table()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     sweep(&mut table);
     table.insert(
         state.clone(),
@@ -140,14 +149,18 @@ pub fn begin_login(region: Region, return_url: &str) -> (String, String) {
 
 /// 取走一轮登录（回调进来时调用；取走即失效，重复回调拿不到第二次）
 pub fn take_pending(state: &str) -> Option<PendingLogin> {
-    let mut table = pending_table().lock().unwrap_or_else(|error| error.into_inner());
+    let mut table = pending_table()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     sweep(&mut table);
     table.remove(state)
 }
 
 /// 丢弃一轮登录（取消 / 失败收尾）
 pub fn drop_pending(state: &str) {
-    let mut table = pending_table().lock().unwrap_or_else(|error| error.into_inner());
+    let mut table = pending_table()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     table.remove(state);
 }
 
@@ -188,7 +201,10 @@ pub async fn exchange_code(
     let data = auth::payload(response, "授权码换令牌").map(auth::unwrap_data)?;
     let access_token = credentials::secret(&data, &["accessToken", "access_token", "token"])?;
     if access_token.is_empty() {
-        return Err(GatewayError::with_status(502, "Accio 换码响应缺少 accessToken"));
+        return Err(GatewayError::with_status(
+            502,
+            "Accio 换码响应缺少 accessToken",
+        ));
     }
     let mut credentials = Credentials {
         region,
@@ -229,7 +245,10 @@ pub fn parse_callback(query: &HashMap<String, String>) -> Result<(String, String
         return Err(GatewayError::with_status(400, "回调没有携带授权码"));
     }
     if state.is_empty() {
-        return Err(GatewayError::with_status(400, "回调没有携带 state，无法确认这次登录归属"));
+        return Err(GatewayError::with_status(
+            400,
+            "回调没有携带 state，无法确认这次登录归属",
+        ));
     }
     if code.len() > 8192 || state.len() > 512 {
         return Err(GatewayError::with_status(400, "回调参数超长，已拒绝"));

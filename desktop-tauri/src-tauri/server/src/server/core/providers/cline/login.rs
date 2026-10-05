@@ -86,10 +86,7 @@ pub async fn start() -> Result<DeviceAuthStart, GatewayError> {
         .post(format!(
             "{WORKOS_BASE_URL}/user_management/authorize/device"
         ))
-        .header(
-            "Content-Type",
-            "application/x-www-form-urlencoded",
-        )
+        .header("Content-Type", "application/x-www-form-urlencoded")
         .header("Accept", "application/json")
         .timeout(Duration::from_millis(REQUEST_TIMEOUT_MS))
         .body(format!("client_id={WORKOS_CLIENT_ID}"))
@@ -376,9 +373,7 @@ async fn register_session(tokens: &WorkosTokens) -> Result<ClineSession, Gateway
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|text| !text.is_empty())
-        .ok_or_else(|| {
-            GatewayError::with_status(502, "Cline 令牌登记响应缺少 accessToken")
-        })?;
+        .ok_or_else(|| GatewayError::with_status(502, "Cline 令牌登记响应缺少 accessToken"))?;
     let refresh = data
         .get("refreshToken")
         .and_then(Value::as_str)

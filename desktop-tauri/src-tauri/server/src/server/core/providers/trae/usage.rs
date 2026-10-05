@@ -47,7 +47,7 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::server::core::account_store::AccountStore;
 use crate::server::core::proxies::ResolvedProxy;
@@ -57,7 +57,7 @@ use super::adapter::{account_proxy, read_record, renew_if_due};
 use super::credentials::Credential;
 use super::errors::classify;
 use super::headers::{DEVICE_BRAND, IDE_VERSION, OS_VERSION};
-use super::http::{Reply, post_json};
+use super::http::{post_json, Reply};
 
 /// 积分/权益那条链的域名（参考实现的包级常量 `UgHost`，与账号 `apiHost` 无关）。
 pub const UG_HOST: &str = "https://api.trae.cn";
@@ -139,13 +139,19 @@ pub struct Pack {
 
 /// 读 `is_credits_billing`（决定"没有任何 credits_limit 时要不要按 0 展示"）。
 pub fn is_credits_billing(payload: &Value) -> bool {
-    payload.get("is_credits_billing").and_then(Value::as_bool).unwrap_or(false)
+    payload
+        .get("is_credits_billing")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 /// `user_entitlement_pack_list` → 包列表（顺序保留上游给的顺序：`SelectActivePack`
 /// 的兜底分支就是"取第一条"，顺序一变选中的包就变了）。
 pub fn parse_packs(payload: &Value) -> Vec<Pack> {
-    let entries = match payload.get("user_entitlement_pack_list").and_then(Value::as_array) {
+    let entries = match payload
+        .get("user_entitlement_pack_list")
+        .and_then(Value::as_array)
+    {
         Some(list) => list,
         None => return Vec::new(),
     };
@@ -158,14 +164,30 @@ fn pack_of(entry: &Value) -> Pack {
     Pack {
         product_type: number(base.and_then(|info| info.get("product_type"))).unwrap_or(0),
         end_time: number(base.and_then(|info| info.get("end_time"))).unwrap_or(0),
-        is_hide: base.and_then(|info| info.get("is_hide")).and_then(Value::as_bool).unwrap_or(false),
+        is_hide: base
+            .and_then(|info| info.get("is_hide"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         // 缺省与 null 都是 None（Go 的 `*int` 同义），判反会把整张清单剔空
         status: number(base.and_then(|info| info.get("status"))),
         base_quota: quota_of(base.and_then(|info| info.get("quota"))),
-        subscription_quota: quota_of(extra.and_then(|extra| extra.get("subscription_extra")).and_then(|part| part.get("quota"))),
-        package_quota: quota_of(extra.and_then(|extra| extra.get("package_extra")).and_then(|part| part.get("quota"))),
+        subscription_quota: quota_of(
+            extra
+                .and_then(|extra| extra.get("subscription_extra"))
+                .and_then(|part| part.get("quota")),
+        ),
+        package_quota: quota_of(
+            extra
+                .and_then(|extra| extra.get("package_extra"))
+                .and_then(|part| part.get("quota")),
+        ),
         usage: usage_of(entry.get("usage")),
-        display_desc: entry.get("display_desc").and_then(Value::as_str).unwrap_or("").trim().to_string(),
+        display_desc: entry
+            .get("display_desc")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim()
+            .to_string(),
     }
 }
 
@@ -179,13 +201,21 @@ fn quota_of(value: Option<&Value>) -> PackQuota {
         fast_request_limit: number(value.get("premium_model_fast_request_limit")),
         credits_limit: number(value.get("credits_limit")),
         solo_parallel: number(value.get("solo_agent_parallel_limit")),
-        solo_enabled: SOLO_FLAG_KEYS.iter().any(|key| value.get(*key).and_then(Value::as_bool) == Some(true)),
+        solo_enabled: SOLO_FLAG_KEYS
+            .iter()
+            .any(|key| value.get(*key).and_then(Value::as_bool) == Some(true)),
     }
 }
 
 /// 上游可能把 SOLO 标志放在**任意一层** quota 里（实测免费包同时出现在
 /// `entitlement_base_info.quota` 与 `product_extra.subscription_extra.quota`）。
-const SOLO_FLAG_KEYS: [&str; 5] = ["enable_solo_agent", "enable_solo_builder", "enable_solo_coder", "enable_solo_lite", "enable_solo_web"];
+const SOLO_FLAG_KEYS: [&str; 5] = [
+    "enable_solo_agent",
+    "enable_solo_builder",
+    "enable_solo_coder",
+    "enable_solo_lite",
+    "enable_solo_web",
+];
 
 fn usage_of(value: Option<&Value>) -> PackUsage {
     let Some(value) = value else {
@@ -201,7 +231,9 @@ fn usage_of(value: Option<&Value>) -> PackUsage {
 
 fn number(value: Option<&Value>) -> Option<i64> {
     let value = value?;
-    value.as_i64().or_else(|| value.as_f64().map(|number| number as i64))
+    value
+        .as_i64()
+        .or_else(|| value.as_f64().map(|number| number as i64))
 }
 
 // ── 判定层：纯函数，全部由向量 `usage` / `payStatus` 段钉住 ──────
@@ -289,9 +321,19 @@ pub fn fast_request_usage(packs: &[Pack], dashboard_payload: bool) -> Option<Fas
         return None;
     }
     if unlimited {
-        return Some(FastUsage { available: -1, limit: -1, used, unlimited: true });
+        return Some(FastUsage {
+            available: -1,
+            limit: -1,
+            used,
+            unlimited: true,
+        });
     }
-    Some(FastUsage { available: (limit - used).max(0), limit, used, unlimited: false })
+    Some(FastUsage {
+        available: (limit - used).max(0),
+        limit,
+        used,
+        unlimited: false,
+    })
 }
 
 /// CN 与 Intl 的优先级**不同表**（CN 多 100 与 5 两档）。抄成一张表的话，
@@ -332,12 +374,22 @@ pub struct CreditsPool {
 /// （官方此时按 0 展示）；false 且没有字段 → `known = false`（界面显示 `--`）。
 pub fn credits_pool_usage(packs: &[Pack], is_credits_billing: bool) -> CreditsPool {
     let filtered = active_packs(packs);
-    let has_field = filtered.iter().any(|pack| effective_quota(pack).credits_limit.is_some());
+    let has_field = filtered
+        .iter()
+        .any(|pack| effective_quota(pack).credits_limit.is_some());
     if !is_credits_billing && !has_field {
-        return CreditsPool { remain: 0, known: false, unlimited: false };
+        return CreditsPool {
+            remain: 0,
+            known: false,
+            unlimited: false,
+        };
     }
     if filtered.is_empty() {
-        return CreditsPool { remain: 0, known: is_credits_billing, unlimited: false };
+        return CreditsPool {
+            remain: 0,
+            known: is_credits_billing,
+            unlimited: false,
+        };
     }
     let mut unlimited = false;
     let mut total = 0i64;
@@ -354,9 +406,17 @@ pub fn credits_pool_usage(packs: &[Pack], is_credits_billing: bool) -> CreditsPo
         total += (left + 0.5) as i64; // 官方 Math.round（left 已夹到非负，等价四舍五入）
     }
     if unlimited {
-        return CreditsPool { remain: -1, known: true, unlimited: true };
+        return CreditsPool {
+            remain: -1,
+            known: true,
+            unlimited: true,
+        };
     }
-    CreditsPool { remain: total, known: true, unlimited: false }
+    CreditsPool {
+        remain: total,
+        known: true,
+        unlimited: false,
+    }
 }
 
 /// 一次 `ent_usage` 的汇总读数（参考实现 `UsageSummary` 的等价物）。
@@ -493,7 +553,10 @@ pub fn plan_name(packs: &[Pack], is_cn: bool) -> String {
 pub fn is_free_plan(plan: &str, plan_type: &str) -> bool {
     let plan = plan.trim().to_lowercase();
     let plan_type = plan_type.trim().to_lowercase();
-    plan.contains("free") || plan.contains("免费") || plan_type.contains("free") || plan_type.contains("免费")
+    plan.contains("free")
+        || plan.contains("免费")
+        || plan_type.contains("free")
+        || plan_type.contains("免费")
 }
 
 // ── pay_status：detail/quota 的分层探测 ────────────────────────
@@ -509,15 +572,24 @@ pub fn is_free_plan(plan: &str, plan_type: &str) -> bool {
 /// 那里的 `json.Unmarshal` 失败不 return）。
 pub fn pick_int(payload: &Value, quota: bool, keys: &[&str]) -> Option<i64> {
     let layers: Vec<&Value> = if quota {
-        [payload.get("quota"), payload.get("entitlementInfo").and_then(|info| info.get("quota"))]
-            .into_iter()
-            .flatten()
-            .collect()
+        [
+            payload.get("quota"),
+            payload
+                .get("entitlementInfo")
+                .and_then(|info| info.get("quota")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
     } else {
         [
             payload.get("detail"),
-            payload.get("entitlementInfo").and_then(|info| info.get("detail")),
-            payload.get("originPayStatusData").and_then(|origin| origin.get("detail")),
+            payload
+                .get("entitlementInfo")
+                .and_then(|info| info.get("detail")),
+            payload
+                .get("originPayStatusData")
+                .and_then(|origin| origin.get("detail")),
         ]
         .into_iter()
         .flatten()
@@ -548,7 +620,11 @@ pub fn fast_request_per(payload: &Value) -> Option<i64> {
 
 /// 速通状态位（detail.can_get_express_status / canGetExpressStatus）。
 pub fn can_get_express_status(payload: &Value) -> Option<i64> {
-    pick_int(payload, false, &["can_get_express_status", "canGetExpressStatus"])
+    pick_int(
+        payload,
+        false,
+        &["can_get_express_status", "canGetExpressStatus"],
+    )
 }
 
 /// SOLO 并发数（quota.solo_agent_parallel_limit）。
@@ -562,8 +638,19 @@ pub fn solo_parallel_limit(payload: &Value) -> Option<i64> {
 /// 当成"没有"。这里同样只收 `Value::is_true()`（向量钉住了 `enable_solo_agent:1`
 /// 不算 SOLO 包这条）。
 pub fn has_solo_package(payload: &Value) -> bool {
-    let keys = ["enable_solo_agent", "enable_solo_builder", "enable_solo_coder", "enable_solo_lite", "enable_solo_web"];
-    let layers = [payload.get("quota"), payload.get("entitlementInfo").and_then(|info| info.get("quota"))];
+    let keys = [
+        "enable_solo_agent",
+        "enable_solo_builder",
+        "enable_solo_coder",
+        "enable_solo_lite",
+        "enable_solo_web",
+    ];
+    let layers = [
+        payload.get("quota"),
+        payload
+            .get("entitlementInfo")
+            .and_then(|info| info.get("quota")),
+    ];
     for key in keys {
         for layer in layers.iter().flatten() {
             if layer.get(key).and_then(Value::as_bool) == Some(true) {
@@ -576,7 +663,12 @@ pub fn has_solo_package(payload: &Value) -> bool {
 
 /// 计划身份串（`user_pay_identity_str`，去空格；缺键 = 空串）。
 pub fn plan_identity(payload: &Value) -> String {
-    payload.get("user_pay_identity_str").and_then(Value::as_str).unwrap_or("").trim().to_string()
+    payload
+        .get("user_pay_identity_str")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string()
 }
 
 // ── SOLO 两个维度的**第二个来源**（本模块相对参考实现的一处有意增补）────
@@ -595,19 +687,27 @@ pub fn plan_identity(payload: &Value) -> String {
 // 这两个字段是**元数据**，不参与 `has_any()` 的三层探测，也不参与任何求和。
 /// 从可见包的三层 quota 里找 `solo_agent_parallel_limit`（读到第一个即算数）。
 pub fn solo_parallel_from_packs(packs: &[Pack]) -> Option<i64> {
-    packs.iter().filter(|pack| is_active_pack(pack)).find_map(|pack| {
-        pack.base_quota
-            .solo_parallel
-            .or(pack.subscription_quota.solo_parallel)
-            .or(pack.package_quota.solo_parallel)
-    })
+    packs
+        .iter()
+        .filter(|pack| is_active_pack(pack))
+        .find_map(|pack| {
+            pack.base_quota
+                .solo_parallel
+                .or(pack.subscription_quota.solo_parallel)
+                .or(pack.package_quota.solo_parallel)
+        })
 }
 
 /// 同上，找任一 `enable_solo_* = true`。
 pub fn solo_package_from_packs(packs: &[Pack]) -> bool {
-    packs.iter().filter(|pack| is_active_pack(pack)).any(|pack| {
-        pack.base_quota.solo_enabled || pack.subscription_quota.solo_enabled || pack.package_quota.solo_enabled
-    })
+    packs
+        .iter()
+        .filter(|pack| is_active_pack(pack))
+        .any(|pack| {
+            pack.base_quota.solo_enabled
+                || pack.subscription_quota.solo_enabled
+                || pack.package_quota.solo_enabled
+        })
 }
 
 /// 上游给的汇总口径（`usage_summary`：总额、已用、消耗比）。
@@ -627,7 +727,11 @@ pub fn official_summary(payload: &Value) -> Option<OfficialSummary> {
     let summary = payload.get("usage_summary")?;
     let total = summary.get("total_amount").and_then(Value::as_f64)?;
     let consumed = summary.get("consumed_amount").and_then(Value::as_f64)?;
-    Some(OfficialSummary { total, consumed, ratio: summary.get("consumption_ratio").and_then(Value::as_f64) })
+    Some(OfficialSummary {
+        total,
+        consumed,
+        ratio: summary.get("consumption_ratio").and_then(Value::as_f64),
+    })
 }
 
 // ── 出站：ug 族的请求头与一次读取 ─────────────────────────────
@@ -640,7 +744,14 @@ fn request_id() -> String {
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     let hex = hex_lower(&bytes);
-    format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
+    format!(
+        "{}-{}-{}-{}-{}",
+        &hex[0..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..32]
+    )
 }
 
 /// `X-TT-Trace-Id`（抓包格式 `00-<32hex>-<16hex>-01`，第二段取自请求 ID 去横线的前 16 位）。
@@ -651,7 +762,11 @@ fn trace_id(request_id: &str) -> String {
     let random = hex_lower(&random_bytes::<16>());
     let from_request = request_id.replace('-', "");
     let taken: String = from_request.chars().take(16).collect();
-    let taken = if taken.is_empty() { "0000000000000000".to_string() } else { taken };
+    let taken = if taken.is_empty() {
+        "0000000000000000".to_string()
+    } else {
+        taken
+    };
     format!("00-{random}-{taken}-01")
 }
 
@@ -698,12 +813,21 @@ pub fn ug_headers(variant: &str, access_token: &str, device_id: &str) -> BTreeMa
     let mut headers = BTreeMap::new();
     headers.insert("Content-Type".to_string(), "application/json".to_string());
     headers.insert("Accept".to_string(), "*/*".to_string());
-    headers.insert("User-Agent".to_string(), format!("VSCode 1.107.1 ({})", platform_name_for(variant)));
+    headers.insert(
+        "User-Agent".to_string(),
+        format!("VSCode 1.107.1 ({})", platform_name_for(variant)),
+    );
     headers.insert("X-User-Region".to_string(), "CN".to_string());
     headers.insert("Accept-Language".to_string(), "zh-CN".to_string());
-    headers.insert("Package-Type".to_string(), package_type_for(variant).to_string());
+    headers.insert(
+        "Package-Type".to_string(),
+        package_type_for(variant).to_string(),
+    );
     headers.insert("X-Lgw-Req-Sdk-Type".to_string(), "3".to_string());
-    headers.insert("X-Market-Client-Id".to_string(), "VSCode 1.107.1".to_string());
+    headers.insert(
+        "X-Market-Client-Id".to_string(),
+        "VSCode 1.107.1".to_string(),
+    );
     headers.insert("X-Device-Brand".to_string(), DEVICE_BRAND.to_string());
     headers.insert("X-Device-Type".to_string(), "windows".to_string());
     headers.insert("X-OS-Version".to_string(), OS_VERSION.to_string());
@@ -713,7 +837,10 @@ pub fn ug_headers(variant: &str, access_token: &str, device_id: &str) -> BTreeMa
     headers.insert("Sec-Fetch-Dest".to_string(), "empty".to_string());
     headers.insert("Sec-Fetch-Mode".to_string(), "no-cors".to_string());
     headers.insert("Sec-Fetch-Site".to_string(), "none".to_string());
-    headers.insert("Authorization".to_string(), format!("Cloud-IDE-JWT {access_token}"));
+    headers.insert(
+        "Authorization".to_string(),
+        format!("Cloud-IDE-JWT {access_token}"),
+    );
     if !device_id.is_empty() {
         headers.insert("X-Device-Id".to_string(), device_id.to_string());
     }
@@ -861,11 +988,19 @@ pub fn document(readout: &Readout, is_cn: bool) -> Value {
     subscription.insert("planName".to_string(), json!(readout.plan));
     subscription.insert(
         "status".to_string(),
-        json!(if is_free_plan(&readout.plan, &plan_type) { "免费" } else { "付费" }),
+        json!(if is_free_plan(&readout.plan, &plan_type) {
+            "免费"
+        } else {
+            "付费"
+        }),
     );
     // 到期时间：上游给的是**秒**级 epoch（>1e11 才当作毫秒用），界面按毫秒判。
     if summary.end_time > 0 {
-        let millis = if summary.end_time > 100_000_000_000 { summary.end_time } else { summary.end_time * 1000 };
+        let millis = if summary.end_time > 100_000_000_000 {
+            summary.end_time
+        } else {
+            summary.end_time * 1000
+        };
         subscription.insert("expireAt".to_string(), json!(millis));
     }
     let is_basic = summary.model == MODEL_BASIC && summary.remain_known;
@@ -882,7 +1017,10 @@ pub fn document(readout: &Readout, is_cn: bool) -> Value {
     raw.insert("remainKnown".to_string(), json!(summary.remain_known));
     raw.insert("creditsPoolKnown".to_string(), json!(pool.known));
     raw.insert("creditsPoolUnlimited".to_string(), json!(pool.unlimited));
-    raw.insert("isCreditsBilling".to_string(), json!(readout.is_credits_billing));
+    raw.insert(
+        "isCreditsBilling".to_string(),
+        json!(readout.is_credits_billing),
+    );
     raw.insert("isCN".to_string(), json!(is_cn));
     if let Some(pay) = &readout.pay_status {
         raw.insert("payStatus".to_string(), pay.clone());
@@ -905,7 +1043,10 @@ fn trim_amount(value: f64) -> String {
     if (value - value.round()).abs() < 0.005 {
         return format!("{}", value.round() as i64);
     }
-    format!("{:.2}", value).trim_end_matches('0').trim_end_matches('.').to_string()
+    format!("{:.2}", value)
+        .trim_end_matches('0')
+        .trim_end_matches('.')
+        .to_string()
 }
 
 fn fast_view(summary: &Summary) -> String {
@@ -913,7 +1054,10 @@ fn fast_view(summary: &Summary) -> String {
         return format!("不限（已用 {}）", summary.fast_used);
     }
     if summary.fast_limit > 0 {
-        return format!("剩 {} / 共 {} 次，已用 {}", summary.remain, summary.fast_limit, summary.fast_used);
+        return format!(
+            "剩 {} / 共 {} 次，已用 {}",
+            summary.remain, summary.fast_limit, summary.fast_used
+        );
     }
     format!("剩 {} 次", summary.remain)
 }
@@ -923,7 +1067,10 @@ fn fast_view(summary: &Summary) -> String {
 /// 401 原样透出（`status_for(SessionDead)`），由调用方走"刷新后重试一次"：
 /// 这条族对**谱系**最敏感（参考实现 v0.12.60 记的就是跨类 token 时聊天照常用、
 /// 只有积分查询报 1001），所以刷新必须在外面真接上，不能在报告里猜成"没有额度"。
-pub async fn read(credential: &Credential, proxy: Option<&ResolvedProxy>) -> Result<Readout, GatewayError> {
+pub async fn read(
+    credential: &Credential,
+    proxy: Option<&ResolvedProxy>,
+) -> Result<Readout, GatewayError> {
     read_at(credential, proxy, UG_HOST).await
 }
 
@@ -931,13 +1078,28 @@ pub async fn read(credential: &Credential, proxy: Option<&ResolvedProxy>) -> Res
 ///
 /// 与 `forward::forward_at` 同一条道理：读环境变量会让同进程里并发的测试
 /// 互相踩（谁先 set 谁的 host 就生效），而"打到真上游"的测试是**会花真实额度**的。
-async fn read_at(credential: &Credential, proxy: Option<&ResolvedProxy>, base: &str) -> Result<Readout, GatewayError> {
+async fn read_at(
+    credential: &Credential,
+    proxy: Option<&ResolvedProxy>,
+    base: &str,
+) -> Result<Readout, GatewayError> {
     if !credential.valid() {
-        return Err(GatewayError::with_status(401, "Trae 账号里没有可用凭证，无法查询额度"));
+        return Err(GatewayError::with_status(
+            401,
+            "Trae 账号里没有可用凭证，无法查询额度",
+        ));
     }
-    let prepared: Vec<(String, String)> =
-        ug_headers(credential.variant(), credential.access_token.trim(), credential.device_id.trim()).into_iter().collect();
-    let headers: Vec<(&str, String)> = prepared.iter().map(|(name, value)| (name.as_str(), value.clone())).collect();
+    let prepared: Vec<(String, String)> = ug_headers(
+        credential.variant(),
+        credential.access_token.trim(),
+        credential.device_id.trim(),
+    )
+    .into_iter()
+    .collect();
+    let headers: Vec<(&str, String)> = prepared
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.clone()))
+        .collect();
     let body = json!({});
     // 两个地址一次算好（而不是两处各自 `format!`）：上一次就是"只把第一处换成
     // base、第二处仍是常量"，结果测试里那条 pay_status 请求打到了真上游。
@@ -975,7 +1137,13 @@ async fn read_at(credential: &Credential, proxy: Option<&ResolvedProxy>, base: &
             if error.status_code == 401 {
                 return Err(error);
             }
-            crate::server::logging::verbose("[Trae]", &format!("pay_status 补充维度没拿到（不影响积分读数）：{}", error.message));
+            crate::server::logging::verbose(
+                "[Trae]",
+                &format!(
+                    "pay_status 补充维度没拿到（不影响积分读数）：{}",
+                    error.message
+                ),
+            );
         }
     }
     // 参考实现只在 `code == 0` 时采纳 pay_status 的维度；把这条判据留在这里，
@@ -988,8 +1156,12 @@ async fn read_at(credential: &Credential, proxy: Option<&ResolvedProxy>, base: &
     // 三个补充维度在此定稿：pay_status 优先（与参考实现同口径），
     // SOLO 那两条没取到时回退到权益包的 quota（本机实测免费包就带着它们）。
     let fast_request_per = pay_status.as_ref().and_then(fast_request_per);
-    let solo_parallel = pay_status.as_ref().and_then(solo_parallel_limit).or_else(|| solo_parallel_from_packs(&packs));
-    let solo_package = pay_status.as_ref().is_some_and(has_solo_package) || solo_package_from_packs(&packs);
+    let solo_parallel = pay_status
+        .as_ref()
+        .and_then(solo_parallel_limit)
+        .or_else(|| solo_parallel_from_packs(&packs));
+    let solo_package =
+        pay_status.as_ref().is_some_and(has_solo_package) || solo_package_from_packs(&packs);
     let pay_plan_type = pay_status.as_ref().map(plan_identity).unwrap_or_default();
 
     Ok(Readout {
@@ -1018,7 +1190,10 @@ async fn post_ug(
         let head: String = reply.body.chars().take(ERROR_BODY_HEAD).collect();
         let kind = classify(reply.status, &head);
         let message = format!("Trae 积分接口返回 {}: {}", reply.status, head.trim());
-        return Err(GatewayError::with_status(i32::from(status_for(kind)), message));
+        return Err(GatewayError::with_status(
+            i32::from(status_for(kind)),
+            message,
+        ));
     }
     Ok(reply)
 }
@@ -1062,15 +1237,39 @@ mod tests {
     /// 逐字段比对一条 `usage` 用例（摊平成 (键, 值) 表，缺字段与 null 视作同值）。
     fn assert_summary_matches(entry: &Value, summary: &Summary, pool: &CreditsPool) {
         assert_eq!(entry["usageModel"].as_str(), Some(summary.model), "口径名");
-        assert_eq!(entry["remainKnown"].as_bool(), Some(summary.remain_known), "剩余是否已知");
+        assert_eq!(
+            entry["remainKnown"].as_bool(),
+            Some(summary.remain_known),
+            "剩余是否已知"
+        );
         assert_eq!(entry["remain"].as_i64(), Some(summary.remain), "remain");
-        assert_eq!(entry["fastLimit"].as_i64(), Some(summary.fast_limit), "fastLimit");
-        assert_eq!(entry["fastUsed"].as_i64(), Some(summary.fast_used), "fastUsed");
+        assert_eq!(
+            entry["fastLimit"].as_i64(),
+            Some(summary.fast_limit),
+            "fastLimit"
+        );
+        assert_eq!(
+            entry["fastUsed"].as_i64(),
+            Some(summary.fast_used),
+            "fastUsed"
+        );
         assert_eq!(entry["used"].as_i64(), Some(summary.used), "used");
         assert_eq!(entry["total"].as_i64(), Some(summary.total), "total");
-        assert_eq!(entry["creditsPool"]["remain"].as_i64(), Some(pool.remain), "积分池 remain");
-        assert_eq!(entry["creditsPool"]["known"].as_bool(), Some(pool.known), "积分池 known");
-        assert_eq!(entry["creditsPool"]["unlimited"].as_bool(), Some(pool.unlimited), "积分池 unlimited");
+        assert_eq!(
+            entry["creditsPool"]["remain"].as_i64(),
+            Some(pool.remain),
+            "积分池 remain"
+        );
+        assert_eq!(
+            entry["creditsPool"]["known"].as_bool(),
+            Some(pool.known),
+            "积分池 known"
+        );
+        assert_eq!(
+            entry["creditsPool"]["unlimited"].as_bool(),
+            Some(pool.unlimited),
+            "积分池 unlimited"
+        );
     }
 
     #[test]
@@ -1092,7 +1291,11 @@ mod tests {
                 Some(plan_name(&list, is_cn)),
                 "{name}：套餐名"
             );
-            assert_eq!(case["isCreditsBilling"].as_bool(), Some(is_credits_billing(&payload)), "{name}：积分计费标记");
+            assert_eq!(
+                case["isCreditsBilling"].as_bool(),
+                Some(is_credits_billing(&payload)),
+                "{name}：积分计费标记"
+            );
             let score = pack_list_remain(&list, is_cn);
             match case["scoreKnown"].as_bool() {
                 Some(true) => assert_eq!(case["score"].as_i64(), score, "{name}：池打分"),
@@ -1101,11 +1304,23 @@ mod tests {
             }
             let selected_known = case["selectedRemainKnown"].as_bool().unwrap_or(false);
             let selected = select_active_pack(&list, is_cn);
-            assert_eq!(case["selectedProductType"].as_i64(), selected.map(|pack| pack.product_type), "{name}：选中的包");
+            assert_eq!(
+                case["selectedProductType"].as_i64(),
+                selected.map(|pack| pack.product_type),
+                "{name}：选中的包"
+            );
             if selected_known {
-                assert_eq!(case["selectedRemain"].as_i64(), selected.and_then(pack_remain), "{name}：选中包的剩余");
+                assert_eq!(
+                    case["selectedRemain"].as_i64(),
+                    selected.and_then(pack_remain),
+                    "{name}：选中包的剩余"
+                );
             } else {
-                assert_eq!(None, selected.and_then(pack_remain), "{name}：剩余未知时不能给出数");
+                assert_eq!(
+                    None,
+                    selected.and_then(pack_remain),
+                    "{name}：剩余未知时不能给出数"
+                );
             }
         }
     }
@@ -1113,17 +1328,44 @@ mod tests {
     #[test]
     fn pay_status_dimensions_follow_the_reference_fallback_layers() {
         let document = vector_document();
-        let cases = document["payStatus"].as_array().expect("payStatus 段是数组");
+        let cases = document["payStatus"]
+            .as_array()
+            .expect("payStatus 段是数组");
         assert!(cases.len() >= 10);
         for case in cases {
             let name = case["name"].as_str().unwrap_or("?");
-            let payload: Value = serde_json::from_str(case["body"].as_str().unwrap_or("{}")).expect("fixture 可解析");
-            assert_eq!(case["code"].as_i64(), Some(pay_code(&payload)), "{name}：code");
-            assert_eq!(case["fastRequestPer"].as_i64(), fast_request_per(&payload), "{name}：快请求/月");
-            assert_eq!(case["canGetExpressStatus"].as_i64(), can_get_express_status(&payload), "{name}：速通状态位");
-            assert_eq!(case["soloParallel"].as_i64(), solo_parallel_limit(&payload), "{name}：SOLO 并发");
-            assert_eq!(case["soloPackage"].as_bool(), Some(has_solo_package(&payload)), "{name}：SOLO 套餐");
-            assert_eq!(case["planType"].as_str().map(str::to_string), Some(plan_identity(&payload)), "{name}：身份串");
+            let payload: Value = serde_json::from_str(case["body"].as_str().unwrap_or("{}"))
+                .expect("fixture 可解析");
+            assert_eq!(
+                case["code"].as_i64(),
+                Some(pay_code(&payload)),
+                "{name}：code"
+            );
+            assert_eq!(
+                case["fastRequestPer"].as_i64(),
+                fast_request_per(&payload),
+                "{name}：快请求/月"
+            );
+            assert_eq!(
+                case["canGetExpressStatus"].as_i64(),
+                can_get_express_status(&payload),
+                "{name}：速通状态位"
+            );
+            assert_eq!(
+                case["soloParallel"].as_i64(),
+                solo_parallel_limit(&payload),
+                "{name}：SOLO 并发"
+            );
+            assert_eq!(
+                case["soloPackage"].as_bool(),
+                Some(has_solo_package(&payload)),
+                "{name}：SOLO 套餐"
+            );
+            assert_eq!(
+                case["planType"].as_str().map(str::to_string),
+                Some(plan_identity(&payload)),
+                "{name}：身份串"
+            );
         }
     }
 
@@ -1131,11 +1373,16 @@ mod tests {
     fn quota_absent_is_not_quota_zero_on_a_credits_billing_account() {
         // 这条单独立一份，是因为它是参考实现真出过的事故：
         // 读一个不存在的 credits_limit → 渲染成"剩余 0 积分"。
-        let list = packs(r#"{"is_credits_billing":false,"user_entitlement_pack_list":[{"entitlement_base_info":{"product_type":0,"display_desc":"免费"}}]}"#);
+        let list = packs(
+            r#"{"is_credits_billing":false,"user_entitlement_pack_list":[{"entitlement_base_info":{"product_type":0,"display_desc":"免费"}}]}"#,
+        );
         let summary = summarize(&list, true);
         assert_eq!(MODEL_UNKNOWN, summary.model);
         assert!(!summary.remain_known, "剩余未知必须是未知，不是 0");
-        assert_eq!(0, summary.remain, "零值只是占位，靠 remain_known 才不构成读数");
+        assert_eq!(
+            0, summary.remain,
+            "零值只是占位，靠 remain_known 才不构成读数"
+        );
         let pool = credits_pool_usage(&list, false);
         assert!(!pool.known, "没有 credits_limit 又不是积分计费 → 未知");
         // 同一个包在 is_credits_billing=true 下变成"已知 0"（官方此时按 0 展示）
@@ -1145,7 +1392,9 @@ mod tests {
 
     #[test]
     fn unlimited_is_carried_as_minus_one_and_never_as_zero() {
-        let list = packs(r#"{"user_entitlement_pack_list":[{"entitlement_base_info":{"product_type":6,"quota":{"premium_model_fast_request_limit":-1}},"usage":{"premium_model_fast_amount":7}}]}"#);
+        let list = packs(
+            r#"{"user_entitlement_pack_list":[{"entitlement_base_info":{"product_type":6,"quota":{"premium_model_fast_request_limit":-1}},"usage":{"premium_model_fast_amount":7}}]}"#,
+        );
         let fast = fast_request_usage(&list, false).expect("有 fast 证据");
         assert!(fast.unlimited);
         assert_eq!(-1, fast.available);
@@ -1157,8 +1406,13 @@ mod tests {
 
     #[test]
     fn dashboard_payload_counts_packs_as_evidence_but_this_module_never_passes_it() {
-        let list = packs(r#"{"user_entitlement_pack_list":[{"entitlement_base_info":{"product_type":6}}]}"#);
-        assert!(fast_request_usage(&list, false).is_none(), "没有 fast 字段 = 没有证据");
+        let list = packs(
+            r#"{"user_entitlement_pack_list":[{"entitlement_base_info":{"product_type":6}}]}"#,
+        );
+        assert!(
+            fast_request_usage(&list, false).is_none(),
+            "没有 fast 字段 = 没有证据"
+        );
         let with_evidence = fast_request_usage(&list, true).expect("另一个数据源按包存在算证据");
         assert_eq!(0, with_evidence.available);
         assert!(!with_evidence.unlimited);
@@ -1168,19 +1422,41 @@ mod tests {
     fn the_free_plan_rule_also_matches_the_chinese_label() {
         let document = vector_document();
         for case in document["isFreePlan"].as_array().expect("isFreePlan 段") {
-            let got = is_free_plan(case["plan"].as_str().unwrap_or(""), case["planType"].as_str().unwrap_or(""));
-            assert_eq!(case["isFree"].as_bool(), Some(got), "用例：{}", case["plan"].as_str().unwrap_or("?"));
+            let got = is_free_plan(
+                case["plan"].as_str().unwrap_or(""),
+                case["planType"].as_str().unwrap_or(""),
+            );
+            assert_eq!(
+                case["isFree"].as_bool(),
+                Some(got),
+                "用例：{}",
+                case["plan"].as_str().unwrap_or("?")
+            );
         }
-        assert!(is_free_plan("免费", ""), "CN 的显示名是中文，上游 .includes('free') 会漏判");
+        assert!(
+            is_free_plan("免费", ""),
+            "CN 的显示名是中文，上游 .includes('free') 会漏判"
+        );
         assert!(!is_free_plan("Ultra", "CNExpress"));
     }
 
     #[test]
     fn product_type_identities_match_both_regions() {
         let document = vector_document();
-        for case in document["productTypeIdentity"].as_array().expect("productTypeIdentity 段") {
-            let got = product_type_identity(case["productType"].as_i64().unwrap_or(-1), case["isCN"].as_bool().unwrap_or(false));
-            assert_eq!(case["identity"].as_str(), Some(got), "product_type={}", case["productType"]);
+        for case in document["productTypeIdentity"]
+            .as_array()
+            .expect("productTypeIdentity 段")
+        {
+            let got = product_type_identity(
+                case["productType"].as_i64().unwrap_or(-1),
+                case["isCN"].as_bool().unwrap_or(false),
+            );
+            assert_eq!(
+                case["identity"].as_str(),
+                Some(got),
+                "product_type={}",
+                case["productType"]
+            );
         }
     }
 
@@ -1189,24 +1465,47 @@ mod tests {
         // 把 SOLO 头照搬过来是最顺手也最难发现的错：画像/谱系不对时上游回
         // 401 code=1001，而 HTTP 层看起来完全正常。
         let document = vector_document();
-        let cases = document["ugHeaders"].as_array().expect("ugHeaders 段是数组");
+        let cases = document["ugHeaders"]
+            .as_array()
+            .expect("ugHeaders 段是数组");
         assert_eq!(5, cases.len(), "四个谱系 + 一个未知值");
         for case in cases {
             let variant = case["variant"].as_str().unwrap_or("?");
             let got = ug_headers(variant, "at", "d-1");
             let want = case["output"].as_object().expect("output 是对象");
-            let lookup = |name: &str| got.iter().find(|(key, _)| key.eq_ignore_ascii_case(name)).map(|(_, value)| value.clone());
+            let lookup = |name: &str| {
+                got.iter()
+                    .find(|(key, _)| key.eq_ignore_ascii_case(name))
+                    .map(|(_, value)| value.clone())
+            };
             for (key, value) in want {
                 // 这两个每请求新生成，只比"存在且形状对"（形状见下一条用例）
-                if key.eq_ignore_ascii_case("X-Request-Id") || key.eq_ignore_ascii_case("X-Tt-Trace-Id") {
+                if key.eq_ignore_ascii_case("X-Request-Id")
+                    || key.eq_ignore_ascii_case("X-Tt-Trace-Id")
+                {
                     assert!(lookup(key).is_some(), "{variant}：少了 {key}");
                     continue;
                 }
-                assert_eq!(value.as_str().unwrap_or(""), lookup(key).unwrap_or_default().as_str(), "{variant}：头 {key}");
+                assert_eq!(
+                    value.as_str().unwrap_or(""),
+                    lookup(key).unwrap_or_default().as_str(),
+                    "{variant}：头 {key}"
+                );
             }
-            assert_eq!(want.len(), got.len(), "{variant}：头集合大小（多出来的就是照搬了对话那套）");
-            assert!(lookup("X-Uid").is_none() && lookup("X-Ide-Token").is_none(), "{variant}：ug 族不带对话那三头");
-            assert_eq!(Some("Cloud-IDE-JWT at".to_string()), lookup("Authorization"), "{variant}：令牌只进一个头");
+            assert_eq!(
+                want.len(),
+                got.len(),
+                "{variant}：头集合大小（多出来的就是照搬了对话那套）"
+            );
+            assert!(
+                lookup("X-Uid").is_none() && lookup("X-Ide-Token").is_none(),
+                "{variant}：ug 族不带对话那三头"
+            );
+            assert_eq!(
+                Some("Cloud-IDE-JWT at".to_string()),
+                lookup("Authorization"),
+                "{variant}：令牌只进一个头"
+            );
         }
     }
 
@@ -1252,14 +1551,19 @@ mod tests {
             pool: credits_pool_usage(&list, false),
             plan: plan_name(&list, true),
             fast_request_per: None,
-            solo_parallel: solo_parallel_limit(&json!({"quota":{"solo_agent_parallel_limit":5}})).or_else(|| solo_parallel_from_packs(&list)),
+            solo_parallel: solo_parallel_limit(&json!({"quota":{"solo_agent_parallel_limit":5}}))
+                .or_else(|| solo_parallel_from_packs(&list)),
             solo_package: solo_package_from_packs(&list),
             pay_plan_type: String::new(),
             official: None,
             pay_status: None,
             raw_ent_usage: json!({}),
         };
-        assert_eq!(Some(5), readout.solo_parallel, "pay_status 的 5 优先于包里的 2");
+        assert_eq!(
+            Some(5),
+            readout.solo_parallel,
+            "pay_status 的 5 优先于包里的 2"
+        );
         let document = document(&readout, true);
         assert_eq!(Some("5 路"), document["wallets"][0]["balanceView"].as_str());
         assert_eq!(Some("可用"), document["wallets"][1]["balanceView"].as_str());
@@ -1275,7 +1579,10 @@ mod tests {
         );
         let summary = summarize(&list, true);
         assert_eq!(MODEL_BASIC, summary.model);
-        assert_eq!(200, summary.remain, "布尔那层不算 quota，探测要走到 subscription_extra");
+        assert_eq!(
+            200, summary.remain,
+            "布尔那层不算 quota，探测要走到 subscription_extra"
+        );
         assert!(!credits_pool_usage(&list, false).known);
     }
 
@@ -1308,10 +1615,23 @@ mod tests {
             raw_ent_usage: json!({}),
         };
         let document = document(&readout, true);
-        assert_eq!(Some(418), document["available"].as_i64(), "主读数=逐包取整的积分池（418+0），不是官方那份");
-        let last = document["wallets"].as_array().expect("wallets 是数组").last().cloned().unwrap_or(Value::Null);
+        assert_eq!(
+            Some(418),
+            document["available"].as_i64(),
+            "主读数=逐包取整的积分池（418+0），不是官方那份"
+        );
+        let last = document["wallets"]
+            .as_array()
+            .expect("wallets 是数组")
+            .last()
+            .cloned()
+            .unwrap_or(Value::Null);
         assert_eq!(Some("官方汇总"), last["displayName"].as_str());
-        assert_eq!(Some("剩 1468.23 / 共 1550（已用 5.3%）"), last["balanceView"].as_str(), "浮点尾零要去掉");
+        assert_eq!(
+            Some("剩 1468.23 / 共 1550（已用 5.3%）"),
+            last["balanceView"].as_str(),
+            "浮点尾零要去掉"
+        );
     }
 
     #[test]
@@ -1319,7 +1639,11 @@ mod tests {
         let readout = Readout {
             is_credits_billing: false,
             summary: Summary::unknown(),
-            pool: CreditsPool { remain: 0, known: false, unlimited: false },
+            pool: CreditsPool {
+                remain: 0,
+                known: false,
+                unlimited: false,
+            },
             plan: "Unknown".to_string(),
             fast_request_per: None,
             solo_parallel: None,
@@ -1331,7 +1655,12 @@ mod tests {
         };
         let document = document(&readout, true);
         assert!(document["available"].is_null(), "查不出来就是 null，不是 0");
-        assert!(document["wallets"].as_array().is_some_and(|rows| rows.is_empty()), "没有证据就不给假行");
+        assert!(
+            document["wallets"]
+                .as_array()
+                .is_some_and(|rows| rows.is_empty()),
+            "没有证据就不给假行"
+        );
         assert!(
             document["subscription"].get("remainQuota").is_none(),
             "JS 里 Number(null)===0，界面会把 null 画成「余量 0」，所以这个键必须整个不写"
@@ -1342,28 +1671,57 @@ mod tests {
     fn unlimited_pool_shows_a_view_string_instead_of_minus_one() {
         let readout = Readout {
             is_credits_billing: true,
-            summary: Summary { model: MODEL_FAST, remain: -1, remain_known: true, fast_limit: -1, fast_used: 12, used: 0, total: 0, end_time: 0 },
-            pool: CreditsPool { remain: -1, known: true, unlimited: true },
+            summary: Summary {
+                model: MODEL_FAST,
+                remain: -1,
+                remain_known: true,
+                fast_limit: -1,
+                fast_used: 12,
+                used: 0,
+                total: 0,
+                end_time: 0,
+            },
+            pool: CreditsPool {
+                remain: -1,
+                known: true,
+                unlimited: true,
+            },
             plan: "CNExpress".to_string(),
             fast_request_per: Some(1000),
             solo_parallel: Some(3),
             solo_package: false,
             pay_plan_type: "CNExpress".to_string(),
             official: None,
-            pay_status: Some(json!({"code":0,"detail":{"fast_request_per":1000},"quota":{"solo_agent_parallel_limit":3}})),
+            pay_status: Some(
+                json!({"code":0,"detail":{"fast_request_per":1000},"quota":{"solo_agent_parallel_limit":3}}),
+            ),
             raw_ent_usage: json!({}),
         };
         let document = document(&readout, true);
         // 两处都是"不限"时没有可给的数：`available` 给 null（界面上是「可用 —」），
         // "不限"这件事由明细行的展示串承担 —— 把 -1 当数写出去会被读成"欠费 1 次"。
-        assert!(document["available"].is_null(), "不限不是数，available 该是 null");
+        assert!(
+            document["available"].is_null(),
+            "不限不是数，available 该是 null"
+        );
         assert_eq!(Some("积分"), document["unit"].as_str());
         let pool_row = &document["wallets"][0];
         assert!(pool_row["balance"].is_null() && pool_row["unlimited"].as_bool() == Some(true));
         assert_eq!(Some("不限"), pool_row["balanceView"].as_str());
-        assert_eq!(Some("不限（已用 12）"), document["wallets"][1]["balanceView"].as_str());
-        assert_eq!(Some(3), document["wallets"][2]["balance"].as_i64(), "SOLO 并发来自 pay_status");
-        assert_eq!(Some(1000), document["wallets"][3]["balance"].as_i64(), "快请求配额来自 pay_status");
+        assert_eq!(
+            Some("不限（已用 12）"),
+            document["wallets"][1]["balanceView"].as_str()
+        );
+        assert_eq!(
+            Some(3),
+            document["wallets"][2]["balance"].as_i64(),
+            "SOLO 并发来自 pay_status"
+        );
+        assert_eq!(
+            Some(1000),
+            document["wallets"][3]["balance"].as_i64(),
+            "快请求配额来自 pay_status"
+        );
         assert_eq!(Some("付费"), document["subscription"]["status"].as_str());
     }
 
@@ -1374,7 +1732,11 @@ mod tests {
         let readout = Readout {
             is_credits_billing: false,
             summary,
-            pool: CreditsPool { remain: 0, known: false, unlimited: false },
+            pool: CreditsPool {
+                remain: 0,
+                known: false,
+                unlimited: false,
+            },
             plan: "免费".to_string(),
             fast_request_per: None,
             solo_parallel: None,
@@ -1384,11 +1746,26 @@ mod tests {
             pay_status: None,
             raw_ent_usage: json!({}),
         };
-        assert_eq!(Some(1_800_000_000_000), document(&readout, true)["subscription"]["expireAt"].as_i64());
+        assert_eq!(
+            Some(1_800_000_000_000),
+            document(&readout, true)["subscription"]["expireAt"].as_i64()
+        );
         // 上游哪天直接给毫秒（>1e11）就不该再乘一遍
-        let readout = Readout { summary: Summary { end_time: 1_800_000_000_000, ..Summary::unknown() }, ..readout };
-        assert_eq!(Some(1_800_000_000_000), document(&readout, true)["subscription"]["expireAt"].as_i64());
-        assert_eq!(Some("免费"), document(&readout, true)["subscription"]["status"].as_str());
+        let readout = Readout {
+            summary: Summary {
+                end_time: 1_800_000_000_000,
+                ..Summary::unknown()
+            },
+            ..readout
+        };
+        assert_eq!(
+            Some(1_800_000_000_000),
+            document(&readout, true)["subscription"]["expireAt"].as_i64()
+        );
+        assert_eq!(
+            Some("免费"),
+            document(&readout, true)["subscription"]["status"].as_str()
+        );
     }
 
     #[test]
@@ -1400,28 +1777,50 @@ mod tests {
         assert_eq!(Some(EP_PAY_STATUS), endpoints["payStatus"].as_str());
         // 两个接口都是「POST 一个空对象」：body 里没有账号、没有 uid，
         // 全凭 ug 那套头识别身份（多塞字段不会被上游拒，但那不是它给的形状）
-        for (label, key) in [("ent_usage", "usageRequest"), ("pay_status", "payStatusRequest")] {
+        for (label, key) in [
+            ("ent_usage", "usageRequest"),
+            ("pay_status", "payStatusRequest"),
+        ] {
             let request = &document[key];
             assert_eq!(Some("POST"), request["method"].as_str(), "{label}");
             assert_eq!(Some("{}"), request["body"].as_str(), "{label}");
         }
-        assert_eq!(Some(EP_ENT_USAGE), document["usageRequest"]["path"].as_str());
-        assert_eq!(Some(EP_PAY_STATUS), document["payStatusRequest"]["path"].as_str());
+        assert_eq!(
+            Some(EP_ENT_USAGE),
+            document["usageRequest"]["path"].as_str()
+        );
+        assert_eq!(
+            Some(EP_PAY_STATUS),
+            document["payStatusRequest"]["path"].as_str()
+        );
         // 参考实现**实际发出的头**要和我们 `ug_headers` 产出的集合逐条比
         // （原先只比 `ugHeaders` 那段，而那是另一个调用点造的 —— 两条链
         //  用同一套头这件事得有人证明）。随机的那两个只断言存在。
         for key in ["usageRequest", "payStatusRequest"] {
             let want = &document[key]["headers"];
             // 反空跑：headers 为空对象时下面那个循环一条都不执行，测试会假绿。
-            assert!(want.as_object().map(|map| map.len() >= 15).unwrap_or(false), "{key} 的头集合不该是空的");
+            assert!(
+                want.as_object().map(|map| map.len() >= 15).unwrap_or(false),
+                "{key} 的头集合不该是空的"
+            );
             let got = ug_headers("solo", "at", "d-1");
-            let lookup = |name: &str| got.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.clone());
+            let lookup = |name: &str| {
+                got.iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case(name))
+                    .map(|(_, v)| v.clone())
+            };
             for (name, value) in want.as_object().expect("headers 是对象") {
-                if name.eq_ignore_ascii_case("X-Request-Id") || name.eq_ignore_ascii_case("X-Tt-Trace-Id") {
+                if name.eq_ignore_ascii_case("X-Request-Id")
+                    || name.eq_ignore_ascii_case("X-Tt-Trace-Id")
+                {
                     assert!(lookup(name).is_some(), "{key}：少了 {name}");
                     continue;
                 }
-                assert_eq!(value.as_str().unwrap_or(""), lookup(name).unwrap_or_default(), "{key}：头 {name} 不一致");
+                assert_eq!(
+                    value.as_str().unwrap_or(""),
+                    lookup(name).unwrap_or_default(),
+                    "{key}：头 {name} 不一致"
+                );
             }
         }
     }
@@ -1453,10 +1852,18 @@ mod tests {
                         let headers: Vec<(String, String)> = request
                             .headers()
                             .iter()
-                            .map(|(name, value)| (name.as_str().to_string(), value.to_str().unwrap_or("").to_string()))
+                            .map(|(name, value)| {
+                                (
+                                    name.as_str().to_string(),
+                                    value.to_str().unwrap_or("").to_string(),
+                                )
+                            })
                             .collect();
                         let body = String::from_utf8_lossy(
-                            axum::body::to_bytes(request.into_body(), 1 << 20).await.unwrap_or_default().as_ref(),
+                            axum::body::to_bytes(request.into_body(), 1 << 20)
+                                .await
+                                .unwrap_or_default()
+                                .as_ref(),
                         )
                         .to_string();
                         seen.lock().unwrap().push((path.clone(), body, headers));
@@ -1472,22 +1879,44 @@ mod tests {
                     }
                 }),
             );
-            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("mock 监听");
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("mock 监听");
             let address = listener.local_addr().expect("本地地址");
-            tokio::spawn(async move { axum::serve(listener, app).await.ok(); });
-            Self { base: format!("http://{address}"), seen }
+            tokio::spawn(async move {
+                axum::serve(listener, app).await.ok();
+            });
+            Self {
+                base: format!("http://{address}"),
+                seen,
+            }
         }
 
         fn paths(&self) -> Vec<String> {
-            self.seen.lock().unwrap().iter().map(|(path, _, _)| path.clone()).collect()
+            self.seen
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|(path, _, _)| path.clone())
+                .collect()
         }
 
         fn authorization(&self, index: usize) -> String {
-            self.seen.lock().unwrap()[index].2.iter().find(|(name, _)| name == "authorization").map(|(_, value)| value.clone()).unwrap_or_default()
+            self.seen.lock().unwrap()[index]
+                .2
+                .iter()
+                .find(|(name, _)| name == "authorization")
+                .map(|(_, value)| value.clone())
+                .unwrap_or_default()
         }
 
         fn user_agent(&self, index: usize) -> String {
-            self.seen.lock().unwrap()[index].2.iter().find(|(name, _)| name == "user-agent").map(|(_, value)| value.clone()).unwrap_or_default()
+            self.seen.lock().unwrap()[index]
+                .2
+                .iter()
+                .find(|(name, _)| name == "user-agent")
+                .map(|(_, value)| value.clone())
+                .unwrap_or_default()
         }
 
         fn body(&self, index: usize) -> String {
@@ -1520,10 +1949,17 @@ mod tests {
         ])
         .await;
         let readout = read_against(&mock, &credential()).await.expect("读取成功");
-        assert_eq!(vec![EP_ENT_USAGE.to_string(), EP_PAY_STATUS.to_string()], mock.paths());
+        assert_eq!(
+            vec![EP_ENT_USAGE.to_string(), EP_PAY_STATUS.to_string()],
+            mock.paths()
+        );
         assert_eq!(r#"{}"#, mock.body(0), "两个接口都只发一个空对象");
         assert_eq!("Cloud-IDE-JWT JWT-AT", mock.authorization(0));
-        assert_eq!("VSCode 1.107.1 (TRAE SOLO CN)", mock.user_agent(0), "ug 族的 UA 不是 IDE 主进程那一份");
+        assert_eq!(
+            "VSCode 1.107.1 (TRAE SOLO CN)",
+            mock.user_agent(0),
+            "ug 族的 UA 不是 IDE 主进程那一份"
+        );
         assert_eq!(MODEL_BASIC, readout.summary.model);
         assert_eq!(400, readout.summary.remain, "500-100");
         assert_eq!(700, readout.pool.remain, "1000-300");
@@ -1534,7 +1970,10 @@ mod tests {
         let document = document(&readout, true);
         assert_eq!(Some(700), document["available"].as_i64());
         assert_eq!(Some("积分"), document["unit"].as_str());
-        assert_eq!(Some("Pro"), document["raw"]["payStatus"]["user_pay_identity_str"].as_str());
+        assert_eq!(
+            Some("Pro"),
+            document["raw"]["payStatus"]["user_pay_identity_str"].as_str()
+        );
     }
 
     #[tokio::test]
@@ -1544,9 +1983,14 @@ mod tests {
             (503, r#"upstream busy"#.to_string()),
         ])
         .await;
-        let readout = read_against(&mock, &credential()).await.expect("第二条链失败不该整体报错");
+        let readout = read_against(&mock, &credential())
+            .await
+            .expect("第二条链失败不该整体报错");
         assert!(readout.pay_status.is_none());
-        assert_eq!(100, document(&readout, true)["available"].as_i64().unwrap_or(-1));
+        assert_eq!(
+            100,
+            document(&readout, true)["available"].as_i64().unwrap_or(-1)
+        );
     }
 
     #[tokio::test]
@@ -1557,7 +2001,10 @@ mod tests {
         ])
         .await;
         let readout = read_against(&mock, &credential()).await.expect("读取成功");
-        assert!(readout.pay_status.is_none(), "code!=0 的失败体不能当成一份合法配额");
+        assert!(
+            readout.pay_status.is_none(),
+            "code!=0 的失败体不能当成一份合法配额"
+        );
         assert_eq!(6, readout.summary.remain);
         assert_eq!(None, readout.fast_request_per);
     }
@@ -1566,11 +2013,30 @@ mod tests {
     async fn session_dead_on_the_ug_family_is_reported_as_401_for_the_retry_path() {
         // 编排层（`usage_query::query_usage_inner`）只认 401 才会"刷新后重试一次"。
         // 报成 502 的话，一条本可以救回来的登录态过期就变成用户看到的红色失败。
-        let mock = MockUg::spawn(vec![(401, r#"{"code":1001,"msg":"We're sorry, but we are not able to authenticate you"}"#.to_string())]).await;
-        let error = read_against(&mock, &credential()).await.expect_err("401 必须报错");
-        assert_eq!(401, error.status_code, "实际：{} {}", error.status_code, error.message);
-        assert!(error.message.contains("1001"), "文案要带上游业务码：{}", error.message);
-        assert_eq!(vec![EP_ENT_USAGE.to_string()], mock.paths(), "主链失败就不必再打第二条");
+        let mock = MockUg::spawn(vec![(
+            401,
+            r#"{"code":1001,"msg":"We're sorry, but we are not able to authenticate you"}"#
+                .to_string(),
+        )])
+        .await;
+        let error = read_against(&mock, &credential())
+            .await
+            .expect_err("401 必须报错");
+        assert_eq!(
+            401, error.status_code,
+            "实际：{} {}",
+            error.status_code, error.message
+        );
+        assert!(
+            error.message.contains("1001"),
+            "文案要带上游业务码：{}",
+            error.message
+        );
+        assert_eq!(
+            vec![EP_ENT_USAGE.to_string()],
+            mock.paths(),
+            "主链失败就不必再打第二条"
+        );
     }
 
     #[tokio::test]
@@ -1578,7 +2044,9 @@ mod tests {
         let mock = MockUg::spawn(vec![]).await;
         let mut credential = credential();
         credential.access_token = String::new();
-        let error = read_against(&mock, &credential).await.expect_err("空凭证不该出站");
+        let error = read_against(&mock, &credential)
+            .await
+            .expect_err("空凭证不该出站");
         assert_eq!(401, error.status_code);
         assert!(mock.paths().is_empty(), "一条请求都没发出去才对");
     }
@@ -1589,9 +2057,20 @@ mod tests {
         // 额度，但会花掉一次真实账号的鉴权（而测试用的令牌是编的）。
         // 这条断言之所以按"两条都在 mock"来判，是因为上一版就是这个写法漏了
         // pay_status 那半 —— 结果 4 条测试各自往 api.trae.cn 发了一条 401。
-        let mock = MockUg::spawn(vec![(200, r#"{"user_entitlement_pack_list":[]}"#.to_string()), (200, r#"{"code":0}"#.to_string())]).await;
-        assert!(mock.base.starts_with("http://127.0.0.1:"), "假上游必须在本机：{}", mock.base);
-        assert!(!UG_HOST.contains("127.0.0.1"), "常量本身指向真上游，只能被 read_at 覆盖");
+        let mock = MockUg::spawn(vec![
+            (200, r#"{"user_entitlement_pack_list":[]}"#.to_string()),
+            (200, r#"{"code":0}"#.to_string()),
+        ])
+        .await;
+        assert!(
+            mock.base.starts_with("http://127.0.0.1:"),
+            "假上游必须在本机：{}",
+            mock.base
+        );
+        assert!(
+            !UG_HOST.contains("127.0.0.1"),
+            "常量本身指向真上游，只能被 read_at 覆盖"
+        );
         read_against(&mock, &credential()).await.expect("读取成功");
         assert_eq!(
             vec![EP_ENT_USAGE.to_string(), EP_PAY_STATUS.to_string()],

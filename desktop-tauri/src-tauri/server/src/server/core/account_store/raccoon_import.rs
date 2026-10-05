@@ -30,8 +30,8 @@ use crate::server::core::account_store::sql;
 use crate::server::core::account_store::state::StoredAccount;
 use crate::server::core::account_store::store::AccountStore;
 use crate::server::core::account_store::store_util::{pick_token, token_tail_of, truncate_chars};
-use crate::server::core::providers::raccoon::jwt;
 use crate::server::core::providers::kind_id;
+use crate::server::core::providers::raccoon::jwt;
 use crate::server::core::providers::ProviderKind;
 use crate::server::logging;
 
@@ -86,18 +86,17 @@ impl AccountStore {
             // 查询失败（库不可用）按「有账号」处理：本函数是启动期的**一次性**
             // 导入，库不可用时不该顺势去写（那只会再失败一次并刷屏），保守跳过
             // 更安全 —— 反正这次启动的账号功能整体已不可用，会由别处的 ❌ 说明。
-            let has_raccoon = match self.with_conn(&_guard, |conn| {
-                sql::count_by_provider(conn, raccoon)
-            }) {
-                Ok(count) => count > 0,
-                Err(error) => {
-                    logging::log(
-                        "[Accounts]",
-                        &format!("⚠️  读取小浣熊账号数失败，跳过旧数据导入: {error}"),
-                    );
-                    true
-                }
-            };
+            let has_raccoon =
+                match self.with_conn(&_guard, |conn| sql::count_by_provider(conn, raccoon)) {
+                    Ok(count) => count > 0,
+                    Err(error) => {
+                        logging::log(
+                            "[Accounts]",
+                            &format!("⚠️  读取小浣熊账号数失败，跳过旧数据导入: {error}"),
+                        );
+                        true
+                    }
+                };
             let flagged = crate::server::config::current()
                 .raw()
                 .get(IMPORT_FLAG_KEY)
@@ -128,10 +127,7 @@ impl AccountStore {
                     );
                 }
             }
-            Err(reason) => logging::log(
-                "[Accounts]",
-                &format!("ℹ️  未导入旧网关账号（{reason}）"),
-            ),
+            Err(reason) => logging::log("[Accounts]", &format!("ℹ️  未导入旧网关账号（{reason}）")),
         }
         // 来源 2：桌面端登录态
         match self.import_raccoon_desktop_account("imported") {
@@ -336,4 +332,5 @@ impl AccountStore {
             .map_err(|error| format!("导入落盘失败: {}", error.message))?;
         }
         Ok((added, skipped))
-    }}
+    }
+}

@@ -71,10 +71,10 @@ use axum::http::HeaderMap;
 use serde_json::Value;
 
 use crate::server::core::account_store::AccountStore;
-use crate::server::core::providers::content_block;
 use crate::server::core::providers::adapter::{
     ChatRequestPlan, ModelRefreshOutcome, ProviderAdapter, UpstreamErrorClass,
 };
+use crate::server::core::providers::content_block;
 use crate::server::core::providers::ProviderKind;
 use crate::server::errors::GatewayError;
 use crate::server::logging;
@@ -285,9 +285,7 @@ impl ProviderAdapter for ClineAdapter {
         // 去拉」这一维 —— 弹窗里那一列对它显示为空，参数照收不用
         _account_id: &'a str,
         _force: bool,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = ModelRefreshOutcome> + Send + 'a>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ModelRefreshOutcome> + Send + 'a>> {
         Box::pin(async move {
             match models::refresh().await {
                 Ok(count) => {
@@ -301,10 +299,7 @@ impl ProviderAdapter for ClineAdapter {
                     ModelRefreshOutcome::refreshed(count)
                 }
                 Err(reason) => {
-                    logging::verbose(
-                        "[Models]",
-                        &format!("Cline 模型目录刷新失败：{reason}"),
-                    );
+                    logging::verbose("[Models]", &format!("Cline 模型目录刷新失败：{reason}"));
                     ModelRefreshOutcome::failed(format!("Cline 目录刷新失败：{reason}"))
                 }
             }
@@ -412,9 +407,8 @@ impl ProviderAdapter for ClineAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>>
+    {
         Box::pin(async move { super::balance::query_usage(store, account_id).await })
     }
 }

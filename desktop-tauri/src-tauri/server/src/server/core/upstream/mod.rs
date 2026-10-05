@@ -47,9 +47,9 @@
 pub mod aggregate;
 pub mod cancellation;
 pub mod connections;
-pub mod request;
 mod payload;
 mod provider_loop;
+pub mod request;
 mod rotate;
 pub mod sse;
 pub mod stall;
@@ -102,7 +102,10 @@ struct InFlight {
 
 impl InFlight {
     fn new() -> Self {
-        Self { done: AtomicBool::new(false), signal: tokio::sync::Notify::new() }
+        Self {
+            done: AtomicBool::new(false),
+            signal: tokio::sync::Notify::new(),
+        }
     }
 
     /// 标记完成并唤醒所有等待者（调用方保证：先置位、后唤醒）
@@ -368,11 +371,7 @@ impl UpstreamService {
     }
 
     /// 等待同 body 的在途请求完成（最多 45 秒；被手动终止则立即返回）
-    async fn wait_for_in_flight(
-        &self,
-        key: &str,
-        cancel: Option<&Arc<cancellation::CancelToken>>,
-    ) {
+    async fn wait_for_in_flight(&self, key: &str, cancel: Option<&Arc<cancellation::CancelToken>>) {
         let signal = lock_table(&self.in_flight).get(key).cloned();
         let Some(signal) = signal else {
             return;
@@ -381,7 +380,10 @@ impl UpstreamService {
         // 不是转发结果 —— 请求日志那边没有它的落点（等待发生在选路之前，
         // 那时还没有任何尝试明细可挂），所以它既不进请求日志、也不再进运行
         // 日志页，只在终端留一行供排障时确认「这条请求为什么慢」。
-        logging::console_line("[Upstream]", "⏳ 检测到相同请求正在处理，排队等待（防重试风暴）");
+        logging::console_line(
+            "[Upstream]",
+            "⏳ 检测到相同请求正在处理，排队等待（防重试风暴）",
+        );
         // 先注册等待、再检查完成标志：notify_waiters 只唤醒「当时已登记」的
         // 等待者，这个顺序保证「置位在前」与「置位在后」两种情况都不会漏
         let mut notified = std::pin::pin!(signal.signal.notified());
@@ -608,7 +610,8 @@ impl Stream for ForwardStream {
                             "type": "proxy_error",
                         }
                     })));
-                    self.pending.push_back(Bytes::from_static(b"data: [DONE]\n\n"));
+                    self.pending
+                        .push_back(Bytes::from_static(b"data: [DONE]\n\n"));
                 }
             }
         }
@@ -632,7 +635,12 @@ pub(super) fn account_display(account: &Value) -> String {
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
-        .or_else(|| account.get("id").and_then(Value::as_str).map(str::to_string))
+        .or_else(|| {
+            account
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
         .unwrap_or_default()
 }
 

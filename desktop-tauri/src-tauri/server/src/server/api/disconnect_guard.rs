@@ -57,7 +57,11 @@ pub struct DisconnectGuard {
 impl DisconnectGuard {
     /// 在 `record_started` 之后创建（此刻进行中行已经在库里）。
     pub fn new(stats: Arc<RequestStats>, id: String) -> Self {
-        Self { stats, id, armed: true }
+        Self {
+            stats,
+            id,
+            armed: true,
+        }
     }
 
     /// 记账已完成 —— 解除兜底并注销取消令牌（请求不再在途）。

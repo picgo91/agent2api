@@ -27,7 +27,9 @@ use serde_json::{json, Value};
 
 use crate::server::config;
 use crate::server::core::egress;
-use crate::server::core::proxies::{resolve_account_proxy, ProxyResolution, ResolvedProxy, CLASH_MIXED_UID};
+use crate::server::core::proxies::{
+    resolve_account_proxy, ProxyResolution, ResolvedProxy, CLASH_MIXED_UID,
+};
 use crate::server::logging;
 
 use super::token;
@@ -42,7 +44,10 @@ use super::USER_AGENT;
 /// WorkBuddy 网关时）与后来的两套写法，按同一惯例兼容读。
 pub fn github_headers() -> Vec<(String, String)> {
     let mut headers = vec![
-        ("Accept".to_string(), "application/vnd.github+json".to_string()),
+        (
+            "Accept".to_string(),
+            "application/vnd.github+json".to_string(),
+        ),
         // UA 与下载走同一个常量（mod.rs 的 USER_AGENT）：项目改名时只改一处
         ("User-Agent".to_string(), USER_AGENT.to_string()),
         ("X-GitHub-Api-Version".to_string(), "2022-11-28".to_string()),
@@ -98,7 +103,10 @@ fn resolve_egress_candidates() -> Vec<(String, Option<ResolvedProxy>)> {
                 }
             } else if let Some(error) = resolution.error() {
                 // Node 在这条分支上静默（try/catch 吞掉），这里留 verbose 便于排障
-                logging::verbose("[Update]", &format!("Clash 出口不可用（{error}），仅用直连"));
+                logging::verbose(
+                    "[Update]",
+                    &format!("Clash 出口不可用（{error}），仅用直连"),
+                );
             }
         }
         None => {}
@@ -140,7 +148,10 @@ pub async fn fetch_with_egress(
             Err(error) => {
                 logging::verbose(
                     "[Update]",
-                    &format!("经 {label} 访问失败: {}", egress::describe_error_detail(&error)),
+                    &format!(
+                        "经 {label} 访问失败: {}",
+                        egress::describe_error_detail(&error)
+                    ),
                 );
                 last_error = Some(error);
             }

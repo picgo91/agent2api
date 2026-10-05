@@ -183,15 +183,22 @@ pub fn normalize_continuation_messages(messages: &[Value]) -> Result<Vec<Value>,
 /// 单条消息归一化（原实现 `normalizeMessage`）。
 fn normalize_message(message: &Value, index: usize) -> Result<Stage1, GatewayError> {
     let Some(object) = message.as_object() else {
-        return Err(GatewayError::bad_request(format!("messages[{index}] 必须是对象")));
+        return Err(GatewayError::bad_request(format!(
+            "messages[{index}] 必须是对象"
+        )));
     };
-    let role = object.get("role").and_then(Value::as_str).unwrap_or_default();
+    let role = object
+        .get("role")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     match role {
         "system" | "developer" => normalize_directive(object, index, role),
         "user" => normalize_user(object, index),
         "assistant" => normalize_assistant(object, index),
         "tool" => normalize_tool(object, index),
-        other => Err(GatewayError::bad_request(format!("不支持的消息角色: {other}"))),
+        other => Err(GatewayError::bad_request(format!(
+            "不支持的消息角色: {other}"
+        ))),
     }
 }
 
@@ -225,7 +232,10 @@ fn normalize_directive(
     } else {
         DirectiveRole::Developer
     };
-    Ok(Stage1::Directive { role: directive_role, text })
+    Ok(Stage1::Directive {
+        role: directive_role,
+        text,
+    })
 }
 
 /// user：内容非空。
@@ -259,10 +269,7 @@ fn normalize_user(object: &Map<String, Value>, index: usize) -> Result<Stage1, G
 /// 有文本块就写进它的 `reasoningContent`；没有就**追加一个空 text 块**承载。
 /// 那个空 text 块在指纹里会被跳过（`fingerprint::is_blank_text_block`）——
 /// 两处是同一条规则的两半，不能只改一边。
-fn normalize_assistant(
-    object: &Map<String, Value>,
-    index: usize,
-) -> Result<Stage1, GatewayError> {
+fn normalize_assistant(object: &Map<String, Value>, index: usize) -> Result<Stage1, GatewayError> {
     let mut content = message_content(object)?;
     if content
         .iter()
@@ -351,10 +358,16 @@ fn normalize_tool(object: &Map<String, Value>, index: usize) -> Result<Stage1, G
     let mut message = Map::new();
     message.insert("type".to_string(), Value::String("tool".to_string()));
     message.insert("messageId".to_string(), message_id(object));
-    message.insert("content".to_string(), Value::Array(vec![Value::Object(block)]));
+    message.insert(
+        "content".to_string(),
+        Value::Array(vec![Value::Object(block)]),
+    );
     message.insert("finished".to_string(), finished_flag(object));
     if let Some(name) = name {
-        message.insert("requestedToolName".to_string(), Value::String(name.to_string()));
+        message.insert(
+            "requestedToolName".to_string(),
+            Value::String(name.to_string()),
+        );
     }
     Ok(Stage1::Message(Value::Object(message)))
 }
@@ -453,7 +466,11 @@ fn assemble(
                 conversation.push(message);
             }
             Some("tool") => {
-                conversation.push(resolve_tool_message(message, index, &mut pending_tool_calls)?);
+                conversation.push(resolve_tool_message(
+                    message,
+                    index,
+                    &mut pending_tool_calls,
+                )?);
             }
             _ => {
                 if !pending_tool_calls.is_empty() {

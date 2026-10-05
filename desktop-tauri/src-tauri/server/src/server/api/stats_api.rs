@@ -114,7 +114,10 @@ fn text_of(params: &Params, key: &str) -> Option<String> {
 
 /// 分页偏移：空串 / 非数字 / 负数 → 0（存储层的 `skip` 以 0 为起点）
 fn parse_offset(value: Option<&String>) -> usize {
-    let Some(text) = value.map(|text| text.trim()).filter(|text| !text.is_empty()) else {
+    let Some(text) = value
+        .map(|text| text.trim())
+        .filter(|text| !text.is_empty())
+    else {
         return 0;
     };
     text.parse::<usize>().unwrap_or(0)
@@ -126,12 +129,17 @@ fn parse_offset(value: Option<&String>) -> usize {
 /// 超上限的夹紧在存储层（`query_requests` 里 `clamp(1, MAX_LIMIT)`，即 500），
 /// 这里只负责把字符串解析成数字 —— 夹紧逻辑只有一处，两层各写一份会漂。
 fn parse_limit(value: Option<&String>) -> Option<usize> {
-    let text = value.map(|text| text.trim()).filter(|text| !text.is_empty())?;
+    let text = value
+        .map(|text| text.trim())
+        .filter(|text| !text.is_empty())?;
     text.parse::<usize>().ok().filter(|size| *size > 0)
 }
 
 /// GET /api/stats/summary?range=7
-pub async fn stats_summary(State(state): State<ServerState>, Query(params): Query<Params>) -> Response {
+pub async fn stats_summary(
+    State(state): State<ServerState>,
+    Query(params): Query<Params>,
+) -> Response {
     // 先 trim 再比对：存储层的 `normalize_range` 也是先 trim 后匹配，
     // 若这里比对未 trim 的值，`?range=%207%20` 会被判 400 而存储层本可接受它 ——
     // 两层的容错度不一致时，用户看到的 400 会显得莫名其妙
@@ -140,7 +148,10 @@ pub async fn stats_summary(State(state): State<ServerState>, Query(params): Quer
     if !RANGES.contains(&requested.as_str()) {
         return errors::management_error(
             400,
-            format!("range 取值非法: {requested}（合法值: {}）", RANGES.join("、")),
+            format!(
+                "range 取值非法: {requested}（合法值: {}）",
+                RANGES.join("、")
+            ),
         );
     }
     // 原样透传存储层的报表结果（`{range, startDate, endDate, overview, providers,
@@ -162,8 +173,15 @@ pub async fn stats_summary(State(state): State<ServerState>, Query(params): Quer
 /// 响应额外带 `running`：同一筛选条件下仍在进行中（status=0）的条数 ——
 /// 转发开始时就会插一条这样的行（见 `RequestStats::record_started`），
 /// 收尾后由终态记账覆盖。status 过滤也认 `running` 值（只看进行中）。
-pub async fn stats_requests(State(state): State<ServerState>, Query(params): Query<Params>) -> Response {
-    ok_json(state.request_stats().query_requests(&filter_from_params(&params)))
+pub async fn stats_requests(
+    State(state): State<ServerState>,
+    Query(params): Query<Params>,
+) -> Response {
+    ok_json(
+        state
+            .request_stats()
+            .query_requests(&filter_from_params(&params)),
+    )
 }
 
 /// 从查询串解析筛选条件 —— GET / DELETE / clear-preview 三条路由共用同一份
@@ -265,10 +283,16 @@ pub async fn clear_stats_requests(
     }
     match (mode, has_filters, deleted) {
         ("raw", _, count) => {
-            logging::log("[Stats]", &format!("已清空 {count} 条原始报文（明细与按天聚合不受影响）"));
+            logging::log(
+                "[Stats]",
+                &format!("已清空 {count} 条原始报文（明细与按天聚合不受影响）"),
+            );
         }
         ("all", true, count) => {
-            logging::log("[Stats]", &format!("已按筛选条件清空 {count} 条请求明细（原始报文同步清空；按天聚合未重算）"));
+            logging::log(
+                "[Stats]",
+                &format!("已按筛选条件清空 {count} 条请求明细（原始报文同步清空；按天聚合未重算）"),
+            );
         }
         _ => {
             logging::log("[Stats]", "请求统计已清空（明细 + 按天聚合 + 原始报文）");
@@ -313,7 +337,11 @@ pub async fn stats_clear_preview(
     State(state): State<ServerState>,
     Query(params): Query<Params>,
 ) -> Response {
-    ok_json(state.request_stats().clear_preview(&filter_from_params(&params)))
+    ok_json(
+        state
+            .request_stats()
+            .clear_preview(&filter_from_params(&params)),
+    )
 }
 
 /// POST /api/stats/requests/compact —— 压缩数据库（checkpoint + VACUUM）。
@@ -392,7 +420,11 @@ pub async fn put_retention(State(state): State<ServerState>, body: Bytes) -> Res
     // 「日志天数改了、明细天数没改」的半套设置（用户以为保存失败，实际生效了一半）
     let mut patch = RetentionPatch::default();
     let mut targets: [(&str, Option<&Value>, &mut Option<i64>); 3] = [
-        (KEY_LOG_RETENTION_DAYS, object.get(KEY_LOG_RETENTION_DAYS), &mut patch.log_days),
+        (
+            KEY_LOG_RETENTION_DAYS,
+            object.get(KEY_LOG_RETENTION_DAYS),
+            &mut patch.log_days,
+        ),
         (
             KEY_REQUEST_RETENTION_DAYS,
             object.get(KEY_REQUEST_RETENTION_DAYS),
@@ -428,7 +460,10 @@ pub async fn put_retention(State(state): State<ServerState>, body: Bytes) -> Res
         if !config::set_retention(patch) {
             // 写盘失败：内存快照已更新（本次运行仍生效），但重启后会回到旧值 ——
             // 必须让用户知道，否则「改了设置重启又变回去」会被当成玄学问题
-            logging::log("[Config]", "⚠️  保留期写入 config.json 失败，本次运行内仍生效");
+            logging::log(
+                "[Config]",
+                "⚠️  保留期写入 config.json 失败，本次运行内仍生效",
+            );
         }
         // ── 立即清理（两种数据各自的时机不同，这里一次触发）──
         // 请求统计：prune() 内部**动态取**保留期回调，所以取到的就是刚写入的值

@@ -264,19 +264,27 @@ mod tests {
     fn the_error_event_reads_message_not_msg() {
         // 参考实现只认 `message`；写成 `msg` 会读出一个空文案 ——
         // 那样 4001 的"过大"判定就永远失效，所以这条单独钉住。
-        let (code, message) = error_event_fields(&serde_json::json!({"code": 4008, "message": "quota"}));
+        let (code, message) =
+            error_event_fields(&serde_json::json!({"code": 4008, "message": "quota"}));
         assert_eq!(4008, code);
         assert_eq!("quota", message);
-        let (code, message) = error_event_fields(&serde_json::json!({"code": 1005, "msg": "plan limit"}));
+        let (code, message) =
+            error_event_fields(&serde_json::json!({"code": 1005, "msg": "plan limit"}));
         assert_eq!(1005, code);
-        assert!(message.is_empty(), "msg 键读不出来是**预期行为**，向量里也是这么记的");
+        assert!(
+            message.is_empty(),
+            "msg 键读不出来是**预期行为**，向量里也是这么记的"
+        );
     }
 
     #[test]
     fn request_level_kinds_are_the_ones_that_must_not_cool_an_account() {
         assert!(ErrorKind::InputTooLarge.is_request_level());
         assert!(ErrorKind::ModelUnavailable.is_request_level());
-        assert!(!ErrorKind::PlanLimit.is_request_level(), "配额不足是账号状态，要冷却");
+        assert!(
+            !ErrorKind::PlanLimit.is_request_level(),
+            "配额不足是账号状态，要冷却"
+        );
         assert!(!ErrorKind::SessionDead.is_request_level());
     }
 }

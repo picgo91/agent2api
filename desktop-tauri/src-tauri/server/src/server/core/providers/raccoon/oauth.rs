@@ -232,11 +232,10 @@ pub async fn exchange_code(
     let refresh_token = text_of("refresh_token");
     let upstream_code = payload.get("code").and_then(Value::as_i64);
     if upstream_code == Some(CODE_EXPIRED) {
-        return Err(GatewayError::with_status(
-            400,
-            "授权码已失效，请重新发起网页登录",
-        )
-        .with_optional_code(upstream_code));
+        return Err(
+            GatewayError::with_status(400, "授权码已失效，请重新发起网页登录")
+                .with_optional_code(upstream_code),
+        );
     }
     if !response.ok || access_token.is_empty() || refresh_token.is_empty() {
         let message = payload
@@ -255,7 +254,9 @@ pub async fn exchange_code(
         } else {
             502
         };
-        return Err(GatewayError::with_status(status as i32, message).with_optional_code(upstream_code));
+        return Err(
+            GatewayError::with_status(status as i32, message).with_optional_code(upstream_code)
+        );
     }
 
     // 落账号：走既有添加路径（理由见模块头）。office_* 用上游返回的下划线键名，

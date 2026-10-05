@@ -90,10 +90,7 @@ pub async fn put_prompt(State(_state): State<ServerState>, body: Bytes) -> Respo
             None => {
                 return errors::management_error(
                     400,
-                    format!(
-                        "{KEY_PROMPT_MODE} 只认 {}（收到: {text}）",
-                        allowed_modes()
-                    ),
+                    format!("{KEY_PROMPT_MODE} 只认 {}（收到: {text}）", allowed_modes()),
                 )
             }
         },
@@ -297,8 +294,8 @@ pub async fn put_prompt(State(_state): State<ServerState>, body: Bytes) -> Respo
                         return errors::management_error(
                             400,
                             format!(
-                                "{KEY_PROMPT_GATEWAY}.{id} 必须是 true / false / null（收到: {other}）"
-                            ),
+                            "{KEY_PROMPT_GATEWAY}.{id} 必须是 true / false / null（收到: {other}）"
+                        ),
                         )
                     }
                 }
@@ -339,14 +336,12 @@ pub async fn put_prompt(State(_state): State<ServerState>, body: Bytes) -> Respo
                 let Some(entry) = value.as_object() else {
                     return errors::management_error(
                         400,
-                        format!("{KEY_PROMPT_GATEWAY_TEXT}.{id} 必须是对象或 null（收到: {value}）"),
+                        format!(
+                            "{KEY_PROMPT_GATEWAY_TEXT}.{id} 必须是对象或 null（收到: {value}）"
+                        ),
                     );
                 };
-                let mut blocks = settings
-                    .gateway_text
-                    .get(id)
-                    .cloned()
-                    .unwrap_or_default();
+                let mut blocks = settings.gateway_text.get(id).cloned().unwrap_or_default();
                 for field in GatewayBlocks::FIELDS {
                     match entry.get(field) {
                         // 未出现 = 这一段不改（保持配置里的原值）
@@ -391,10 +386,7 @@ pub async fn put_prompt(State(_state): State<ServerState>, body: Bytes) -> Respo
     // 无论配置项有没有变都重跑一次解析：它顺带把**提示词文件此刻的内容**重新读
     // 一遍（用户刚改完文件、或刚把文件恢复出来，一次 PUT 就能生效）。
     if !config::set_prompt(mode, file, inline) {
-        logging::log(
-            "[Config]",
-            "⚠️  系统提示词设置写入失败，本次运行内仍生效",
-        );
+        logging::log("[Config]", "⚠️  系统提示词设置写入失败，本次运行内仍生效");
     }
     // 逐家覆盖：一家一条地写（单条写入失败只影响那一家的持久化，其余照写）
     for (id, patch) in &provider_patches {
@@ -613,7 +605,10 @@ fn provider_options() -> Value {
 fn blocks_json(blocks: &GatewayBlocks) -> Value {
     let mut map = serde_json::Map::new();
     for field in GatewayBlocks::FIELDS {
-        map.insert(field.to_string(), Value::String(blocks.get(field).to_string()));
+        map.insert(
+            field.to_string(),
+            Value::String(blocks.get(field).to_string()),
+        );
     }
     Value::Object(map)
 }

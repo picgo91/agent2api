@@ -78,7 +78,10 @@ pub struct Retention {
 
 impl Default for Retention {
     fn default() -> Self {
-        Self { request_days: 30, daily_days: 365 }
+        Self {
+            request_days: 30,
+            daily_days: 365,
+        }
     }
 }
 
@@ -668,13 +671,21 @@ pub struct DailyEntry {
     /// 分组统计都要跨过明细的 30 天保留期（`all` / `month` 可能跨年），
     /// 只靠明细算会在明细到期后突然少掉一大段。
     /// 键名不沿用 `*Tokens` 是因为它承载的语义比 tokens 宽（请求数与成功数）。
-    #[serde(rename = "providerStats", default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "providerStats",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub provider_stats: Vec<ProviderAccum>,
     /// 当天的按账号累计（**契约之外的补充字段**）。
     ///
     /// 与 `providerStats` 同一理由：区间级的账号用量排行要跨过明细的 30 天
     /// 保留期，只有明细的话 `all` / `month` 会在明细到期后突然少掉一大段。
-    #[serde(rename = "accountStats", default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "accountStats",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub account_stats: Vec<AccountAccum>,
 }
 

@@ -284,15 +284,12 @@ fn translate_max_completion_tokens(object: &mut Map<String, Value>, report: &mut
         return; // 显式 max_tokens 优先：别名只删不译
     }
     // 整数（含 JSON 里恰好是整数的浮点）才译；1.5 这类上游 struct 也收不了
-    let translated = alias
-        .as_i64()
-        .filter(|number| *number > 0)
-        .or_else(|| {
-            alias
-                .as_f64()
-                .filter(|number| *number > 0.0 && number.fract() == 0.0)
-                .map(|number| number as i64)
-        });
+    let translated = alias.as_i64().filter(|number| *number > 0).or_else(|| {
+        alias
+            .as_f64()
+            .filter(|number| *number > 0.0 && number.fract() == 0.0)
+            .map(|number| number as i64)
+    });
     if let Some(number) = translated {
         object.insert("max_tokens".to_string(), Value::from(number));
         report.max_tokens_translated = true;

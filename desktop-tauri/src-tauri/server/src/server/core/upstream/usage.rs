@@ -58,7 +58,12 @@ pub fn extract_usage(usage: &Value) -> Option<UsageTokens> {
         .or_else(|| number_field(object.get("cache_read_tokens")))
         .or_else(|| number_field(object.get("cache_read_input_tokens")))
         .unwrap_or(0);
-    Some(UsageTokens { prompt, completion, total, cache_read })
+    Some(UsageTokens {
+        prompt,
+        completion,
+        total,
+        cache_read,
+    })
 }
 
 /// 取数值字段：`as_i64` 对 `1.0` 这类浮点形态会失败，所以再补一次 f64 转换
@@ -563,9 +568,7 @@ impl RequestTelemetry {
     }
 
     /// 取采集器（未开启调试模式时为 None，调用点据此完全跳过采集）
-    pub fn capture(
-        &self,
-    ) -> Option<Arc<crate::server::core::debug_traffic::TrafficCapture>> {
+    pub fn capture(&self) -> Option<Arc<crate::server::core::debug_traffic::TrafficCapture>> {
         self.capture
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())

@@ -48,15 +48,15 @@ use axum::http::HeaderMap;
 use serde_json::Value;
 
 use crate::server::core::account_store::AccountStore;
-use crate::server::core::providers::content_block;
 use crate::server::core::providers::adapter::{
     adapter_for, ChatRequestPlan, ModelRefreshOutcome, ProviderAdapter, ReasoningPatch,
     UpstreamErrorClass,
 };
+use crate::server::core::providers::content_block;
+use crate::server::core::providers::ProviderKind;
 use crate::server::core::proxies::ResolvedProxy;
 use crate::server::core::upstream::usage::RequestTelemetry;
 use crate::server::core::upstream::ForwardOutcome;
-use crate::server::core::providers::ProviderKind;
 use crate::server::errors::GatewayError;
 use crate::server::logging;
 
@@ -64,7 +64,9 @@ use self::credentials::Credentials;
 use self::endpoints::Region;
 
 /// 国际版适配器实例（`adapter_for(ProviderKind::Accio)` 给出这一个）
-pub static ACCIO_ADAPTER: AccioAdapter = AccioAdapter { region: Region::Global };
+pub static ACCIO_ADAPTER: AccioAdapter = AccioAdapter {
+    region: Region::Global,
+};
 /// 国内版适配器实例（同一份实现，只有登录站点与 `x-package-region` 不同）
 pub static ACCIO_CN_ADAPTER: AccioAdapter = AccioAdapter { region: Region::Cn };
 
@@ -147,7 +149,9 @@ impl ProviderAdapter for AccioAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>,
+    > {
         Box::pin(async move {
             refresh::ensure_fresh(store, account_id, self.region, false)
                 .await
@@ -161,7 +165,9 @@ impl ProviderAdapter for AccioAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>,
+    > {
         Box::pin(async move {
             refresh::ensure_fresh(store, account_id, self.region, true)
                 .await
@@ -193,13 +199,19 @@ impl ProviderAdapter for AccioAdapter {
     /// 可靠的「关闭思考」表达）。
     fn reasoning_patch(&self, level: &str, _model: &str, body: &Value) -> ReasoningPatch {
         if crate::server::core::model_rules::reasoning_is_off(level) {
-            return ReasoningPatch::Skip { reason: "Accio 没有「关闭思考」的可靠表达，跳过注入" };
+            return ReasoningPatch::Skip {
+                reason: "Accio 没有「关闭思考」的可靠表达，跳过注入",
+            };
         }
         if crate::server::core::model_rules::read_client_level(body).is_some() {
-            return ReasoningPatch::Skip { reason: "客户端请求体里已指定思考等级，绑定让位" };
+            return ReasoningPatch::Skip {
+                reason: "客户端请求体里已指定思考等级，绑定让位",
+            };
         }
         if crate::server::core::model_rules::reasoning_rank(level).is_none() {
-            return ReasoningPatch::Skip { reason: "该等级不在通用档位表内，Accio 不注入未知档位" };
+            return ReasoningPatch::Skip {
+                reason: "该等级不在通用档位表内，Accio 不注入未知档位",
+            };
         }
         ReasoningPatch::Set {
             field: REASONING_FIELD,
@@ -220,10 +232,14 @@ impl ProviderAdapter for AccioAdapter {
         force: bool,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ModelRefreshOutcome> + Send + 'a>> {
         Box::pin(async move {
-            let Some(record) = store.accio_account_record(account_id, self.region.provider_id()) else {
+            let Some(record) = store.accio_account_record(account_id, self.region.provider_id())
+            else {
                 logging::verbose(
                     "[Models]",
-                    &format!("Accio {}模型目录刷新跳过：尚未添加账号", self.region.label()),
+                    &format!(
+                        "Accio {}模型目录刷新跳过：尚未添加账号",
+                        self.region.label()
+                    ),
                 );
                 if account_id.is_empty() {
                     return ModelRefreshOutcome::unchanged();
@@ -253,7 +269,8 @@ impl ProviderAdapter for AccioAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>>
+    {
         Box::pin(async move { balance::query(store, account_id, self.region).await })
     }
 
@@ -282,7 +299,9 @@ impl ProviderAdapter for AccioAdapter {
         store: &'a AccountStore,
         code: &'a str,
         state: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>,
+    > {
         Box::pin(async move {
             let Some(pending) = oauth::take_pending(state) else {
                 return Err(GatewayError::with_status(
@@ -347,7 +366,8 @@ impl ProviderAdapter for AccioAdapter {
             let context = account_context(store, &account_id, self.region, false).await?;
             // 思考档位：客户端显式指定 > 映射绑定（`body` 里已由 payload 层注入）
             let effort = protocol::client_effort(body);
-            let plan = chat::build_plan(&context.credentials, body, &model_name, effort.as_deref())?;
+            let plan =
+                chat::build_plan(&context.credentials, body, &model_name, effort.as_deref())?;
             let effective_proxy = proxy.or(context.proxy);
 
             logging::verbose(
@@ -355,7 +375,11 @@ impl ProviderAdapter for AccioAdapter {
                 &format!(
                     "POST {} model={} upstream={} stream={} region={} account={}",
                     plan.url,
-                    if model_name.is_empty() { "(默认)" } else { &model_name },
+                    if model_name.is_empty() {
+                        "(默认)"
+                    } else {
+                        &model_name
+                    },
                     plan.upstream_key,
                     stream,
                     self.region.edition(),
@@ -403,7 +427,8 @@ impl ProviderAdapter for AccioAdapter {
                     tokio::sync::mpsc::channel::<Result<bytes::Bytes, std::io::Error>>(64);
                 let telemetry = telemetry.clone();
                 crate::spawn_task(async move {
-                    chat::drive_stream(source, translator, telemetry, limit, sender, prefetched).await;
+                    chat::drive_stream(source, translator, telemetry, limit, sender, prefetched)
+                        .await;
                 });
                 return Ok(ForwardOutcome::Stream {
                     status: 200,
@@ -463,4 +488,3 @@ pub fn adapter_label() -> &'static str {
 pub fn adapter_for_self(region: Region) -> &'static dyn ProviderAdapter {
     adapter_for(region.kind())
 }
-

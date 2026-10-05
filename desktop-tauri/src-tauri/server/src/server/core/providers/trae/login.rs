@@ -23,13 +23,14 @@
 //! `core::login::trae` 那一层用任务状态判（任务表是所有 provider 共用的，
 //! 取消语义必须与其他家一致：`/cancel` 之后 `/wait` 立刻 404、端口释放）。
 
-use crate::server::errors::GatewayError;
 use crate::server::core::proxies::ResolvedProxy;
+use crate::server::errors::GatewayError;
 
 use super::callback_server::CallbackListener;
 use super::credentials::Credential;
 use super::oauth::{
-    exchange_auth_code, request_login_guidance, verification_uri, Callback, LoginContext, DEFAULT_LOGIN_HOST,
+    exchange_auth_code, request_login_guidance, verification_uri, Callback, LoginContext,
+    DEFAULT_LOGIN_HOST,
 };
 use super::profile::{callback_identity, get_user_info, Identity};
 use super::refresh::{refresh_candidates, refresh_once};
@@ -57,10 +58,16 @@ impl Session {
     /// 与实际监听的端口不是同一个 —— 上游那个正则照样放行，回调却落错地方。
     pub async fn begin(variant: &str, proxy: Option<&ResolvedProxy>) -> Result<Self, String> {
         let listener = CallbackListener::bind().await?;
-        let context = LoginContext::new(variant, listener.port(), crate::server::logging::now_ms())?;
+        let context =
+            LoginContext::new(variant, listener.port(), crate::server::logging::now_ms())?;
         let login_host = request_login_guidance(proxy).await;
         let auth_url = verification_uri(&login_host, &context);
-        Ok(Self { context, login_host, auth_url, listener })
+        Ok(Self {
+            context,
+            login_host,
+            auth_url,
+            listener,
+        })
     }
 
     /// 主动结束这一轮：释放回调端口，并让正在等的 `complete()` 以错误退出。
@@ -75,12 +82,13 @@ impl Session {
     ///
     /// 回调一次只认一个：监听器已经把"认不出材料的噪音"（favicon /
     /// preconnect）挡在门外，所以这里拿到的一定是授权材料或错误。
-    pub async fn complete(&self, proxy: Option<&ResolvedProxy>) -> Result<Credential, GatewayError> {
-        let query = self
-            .listener
-            .next_callback()
-            .await
-            .ok_or_else(|| GatewayError::with_status(408, "Trae 登录回调已丢失（本轮监听已结束），请重新发起登录"))?;
+    pub async fn complete(
+        &self,
+        proxy: Option<&ResolvedProxy>,
+    ) -> Result<Credential, GatewayError> {
+        let query = self.listener.next_callback().await.ok_or_else(|| {
+            GatewayError::with_status(408, "Trae 登录回调已丢失（本轮监听已结束），请重新发起登录")
+        })?;
         let callback = Callback::from_query(&query);
         if !callback.error.is_empty() {
             // 上游明说的失败（用户取消、errorCode=20405 设备绑定被拒、
@@ -88,18 +96,29 @@ impl Session {
             return Err(GatewayError::with_status(400, callback.error.clone()));
         }
         if callback.auth_code.is_empty() && callback.refresh_token.is_empty() {
-            return Err(GatewayError::with_status(400, "Trae 回调里没有授权码也没有续期串"));
+            return Err(GatewayError::with_status(
+                400,
+                "Trae 回调里没有授权码也没有续期串",
+            ));
         }
         // 回调带回的 loginHost 优先（它才是这次授权实际发生的站点），
         // 没有就退回发起时 guidance 的那一份。
-        let login_host = if callback.login_host.is_empty() { self.login_host.clone() } else { callback.login_host.clone() };
+        let login_host = if callback.login_host.is_empty() {
+            self.login_host.clone()
+        } else {
+            callback.login_host.clone()
+        };
         let (access_token, refresh_token, expires_at) = if !callback.refresh_token.is_empty() {
             self.exchange_via_refresh_token(&callback, proxy).await
         } else {
-            self.exchange_via_auth_code(&callback, &login_host, proxy).await?
+            self.exchange_via_auth_code(&callback, &login_host, proxy)
+                .await?
         };
         if access_token.is_empty() && refresh_token.is_empty() {
-            return Err(GatewayError::with_status(502, "Trae 换证成功但响应里没有任何令牌，请重试"));
+            return Err(GatewayError::with_status(
+                502,
+                "Trae 换证成功但响应里没有任何令牌，请重试",
+            ));
         }
         let mut credential = Credential {
             access_token,
@@ -118,7 +137,11 @@ impl Session {
         // 就落一个每个 variant 固定的 unknown 名（见 `profile.rs` 模块头 ——
         // 用 per-login 的随机 id 兜底会造出重复账号）。
         let authoritative = get_user_info(&credential, proxy).await.unwrap_or_default();
-        let identity = Identity::merged(&authoritative, &callback_identity(&query), credential.variant());
+        let identity = Identity::merged(
+            &authoritative,
+            &callback_identity(&query),
+            credential.variant(),
+        );
         credential.uid = identity.uid;
         credential.nickname = identity.nickname;
         credential.enterprise_id = identity.enterprise_id;
@@ -130,7 +153,11 @@ impl Session {
     /// 续期也失败时**不报错**：把这条串既当 accessToken 又当 refreshToken 存下
     /// （参考实现同一条）。判成失败等于把一次已经花掉用户点击的授权丢掉，
     /// 而存下来最坏也只是第一次转发时 401。
-    async fn exchange_via_refresh_token(&self, callback: &Callback, proxy: Option<&ResolvedProxy>) -> (String, String, i64) {
+    async fn exchange_via_refresh_token(
+        &self,
+        callback: &Callback,
+        proxy: Option<&ResolvedProxy>,
+    ) -> (String, String, i64) {
         let seed = Credential {
             refresh_token: callback.refresh_token.clone(),
             api_host: DEFAULT_LOGIN_HOST.to_string(),
@@ -153,10 +180,19 @@ impl Session {
         login_host: &str,
         proxy: Option<&ResolvedProxy>,
     ) -> Result<(String, String, i64), GatewayError> {
-        let exchanged = exchange_auth_code(&self.context, &callback.auth_code, login_host, proxy).await?;
+        let exchanged =
+            exchange_auth_code(&self.context, &callback.auth_code, login_host, proxy).await?;
         // 只有 refreshToken 回来时用它当 accessToken（参考实现 `if accessToken == "" { = refreshToken }`）。
-        let access_token = if exchanged.access_token.is_empty() { exchanged.refresh_token.clone() } else { exchanged.access_token };
-        Ok((access_token, exchanged.refresh_token, exchanged.expires_at_ms))
+        let access_token = if exchanged.access_token.is_empty() {
+            exchanged.refresh_token.clone()
+        } else {
+            exchanged.access_token
+        };
+        Ok((
+            access_token,
+            exchanged.refresh_token,
+            exchanged.expires_at_ms,
+        ))
     }
 }
 
@@ -188,7 +224,9 @@ mod tests {
     ///
     /// 不这么包的话，任何一条"等待方永远等不到东西"的回归都会表现成
     /// 整个测试套件挂住（而不是某条用例红）—— 那是最难查的失效方式。
-    async fn await_with_timeout(handle: tokio::task::JoinHandle<Result<Credential, GatewayError>>) -> Result<Credential, GatewayError> {
+    async fn await_with_timeout(
+        handle: tokio::task::JoinHandle<Result<Credential, GatewayError>>,
+    ) -> Result<Credential, GatewayError> {
         tokio::time::timeout(std::time::Duration::from_secs(10), handle)
             .await
             .expect("10 秒内登录任务应有结论（挂住 = 等待方收不到任何回调）")
@@ -203,13 +241,19 @@ mod tests {
             .unwrap_or_else(|error| panic!("回调端口 {port} 应在监听：{error}"));
         let request =
             format!("GET {CALLBACK_PATH}?{query} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
-        stream.write_all(request.as_bytes()).await.expect("请求要写进去");
+        stream
+            .write_all(request.as_bytes())
+            .await
+            .expect("请求要写进去");
         // 读到 EOF，但**带超时**：hyper 在 `Connection: close` 上何时关连接
         // 不由我们决定，测试不能挂在那儿（挂住的表现是整个套件不动）。
-        let response = tokio::time::timeout(std::time::Duration::from_secs(5), stream.read_to_end(&mut Vec::new()))
-            .await
-            .expect("5 秒内应读完回执")
-            .expect("回执可读");
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            stream.read_to_end(&mut Vec::new()),
+        )
+        .await
+        .expect("5 秒内应读完回执")
+        .expect("回执可读");
         assert!(response > 0, "监听器连回执都没给：{query}");
     }
 
@@ -222,10 +266,24 @@ mod tests {
             let session = Arc::clone(&session);
             tokio::spawn(async move { session.complete(None).await })
         };
-        deliver(&session, "error=access_denied&errorDescription=user%20cancelled").await;
-        let error = await_with_timeout(waiting).await.expect_err("错误回调必须失败");
-        assert_eq!(400, error.status_code, "实际：{} {}", error.status_code, error.message);
-        assert!(error.message.contains("access_denied"), "上游给的原因要原样出去：{}", error.message);
+        deliver(
+            &session,
+            "error=access_denied&errorDescription=user%20cancelled",
+        )
+        .await;
+        let error = await_with_timeout(waiting)
+            .await
+            .expect_err("错误回调必须失败");
+        assert_eq!(
+            400, error.status_code,
+            "实际：{} {}",
+            error.status_code, error.message
+        );
+        assert!(
+            error.message.contains("access_denied"),
+            "上游给的原因要原样出去：{}",
+            error.message
+        );
     }
 
     #[tokio::test]
@@ -242,18 +300,25 @@ mod tests {
         };
         deliver(&session, "scope=solo&userRegion=cn").await;
         let mut waiting = Some(waiting);
-        let pending = tokio::time::timeout(std::time::Duration::from_secs(2), waiting.as_mut().unwrap()).await;
+        let pending =
+            tokio::time::timeout(std::time::Duration::from_secs(2), waiting.as_mut().unwrap())
+                .await;
         assert!(pending.is_err(), "无材料的回调被当成正经回调投进来了");
         // 但**同一轮不能被它烧掉**：随后送来真材料（这里用一条错误回调，
         // 因为真授权材料要出网换证）时，等待方必须照常醒并给出结论 ——
         // 少了这后半段，上面那条断言就只证明了"卡住"，没证明"这一轮还活着"。
         deliver(&session, "error=access_denied").await;
-        let error = tokio::time::timeout(std::time::Duration::from_secs(10), waiting.take().unwrap())
-            .await
-            .expect("真材料到达后等待方应醒来")
-            .expect("任务不该 panic")
-            .expect_err("错误回调应失败");
-        assert_eq!(400, error.status_code, "实际：{} {}", error.status_code, error.message);
+        let error =
+            tokio::time::timeout(std::time::Duration::from_secs(10), waiting.take().unwrap())
+                .await
+                .expect("真材料到达后等待方应醒来")
+                .expect("任务不该 panic")
+                .expect_err("错误回调应失败");
+        assert_eq!(
+            400, error.status_code,
+            "实际：{} {}",
+            error.status_code, error.message
+        );
     }
 
     #[tokio::test]
@@ -269,8 +334,14 @@ mod tests {
         };
         tokio::time::sleep(std::time::Duration::from_millis(30)).await;
         session.close();
-        let error = await_with_timeout(waiting).await.expect_err("关闭后不该拿到凭据");
-        assert_eq!(408, error.status_code, "实际：{} {}", error.status_code, error.message);
+        let error = await_with_timeout(waiting)
+            .await
+            .expect_err("关闭后不该拿到凭据");
+        assert_eq!(
+            408, error.status_code,
+            "实际：{} {}",
+            error.status_code, error.message
+        );
         drop(session);
         // 端口还能再绑上一次 = 真的还掉了（异步任务收尾有一瞬延迟，重试几次）
         let mut rebound = false;
@@ -290,9 +361,15 @@ mod tests {
         // 丢掉它等于把一次已经花掉用户点击的授权扔掉。这里把候选指向一个
         // **本机没人听的端口**，保证不碰真上游也必然走失败支。
         let session = session().await;
-        let callback = Callback { refresh_token: "rt-just-granted".to_string(), ..Default::default() };
+        let callback = Callback {
+            refresh_token: "rt-just-granted".to_string(),
+            ..Default::default()
+        };
         let (access, refresh, expires) = session.exchange_via_refresh_token(&callback, None).await;
-        assert_eq!("rt-just-granted", access, "续期失败时 accessToken 用种子串兜底");
+        assert_eq!(
+            "rt-just-granted", access,
+            "续期失败时 accessToken 用种子串兜底"
+        );
         assert_eq!("rt-just-granted", refresh);
         assert_eq!(0, expires);
     }

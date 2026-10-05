@@ -168,8 +168,7 @@ fn load_os_crypt_aes_key(local_state_path: &Path) -> Result<Vec<u8>, String> {
     }
     if &blob[..DPAPI_PREFIX_LEN] != b"DPAPI" {
         return Err(
-            "AutoClaw os_crypt 密钥前缀不是 DPAPI（这不是 Windows 平台的 Local State）"
-                .to_string(),
+            "AutoClaw os_crypt 密钥前缀不是 DPAPI（这不是 Windows 平台的 Local State）".to_string(),
         );
     }
     let key = dpapi::unprotect(&blob[DPAPI_PREFIX_LEN..])?;
@@ -256,7 +255,11 @@ pub fn decrypt_enc_value(value: &str, aes_key: Option<&[u8]>) -> Result<String, 
 ///
 /// 全程无 panic：密钥长度由 `new_from_slice` 校验，nonce 由 `try_from` 转换
 /// （都是 Result），解密失败由 GCM 的 tag 校验给出 Error。
-fn aes_gcm_decrypt(key: &[u8], nonce: &[u8], ciphertext_with_tag: &[u8]) -> Result<Vec<u8>, String> {
+fn aes_gcm_decrypt(
+    key: &[u8],
+    nonce: &[u8],
+    ciphertext_with_tag: &[u8],
+) -> Result<Vec<u8>, String> {
     use aes_gcm::aead::consts::U12;
     use aes_gcm::aead::Aead as _;
     use aes_gcm::{Aes256Gcm, KeyInit as _, Nonce};

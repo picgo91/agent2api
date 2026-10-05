@@ -123,7 +123,12 @@ pub(super) fn range_totals(
             totals.active_days += 1;
         }
         for acc in &day.model_tokens {
-            push_model_accum(&mut totals.model_totals, &acc.model, acc.tokens, acc.requests);
+            push_model_accum(
+                &mut totals.model_totals,
+                &acc.model,
+                acc.tokens,
+                acc.requests,
+            );
         }
         for acc in &day.provider_stats {
             push_provider_accum(
@@ -154,8 +159,16 @@ pub(super) fn range_totals(
     //   ② 旧数据落进「未知」组而不是被静默丢掉 —— 契约要求不得给旧数据
     //      **猜**值（不许补 workbuddy），但「未知」正是它的真实归属，不是猜。
     // 先求和再借用 `&mut`：闭包持着不可变借用时不能同时改这张表。
-    let covered_requests: i64 = totals.provider_totals.iter().map(|item| item.requests).sum();
-    let covered_successful: i64 = totals.provider_totals.iter().map(|item| item.successful).sum();
+    let covered_requests: i64 = totals
+        .provider_totals
+        .iter()
+        .map(|item| item.requests)
+        .sum();
+    let covered_successful: i64 = totals
+        .provider_totals
+        .iter()
+        .map(|item| item.successful)
+        .sum();
     let covered_tokens: i64 = totals.provider_totals.iter().map(|item| item.tokens).sum();
     // `max(0)` 兜住手改文件造成的「拆分比总量还多」；余量全零时这里仍会建出
     // 一个空组，但 `build_providers` 会把全零的组滤掉（见那边的 `requests > 0
@@ -174,7 +187,11 @@ pub(super) fn range_totals(
     // 请求都会落进「未知账号」组。这是如实反映「那些行没记账号身份」，
     // 而不是我们丢数据 —— 明细里其实有，但聚合要跨过年份，只能按聚合算。
     let covered_requests: i64 = totals.account_totals.iter().map(|item| item.requests).sum();
-    let covered_successful: i64 = totals.account_totals.iter().map(|item| item.successful).sum();
+    let covered_successful: i64 = totals
+        .account_totals
+        .iter()
+        .map(|item| item.successful)
+        .sum();
     let covered_tokens: i64 = totals.account_totals.iter().map(|item| item.tokens).sum();
     push_account_accum(
         &mut totals.account_totals,
@@ -189,7 +206,12 @@ pub(super) fn range_totals(
 
 /// 把一次请求（或一天的累计）并进按模型的累计表。
 /// 线性查找即可：模型数量是个位到十位级，建 HashMap 反而更慢。
-pub(super) fn push_model_accum(list: &mut Vec<ModelAccum>, model: &str, tokens: i64, requests: i64) {
+pub(super) fn push_model_accum(
+    list: &mut Vec<ModelAccum>,
+    model: &str,
+    tokens: i64,
+    requests: i64,
+) {
     match list.iter_mut().find(|item| item.model == model) {
         Some(item) => {
             item.tokens += tokens;
@@ -517,7 +539,11 @@ pub(super) fn build_top_model(totals: &[ModelAccum], range_tokens: i64) -> Value
 ///
 /// 前端按天画柱状图，缺的那天必须占位（补 0）而不是不返回 ——
 /// 少一天会让整条曲线在视觉上被压缩，趋势看起来是错的。
-pub(super) fn daily_trend(daily: &BTreeMap<String, DailyEntry>, start: &str, end: &str) -> Vec<Value> {
+pub(super) fn daily_trend(
+    daily: &BTreeMap<String, DailyEntry>,
+    start: &str,
+    end: &str,
+) -> Vec<Value> {
     let (Some(start_date), Some(end_date)) = (parse_key(start), parse_key(end)) else {
         return Vec::new();
     };
@@ -623,7 +649,9 @@ pub(super) fn cache_trend_24h(entries: &[RequestEntry], now: i64) -> Vec<Value> 
         if item.ts < start_ms || item.ts > now {
             continue;
         }
-        let slot = buckets.entry(hour_key(ms_to_local(item.ts))).or_insert((0, 0, 0));
+        let slot = buckets
+            .entry(hour_key(ms_to_local(item.ts)))
+            .or_insert((0, 0, 0));
         slot.0 += item.cache_read_tokens;
         slot.1 += item.prompt_tokens;
         slot.2 += item.total_tokens;

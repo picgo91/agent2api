@@ -123,7 +123,8 @@ impl Credential {
 
     /// 有效到期时刻：JWT 的 `exp` 优先，落盘字段兜底。
     pub fn effective_expiry_ms(&self) -> i64 {
-        self.jwt_expires_at_ms().unwrap_or_else(|| self.expires_at_ms())
+        self.jwt_expires_at_ms()
+            .unwrap_or_else(|| self.expires_at_ms())
     }
 
     /// 是否需要续期：临期（`lead` 之内）**或**签发龄超过 `max_age`。
@@ -149,7 +150,10 @@ impl Credential {
     /// 蛇形键**直接报错**而不是当空凭据收下 —— 那是别家的形状，
     /// 静默接受会让一个明显有数据的账号显示成"缺凭据"。
     pub fn from_payload(payload: &Value) -> Result<Self, String> {
-        let auth = payload.get("auth").filter(|value| value.is_object()).unwrap_or(payload);
+        let auth = payload
+            .get("auth")
+            .filter(|value| value.is_object())
+            .unwrap_or(payload);
         let account = payload.get("account").filter(|value| value.is_object());
         let text = text_of;
         let number = |object: &Value, key: &str| -> i64 {
@@ -197,10 +201,16 @@ impl Credential {
             ("variant", json_or_empty(self.variant())),
         ];
         if !self.device_public_key.is_empty() {
-            fields.push(("devicePublicKey", Value::String(self.device_public_key.clone())));
+            fields.push((
+                "devicePublicKey",
+                Value::String(self.device_public_key.clone()),
+            ));
         }
         if !self.device_private_key.is_empty() {
-            fields.push(("devicePrivateKey", Value::String(self.device_private_key.clone())));
+            fields.push((
+                "devicePrivateKey",
+                Value::String(self.device_private_key.clone()),
+            ));
         }
         fields
     }
@@ -215,8 +225,14 @@ fn json_or_empty(value: &str) -> Value {
 /// 参考实现把身份放在 `account{uid,nickname,enterpriseId}`，而手工粘贴的
 /// 凭据常常是平铺的 —— 两个位置都读一次，才不会让"明明填了昵称却显示空"。
 fn text_either(account: Option<&Value>, auth: &Value, key: &str) -> String {
-    let from_account = account.map(|object| text_of(object, key)).unwrap_or_default();
-    if from_account.is_empty() { text_of(auth, key) } else { from_account }
+    let from_account = account
+        .map(|object| text_of(object, key))
+        .unwrap_or_default();
+    if from_account.is_empty() {
+        text_of(auth, key)
+    } else {
+        from_account
+    }
 }
 
 fn text_of(object: &Value, key: &str) -> String {
@@ -270,21 +286,43 @@ mod tests {
         assert_eq!("u1", credential.uid);
         assert_eq!("小明", credential.nickname);
         let flat = json!({"accessToken":"a","refreshToken":"r","uid":"u1"});
-        assert_eq!("u1", Credential::from_payload(&flat).expect("平铺也要能读").uid);
+        assert_eq!(
+            "u1",
+            Credential::from_payload(&flat).expect("平铺也要能读").uid
+        );
     }
 
     #[test]
     fn a_payload_without_any_token_is_rejected_not_empty_accepted() {
         // 静默收下空凭据 = 账号"看着有数据却提示缺凭据"，最难查的那种。
-        let error = Credential::from_payload(&json!({"uid":"u1"})).expect_err("两个令牌都没有要报错");
+        let error =
+            Credential::from_payload(&json!({"uid":"u1"})).expect_err("两个令牌都没有要报错");
         assert!(error.contains("accessToken"), "文案要指出缺什么：{error}");
     }
 
     #[test]
     fn seconds_and_milliseconds_are_told_apart_by_magnitude() {
-        assert_eq!(1_800_000_000_000, Credential { expires_at: 1_800_000_000, ..Default::default() }.expires_at_ms());
-        assert_eq!(1_800_000_000_000, Credential { expires_at: 1_800_000_000_000, ..Default::default() }.expires_at_ms());
-        assert_eq!(0, Credential::default().expires_at_ms(), "没给到期时刻就是 0，不是 1970");
+        assert_eq!(
+            1_800_000_000_000,
+            Credential {
+                expires_at: 1_800_000_000,
+                ..Default::default()
+            }
+            .expires_at_ms()
+        );
+        assert_eq!(
+            1_800_000_000_000,
+            Credential {
+                expires_at: 1_800_000_000_000,
+                ..Default::default()
+            }
+            .expires_at_ms()
+        );
+        assert_eq!(
+            0,
+            Credential::default().expires_at_ms(),
+            "没给到期时刻就是 0，不是 1970"
+        );
     }
 
     #[test]
@@ -296,32 +334,82 @@ mod tests {
             expires_at: (now_seconds + 90 * 86400) * 1000,
             ..Default::default()
         };
-        assert_eq!((now_seconds + 3600) * 1000, credential.effective_expiry_ms());
+        assert_eq!(
+            (now_seconds + 3600) * 1000,
+            credential.effective_expiry_ms()
+        );
         // 提前 24h 的临期窗口：还剩 1 小时 → 要续
         assert!(credential.needs_refresh(24 * 3600 * 1000, 15 * 86400 * 1000, now_seconds * 1000));
         // 一个刚签发、到期也远的令牌：两条规则都不该触发。
-        let fresh = Credential { access_token: fake_jwt(now_seconds + 90 * 86400, now_seconds - 60), ..Default::default() };
-        assert!(!fresh.needs_refresh(24 * 3600 * 1000, 0, now_seconds * 1000), "关掉签发龄规则时不该续");
-        assert!(!fresh.needs_refresh(24 * 3600 * 1000, 15 * 86400 * 1000, now_seconds * 1000), "刚签发的令牌两条规则都不沾");
+        let fresh = Credential {
+            access_token: fake_jwt(now_seconds + 90 * 86400, now_seconds - 60),
+            ..Default::default()
+        };
+        assert!(
+            !fresh.needs_refresh(24 * 3600 * 1000, 0, now_seconds * 1000),
+            "关掉签发龄规则时不该续"
+        );
+        assert!(
+            !fresh.needs_refresh(24 * 3600 * 1000, 15 * 86400 * 1000, now_seconds * 1000),
+            "刚签发的令牌两条规则都不沾"
+        );
         // 签发龄超 15 天：临期还远，但服务端有吊销风险，要靠年龄触发。
-        let aged = Credential { access_token: fake_jwt(now_seconds + 90 * 86400, now_seconds - 20 * 86400), ..Default::default() };
-        assert!(aged.needs_refresh(24 * 3600 * 1000, 15 * 86400 * 1000, now_seconds * 1000), "签发龄超 15 天要续（服务端有吊销风险）");
-        assert!(!aged.needs_refresh(24 * 3600 * 1000, 0, now_seconds * 1000), "max_age=0 是关掉这条规则，不是立刻续");
+        let aged = Credential {
+            access_token: fake_jwt(now_seconds + 90 * 86400, now_seconds - 20 * 86400),
+            ..Default::default()
+        };
+        assert!(
+            aged.needs_refresh(24 * 3600 * 1000, 15 * 86400 * 1000, now_seconds * 1000),
+            "签发龄超 15 天要续（服务端有吊销风险）"
+        );
+        assert!(
+            !aged.needs_refresh(24 * 3600 * 1000, 0, now_seconds * 1000),
+            "max_age=0 是关掉这条规则，不是立刻续"
+        );
     }
 
     #[test]
     fn a_broken_token_still_leaves_the_stored_expiry() {
         for token in ["", "not-a-jwt", "a.b", "a.!!!.c"] {
-            let credential = Credential { access_token: token.to_string(), expires_at: 1_800_000_000, ..Default::default() };
-            assert_eq!(1_800_000_000_000, credential.effective_expiry_ms(), "{token:?} 解不出来时要退回落盘值");
+            let credential = Credential {
+                access_token: token.to_string(),
+                expires_at: 1_800_000_000,
+                ..Default::default()
+            };
+            assert_eq!(
+                1_800_000_000_000,
+                credential.effective_expiry_ms(),
+                "{token:?} 解不出来时要退回落盘值"
+            );
         }
     }
 
     #[test]
     fn an_unknown_variant_falls_back_to_solo() {
-        assert_eq!("solo", Credential { variant: String::new(), ..Default::default() }.variant());
-        assert_eq!("solo", Credential { variant: "CN-unknown".into(), ..Default::default() }.variant());
-        assert_eq!("cn", Credential { variant: "cn".into(), ..Default::default() }.variant());
+        assert_eq!(
+            "solo",
+            Credential {
+                variant: String::new(),
+                ..Default::default()
+            }
+            .variant()
+        );
+        assert_eq!(
+            "solo",
+            Credential {
+                variant: "CN-unknown".into(),
+                ..Default::default()
+            }
+            .variant()
+        );
+        assert_eq!(
+            "cn",
+            Credential {
+                variant: "cn".into(),
+                ..Default::default()
+            }
+            .variant()
+        );
     }
 
     #[test]
@@ -336,16 +424,32 @@ mod tests {
         let fields = credential.patch_fields();
         let keys: Vec<&str> = fields.iter().map(|(key, _)| *key).collect();
         assert!(keys.contains(&"devicePrivateKey"), "私钥不能从写回里消失");
-        assert!(keys.contains(&"devicePublicKey"), "公钥也不能（它与服务端那台设备绑定同源）");
+        assert!(
+            keys.contains(&"devicePublicKey"),
+            "公钥也不能（它与服务端那台设备绑定同源）"
+        );
         // 手工粘贴的凭据没有密钥对 —— 这时这两把键**不该**出现在写回里
         // （把一个空串写进已有字段，等于把设备上那把键覆盖成空）。
-        let bare = Credential { access_token: "a".into(), ..Default::default() }.patch_fields();
+        let bare = Credential {
+            access_token: "a".into(),
+            ..Default::default()
+        }
+        .patch_fields();
         let bare_keys: Vec<&str> = bare.iter().map(|(key, _)| *key).collect();
-        assert!(!bare_keys.contains(&"devicePrivateKey") && !bare_keys.contains(&"devicePublicKey"), "{bare_keys:?}");
-        assert!(!keys.contains(&"uid"), "uid 属于 account 段，不该被 auth 补丁覆盖");
+        assert!(
+            !bare_keys.contains(&"devicePrivateKey") && !bare_keys.contains(&"devicePublicKey"),
+            "{bare_keys:?}"
+        );
+        assert!(
+            !keys.contains(&"uid"),
+            "uid 属于 account 段，不该被 auth 补丁覆盖"
+        );
         assert_eq!(
             Some(&Value::String("-----BEGIN PRIVATE KEY-----".into())),
-            fields.iter().find(|(key, _)| *key == "devicePrivateKey").map(|(_, value)| value),
+            fields
+                .iter()
+                .find(|(key, _)| *key == "devicePrivateKey")
+                .map(|(_, value)| value),
         );
     }
 }

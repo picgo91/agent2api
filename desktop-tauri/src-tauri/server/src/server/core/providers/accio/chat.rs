@@ -83,7 +83,13 @@ pub fn build_plan(
     let efforts: Vec<String> = entry
         .get("reasoningEfforts")
         .and_then(Value::as_array)
-        .map(|items| items.iter().filter_map(Value::as_str).map(str::to_string).collect())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
         .unwrap_or_default();
     // 档位按模型自己声明的集合收敛（发一个它没声明的档位要么被忽略要么 400）
     let resolved_effort = effort.and_then(|level| protocol::resolve_effort(level, &efforts));
@@ -106,7 +112,10 @@ pub fn build_plan(
     let mut headers = vec![
         ("Content-Type".to_string(), "application/json".to_string()),
         ("Accept".to_string(), "text/event-stream".to_string()),
-        ("x-language".to_string(), endpoints::ACCEPT_LANGUAGE.to_string()),
+        (
+            "x-language".to_string(),
+            endpoints::ACCEPT_LANGUAGE.to_string(),
+        ),
         (
             "x-app-version".to_string(),
             std::env::var("ACCIO_APP_VERSION")
@@ -115,7 +124,10 @@ pub fn build_plan(
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| endpoints::DEFAULT_APP_VERSION.to_string()),
         ),
-        ("x-package-region".to_string(), credentials.region.package_region().to_string()),
+        (
+            "x-package-region".to_string(),
+            credentials.region.package_region().to_string(),
+        ),
         // **必带**：缺了它上游不报错，而是回一段「当前版本已不再支持，请升级」
         // 的普通文本（HTTP 200 + 正常帧形态），会被当成模型输出吐给下游。
         // 见 `endpoints::DEFAULT_APP_KEY`。
@@ -125,7 +137,10 @@ pub fn build_plan(
     if !credentials.device_id.is_empty() {
         headers.push(("utdid".to_string(), credentials.device_id.clone()));
     }
-    headers.push(("version".to_string(), endpoints::DEFAULT_APP_VERSION.to_string()));
+    headers.push((
+        "version".to_string(),
+        endpoints::DEFAULT_APP_VERSION.to_string(),
+    ));
 
     let body_bytes = serde_json::to_vec(&built.body)
         .map_err(|_| GatewayError::with_status(500, "Accio 请求体序列化失败"))?;
@@ -155,9 +170,8 @@ pub async fn send(
         Some(proxy) => format!("经代理 {}", proxy.host),
         None => "直连".to_string(),
     };
-    let budget = std::time::Duration::from_millis(
-        crate::server::config::timeout_settings().headers_ms(),
-    );
+    let budget =
+        std::time::Duration::from_millis(crate::server::config::timeout_settings().headers_ms());
     match tokio::time::timeout(budget, builder.send()).await {
         Ok(Ok(response)) => Ok(response),
         Ok(Err(error)) if error.is_timeout() => Err(GatewayError::with_status(
@@ -169,7 +183,10 @@ pub async fn send(
         )),
         Ok(Err(error)) => Err(GatewayError::with_status(
             502,
-            format!("Accio 上游请求失败（{via}）: {}", egress::describe_error_detail(&error)),
+            format!(
+                "Accio 上游请求失败（{via}）: {}",
+                egress::describe_error_detail(&error)
+            ),
         )),
         Err(_elapsed) => Err(GatewayError::with_status(
             502,
@@ -222,7 +239,10 @@ pub fn record_limited(limit: &LimitContext, status: u16, message: &str) {
     );
     logging::log(
         "[Accio]",
-        &format!("⚠️ 账号 {} 对模型 {} 已限额，进入冷却", limit.account_id, limit.model),
+        &format!(
+            "⚠️ 账号 {} 对模型 {} 已限额，进入冷却",
+            limit.account_id, limit.model
+        ),
     );
 }
 
@@ -239,11 +259,7 @@ fn frame_error(frame: &Frame) -> GatewayError {
 }
 
 /// 面向客户端的 chunk 构造（流式）
-fn chunk_frame(
-    translator: &Translator,
-    delta: Value,
-    finish_reason: Value,
-) -> Value {
+fn chunk_frame(translator: &Translator, delta: Value, finish_reason: Value) -> Value {
     json!({
         "id": translator.response_id(),
         "object": "chat.completion.chunk",
@@ -267,7 +283,12 @@ fn frames_for_deltas(translator: &mut Translator, deltas: &[Delta]) -> Option<St
         let payload = match delta {
             Delta::Content(text) => json!({ "content": text }),
             Delta::Reasoning(text) => json!({ "reasoning_content": text }),
-            Delta::ToolCall { index, id, name, arguments } => {
+            Delta::ToolCall {
+                index,
+                id,
+                name,
+                arguments,
+            } => {
                 let mut function = serde_json::Map::new();
                 if let Some(name) = name {
                     function.insert("name".to_string(), Value::String(name.clone()));
@@ -285,7 +306,11 @@ fn frames_for_deltas(translator: &mut Translator, deltas: &[Delta]) -> Option<St
                 json!({ "tool_calls": [Value::Object(call)] })
             }
         };
-        out.push_str(&stream::sse_frame(&chunk_frame(translator, payload, Value::Null)));
+        out.push_str(&stream::sse_frame(&chunk_frame(
+            translator,
+            payload,
+            Value::Null,
+        )));
     }
     (!out.is_empty()).then_some(out)
 }
@@ -326,13 +351,21 @@ fn tail_frames(translator: &mut Translator) -> String {
 pub(super) async fn prefetch_stream_head(
     response: reqwest::Response,
     limit: &LimitContext,
-) -> Result<(Vec<Frame>, futures::stream::BoxStream<'static, Result<bytes::Bytes, std::io::Error>>), GatewayError> {
+) -> Result<
+    (
+        Vec<Frame>,
+        futures::stream::BoxStream<'static, Result<bytes::Bytes, std::io::Error>>,
+    ),
+    GatewayError,
+> {
     let source = response.bytes_stream().map(|item| {
         item.map_err(|error| std::io::Error::other(egress::describe_error_detail(&error)))
     });
     let mut source = crate::server::core::upstream::stall::idle_guard(
         Box::pin(source),
-        std::time::Duration::from_millis(crate::server::config::timeout_settings().stream_idle_ms()),
+        std::time::Duration::from_millis(
+            crate::server::config::timeout_settings().stream_idle_ms(),
+        ),
     );
     let mut buffer = LineBuffer::new();
     let mut frames: Vec<Frame> = Vec::new();
@@ -362,15 +395,17 @@ pub(super) async fn prefetch_stream_head(
                 // 半行换手：把缓冲区里还没成行的尾巴拼回流头（见 `take_pending`
                 // 的说明）—— 不做这一步，被切在 chunk 边界的帧会静默丢内容
                 let leftover = buffer.take_pending();
-                let source: futures::stream::BoxStream<'static, Result<bytes::Bytes, std::io::Error>> =
-                    if leftover.is_empty() {
-                        source
-                    } else {
-                        Box::pin(
-                            futures::stream::once(async move { Ok(bytes::Bytes::from(leftover)) })
-                                .chain(source),
-                        )
-                    };
+                let source: futures::stream::BoxStream<
+                    'static,
+                    Result<bytes::Bytes, std::io::Error>,
+                > = if leftover.is_empty() {
+                    source
+                } else {
+                    Box::pin(
+                        futures::stream::once(async move { Ok(bytes::Bytes::from(leftover)) })
+                            .chain(source),
+                    )
+                };
                 return Ok((frames, source));
             }
         }
@@ -474,7 +509,10 @@ pub async fn drive_aggregate(
         let chunk = item.map_err(|error| {
             GatewayError::with_status(
                 502,
-                format!("Accio 上游流式传输中断: {}", egress::describe_error_detail(&error)),
+                format!(
+                    "Accio 上游流式传输中断: {}",
+                    egress::describe_error_detail(&error)
+                ),
             )
         })?;
         let text = String::from_utf8_lossy(&chunk).to_string();
@@ -509,11 +547,18 @@ fn completion_body(translator: &Translator) -> Value {
     let content = translator.content();
     message.insert(
         "content".to_string(),
-        if content.is_empty() { Value::Null } else { Value::String(content.to_string()) },
+        if content.is_empty() {
+            Value::Null
+        } else {
+            Value::String(content.to_string())
+        },
     );
     let reasoning = translator.reasoning();
     if !reasoning.is_empty() {
-        message.insert("reasoning_content".to_string(), Value::String(reasoning.to_string()));
+        message.insert(
+            "reasoning_content".to_string(),
+            Value::String(reasoning.to_string()),
+        );
     }
     let tool_calls = translator.final_tool_calls();
     if !tool_calls.is_empty() {

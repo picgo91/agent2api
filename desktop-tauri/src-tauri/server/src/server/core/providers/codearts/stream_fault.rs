@@ -118,7 +118,11 @@ pub fn stream_frame_fault(payload: &str) -> Option<StreamFault> {
     }
     // 有答案就不算故障（规则 2）。三个位置都要看：顶层 `delta`（原生协议把
     // 增量放在这里）、`choices[].delta|message|text`（OpenAI 协议）、顶层 `text`
-    let text = frame.get("text").and_then(Value::as_str).unwrap_or("").trim();
+    let text = frame
+        .get("text")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
     let has_answer = delta_has_content(frame.get("delta").unwrap_or(&Value::Null))
         || choices_have_content(frame.get("choices").unwrap_or(&Value::Null))
         || (!text.is_empty() && text != DONE_SENTINEL);
@@ -127,7 +131,11 @@ pub fn stream_frame_fault(payload: &str) -> Option<StreamFault> {
     }
 
     let mut message = format!("上游报告 {code}");
-    if let Some(detail) = frame.get("error_msg").and_then(Value::as_str).map(str::trim) {
+    if let Some(detail) = frame
+        .get("error_msg")
+        .and_then(Value::as_str)
+        .map(str::trim)
+    {
         if !detail.is_empty() {
             message.push_str("：");
             message.push_str(detail);
@@ -136,7 +144,11 @@ pub fn stream_frame_fault(payload: &str) -> Option<StreamFault> {
     // details 里只认「一条短且不含冒号」的补充说明（规则 3）
     if let Some(items) = frame.get("details").and_then(Value::as_array) {
         for item in items {
-            let detail = item.get("error_msg").and_then(Value::as_str).unwrap_or("").trim();
+            let detail = item
+                .get("error_msg")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim();
             if detail.is_empty() || message.contains(detail) || detail.contains(':') {
                 continue;
             }
@@ -148,12 +160,17 @@ pub fn stream_frame_fault(payload: &str) -> Option<StreamFault> {
     let lowered = message.to_lowercase();
     let status = if lowered.contains("insufficient quota") {
         403
-    } else if code.contains("429") || lowered.contains("rate limit") || lowered.contains("too many") {
+    } else if code.contains("429") || lowered.contains("rate limit") || lowered.contains("too many")
+    {
         429
     } else {
         502
     };
-    Some(StreamFault { code, message, status })
+    Some(StreamFault {
+        code,
+        message,
+        status,
+    })
 }
 
 /// 把流内故障转成编排层能用的错误：**带上分类后的状态码**，好让上游循环按
@@ -207,12 +224,30 @@ mod tests {
             ("空", ""),
             ("结束哨兵", "[DONE]"),
             ("半截 JSON", r#"{"error_code":"#),
-            ("成功信封", r#"{"error_code":"0000","error_msg":"success","result":{"daily_token_limit":1}}"#),
-            ("零码带内容", r#"{"error_code":"0","choices":[{"delta":{"content":"hi"}}]}"#),
-            ("普通增量", r#"{"choices":[{"index":0,"delta":{"content":"2"},"finish_reason":"stop"}]}"#),
-            ("用量帧", r#"{"id":"x","model":"glm-5.2","usage":{"total_tokens":9}}"#),
-            ("带错误码但有内容", r#"{"error_code":"InferHub.4291.200","choices":[{"delta":{"content":"partial"}}]}"#),
-            ("原生阶段帧", r#"{"type":"stage","stage":[{"name":"plan"}]}"#),
+            (
+                "成功信封",
+                r#"{"error_code":"0000","error_msg":"success","result":{"daily_token_limit":1}}"#,
+            ),
+            (
+                "零码带内容",
+                r#"{"error_code":"0","choices":[{"delta":{"content":"hi"}}]}"#,
+            ),
+            (
+                "普通增量",
+                r#"{"choices":[{"index":0,"delta":{"content":"2"},"finish_reason":"stop"}]}"#,
+            ),
+            (
+                "用量帧",
+                r#"{"id":"x","model":"glm-5.2","usage":{"total_tokens":9}}"#,
+            ),
+            (
+                "带错误码但有内容",
+                r#"{"error_code":"InferHub.4291.200","choices":[{"delta":{"content":"partial"}}]}"#,
+            ),
+            (
+                "原生阶段帧",
+                r#"{"type":"stage","stage":[{"name":"plan"}]}"#,
+            ),
         ] {
             assert!(
                 stream_frame_fault(payload).is_none(),
@@ -223,11 +258,13 @@ mod tests {
 
     #[test]
     fn rate_limit_and_unknown_codes_map_to_their_status() {
-        let rate = stream_frame_fault(r#"{"error_code":"Gate.429","error_msg":"Too Many Requests"}"#)
-            .expect("限流信封应当被识别");
+        let rate =
+            stream_frame_fault(r#"{"error_code":"Gate.429","error_msg":"Too Many Requests"}"#)
+                .expect("限流信封应当被识别");
         assert_eq!(429, rate.status);
-        let unknown = stream_frame_fault(r#"{"error_code":"InferHub.5000","error_msg":"backend exploded"}"#)
-            .expect("未知错误应当被识别");
+        let unknown =
+            stream_frame_fault(r#"{"error_code":"InferHub.5000","error_msg":"backend exploded"}"#)
+                .expect("未知错误应当被识别");
         assert_eq!(502, unknown.status);
         assert_eq!("InferHub.5000", unknown.code);
     }
@@ -237,22 +274,49 @@ mod tests {
     #[test]
     fn answer_detection_covers_every_partial_answer_shape() {
         for (name, payload) in [
-            ("只有 role", r#"{"error_code":"E","choices":[{"delta":{"role":"assistant"}}]}"#),
+            (
+                "只有 role",
+                r#"{"error_code":"E","choices":[{"delta":{"role":"assistant"}}]}"#,
+            ),
             ("text 是 [DONE]", r#"{"error_code":"E","text":"[DONE]"}"#),
-            ("null content", r#"{"error_code":"E","choices":[{"delta":{"content":null}}]}"#),
+            (
+                "null content",
+                r#"{"error_code":"E","choices":[{"delta":{"content":null}}]}"#,
+            ),
             ("空数组", r#"{"error_code":"E","choices":[]}"#),
         ] {
-            assert!(stream_frame_fault(payload).is_some(), "{name}：这些都没有答案，应当判成故障");
+            assert!(
+                stream_frame_fault(payload).is_some(),
+                "{name}：这些都没有答案，应当判成故障"
+            );
         }
         for (name, payload) in [
-            ("reasoning", r#"{"error_code":"E","choices":[{"delta":{"reasoning_content":"想"}}]}"#),
-            ("tool_calls", r#"{"error_code":"E","choices":[{"delta":{"tool_calls":[{"id":"1"}]}}]}"#),
-            ("choices.text", r#"{"error_code":"E","choices":[{"text":"答案"}]}"#),
-            ("顶层 delta", r#"{"error_code":"E","delta":{"content":"答案"}}"#),
+            (
+                "reasoning",
+                r#"{"error_code":"E","choices":[{"delta":{"reasoning_content":"想"}}]}"#,
+            ),
+            (
+                "tool_calls",
+                r#"{"error_code":"E","choices":[{"delta":{"tool_calls":[{"id":"1"}]}}]}"#,
+            ),
+            (
+                "choices.text",
+                r#"{"error_code":"E","choices":[{"text":"答案"}]}"#,
+            ),
+            (
+                "顶层 delta",
+                r#"{"error_code":"E","delta":{"content":"答案"}}"#,
+            ),
             ("顶层 text", r#"{"error_code":"E","text":"答案"}"#),
-            ("多模态 text 段", r#"{"error_code":"E","choices":[{"delta":{"content":[{"type":"text","text":"答案"}]}}]}"#),
+            (
+                "多模态 text 段",
+                r#"{"error_code":"E","choices":[{"delta":{"content":[{"type":"text","text":"答案"}]}}]}"#,
+            ),
         ] {
-            assert!(stream_frame_fault(payload).is_none(), "{name}：带了答案，绝不能判故障");
+            assert!(
+                stream_frame_fault(payload).is_none(),
+                "{name}：带了答案，绝不能判故障"
+            );
         }
     }
 
@@ -264,7 +328,10 @@ mod tests {
             r#"{"error_code":"E1","error_msg":"boom","details":[{"error_msg":"requestId: abc"},{"error_msg":"模型未开通"}]}"#,
         )
         .expect("应当判成故障");
-        assert!(with_plain_detail.message.contains("模型未开通"), "无冒号的补充说明该带上");
+        assert!(
+            with_plain_detail.message.contains("模型未开通"),
+            "无冒号的补充说明该带上"
+        );
         assert!(!with_plain_detail.message.contains("requestId"));
 
         // 只有 trace 装饰时，一条都不该带
@@ -279,28 +346,53 @@ mod tests {
     fn fault_maps_to_an_error_the_orchestrator_can_cool_over() {
         let fault = stream_frame_fault(QUOTA_FAULT_FRAME).unwrap();
         let error = fault_to_error(&fault);
-        assert_eq!(403, error.status_code, "状态码必须带出去，否则编排层不会换账号");
+        assert_eq!(
+            403, error.status_code,
+            "状态码必须带出去，否则编排层不会换账号"
+        );
         assert!(error.message.contains("insufficient quota"));
 
         // 客户端那一侧的判据（与参考实现对拍的产物，见 fault_to_error 的注释）
-        let payload = error.payload()["error"].as_object().cloned().unwrap_or_default();
+        let payload = error.payload()["error"]
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
         assert_eq!(
             "insufficient_quota",
-            payload.get("code").and_then(Value::as_str).unwrap_or_default(),
+            payload
+                .get("code")
+                .and_then(Value::as_str)
+                .unwrap_or_default(),
             "缺 code 会让按 code 分支的客户端读不到「是额度问题」"
         );
-        assert!(payload.contains_key("type"), "type 必须一直在（本仓统一映射）");
+        assert!(
+            payload.contains_key("type"),
+            "type 必须一直在（本仓统一映射）"
+        );
 
-        let limited = stream_frame_fault(r#"{"error_code":"InferHub.4291.429","error_msg":"too many requests"}"#)
-            .expect("限流信封");
+        let limited = stream_frame_fault(
+            r#"{"error_code":"InferHub.4291.429","error_msg":"too many requests"}"#,
+        )
+        .expect("限流信封");
         let error = fault_to_error(&limited);
         assert_eq!(429, error.status_code);
-        assert_eq!("rate_limit_exceeded", error.payload()["error"]["code"].as_str().unwrap_or_default());
+        assert_eq!(
+            "rate_limit_exceeded",
+            error.payload()["error"]["code"]
+                .as_str()
+                .unwrap_or_default()
+        );
 
         // 认不出类别的那种**不该**有 code：编一个出来会把客户端引向错误的分支
-        let unknown = fault_to_error(&stream_frame_fault(r#"{"error_code":"E9","error_msg":"boom"}"#).unwrap());
+        let unknown = fault_to_error(
+            &stream_frame_fault(r#"{"error_code":"E9","error_msg":"boom"}"#).unwrap(),
+        );
         assert_eq!(502, unknown.status_code);
-        assert!(unknown.payload()["error"].get("code").is_none(), "不确定的分类不要伪造 code：{}", unknown.payload());
+        assert!(
+            unknown.payload()["error"].get("code").is_none(),
+            "不确定的分类不要伪造 code：{}",
+            unknown.payload()
+        );
     }
 
     /// 大小写不敏感：上游的 `error_code` 大小写并不稳定。

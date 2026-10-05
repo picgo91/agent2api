@@ -81,9 +81,7 @@ fn images_of(content: &Value) -> Vec<Value> {
         .map(|items| {
             items
                 .iter()
-                .filter(|item| {
-                    item.get("type").and_then(Value::as_str) == Some("image_url")
-                })
+                .filter(|item| item.get("type").and_then(Value::as_str) == Some("image_url"))
                 .cloned()
                 .collect()
         })
@@ -123,7 +121,10 @@ pub fn normalize_messages(messages: &[Value]) -> Vec<Value> {
             }
         }
         if role == "tool" {
-            let call_id = message.get("tool_call_id").and_then(Value::as_str).unwrap_or("");
+            let call_id = message
+                .get("tool_call_id")
+                .and_then(Value::as_str)
+                .unwrap_or("");
             if dropped_tool_call_ids.iter().any(|known| known == call_id) {
                 continue;
             }
@@ -218,7 +219,11 @@ pub fn normalize_tools(tools: Option<&Value>) -> Option<Vec<Value>> {
     }
     let mapped: Vec<Value> = items
         .iter()
-        .filter(|item| item.pointer("/function/name").and_then(Value::as_str).is_some())
+        .filter(|item| {
+            item.pointer("/function/name")
+                .and_then(Value::as_str)
+                .is_some()
+        })
         .map(|item| {
             let mut function = serde_json::Map::new();
             if let Some(name) = item.pointer("/function/name") {
@@ -298,19 +303,28 @@ pub fn resolve_thinking(body: &Value, model: &Value) -> ThinkingChoice {
     let reasoning = model.get("reasoning").map(truthy).unwrap_or(false);
     // 模型不支持思考：直接不指定
     if !reasoning {
-        return ThinkingChoice { enable: None, effort: None };
+        return ThinkingChoice {
+            enable: None,
+            effort: None,
+        };
     }
 
     // 下游请求「关闭思考」：上游无法真正关闭，不发 false（理由见模块头）
     if matches!(raw, Value::Bool(false))
         || matches!(raw.as_str(), Some("off") | Some("none") | Some("disabled"))
     {
-        return ThinkingChoice { enable: None, effort: None };
+        return ThinkingChoice {
+            enable: None,
+            effort: None,
+        };
     }
 
     // 未指定（或显式 true）：沿用上游默认档位
     if raw.is_null() || matches!(raw, Value::Bool(true)) {
-        return ThinkingChoice { enable: Some(true), effort: None };
+        return ThinkingChoice {
+            enable: Some(true),
+            effort: None,
+        };
     }
 
     let asked = match &raw {
@@ -328,7 +342,13 @@ pub fn resolve_thinking(body: &Value, model: &Value) -> ThinkingChoice {
     let declared: Vec<String> = model
         .get("efforts")
         .and_then(Value::as_array)
-        .map(|items| items.iter().filter_map(Value::as_str).map(str::to_string).collect())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
         .unwrap_or_default();
     // 模型声明了档位就以它为准；没声明就只在标准三档里做保守映射
     let pool: Vec<String> = if declared.is_empty() {
@@ -347,7 +367,10 @@ pub fn resolve_thinking(body: &Value, model: &Value) -> ThinkingChoice {
             .cloned()
             .unwrap_or_else(|| "medium".to_string())
     };
-    ThinkingChoice { enable: Some(true), effort: Some(effort) }
+    ThinkingChoice {
+        enable: Some(true),
+        effort: Some(effort),
+    }
 }
 
 /// 组装上游请求体（源实现 `buildUpstreamBody`）。
@@ -389,7 +412,10 @@ pub fn build_upstream_body(
         Some(true) => {
             parameters.insert("enable_thinking".to_string(), Value::Bool(true));
             if let Some(effort) = &thinking.effort {
-                parameters.insert("reasoning_effort".to_string(), Value::String(effort.clone()));
+                parameters.insert(
+                    "reasoning_effort".to_string(),
+                    Value::String(effort.clone()),
+                );
             }
         }
         Some(false) => {
@@ -486,10 +512,7 @@ fn session_id_for(user_id: &str, upstream_key: &str, seed: Option<&str>) -> Stri
     let base: String = base.chars().take(16).collect();
     match seed.filter(|value| !value.is_empty()) {
         Some(seed) => format!("{base}-{seed}"),
-        None => format!(
-            "{base}-{}",
-            super::cosy::random_uuid().unwrap_or_default()
-        ),
+        None => format!("{base}-{}", super::cosy::random_uuid().unwrap_or_default()),
     }
 }
 
@@ -527,7 +550,10 @@ fn record_id_for(
     }
     hasher.update([0u8]);
     hasher.update(format!("mt={max_tokens}").as_bytes());
-    format!("{:x}", hasher.finalize()).chars().take(16).collect()
+    format!("{:x}", hasher.finalize())
+        .chars()
+        .take(16)
+        .collect()
 }
 
 /// 从上游返回的模型名反查回对外 id：上游可能回真实 key，也可能回展示名。
@@ -536,10 +562,14 @@ pub fn map_model_back(name: &str) -> Option<String> {
         return None;
     }
     // 先按 upstreamKey 查，再按 id/name 查（与源实现 `displayNameFor` 同序）
-    if let Some(model) = super::models::list().iter().find(|model| {
-        model.get("upstreamKey").and_then(Value::as_str) == Some(name)
-    }) {
-        return model.get("name").and_then(Value::as_str).map(str::to_string);
+    if let Some(model) = super::models::list()
+        .iter()
+        .find(|model| model.get("upstreamKey").and_then(Value::as_str) == Some(name))
+    {
+        return model
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::to_string);
     }
     super::models::resolve(name, super::endpoints::Region::Global)
         .and_then(|model| model.get("id").and_then(Value::as_str).map(str::to_string))

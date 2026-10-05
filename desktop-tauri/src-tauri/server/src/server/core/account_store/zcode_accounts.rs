@@ -134,7 +134,10 @@ impl AccountStore {
             }
         };
         fields.insert("id".to_string(), Value::String(id.clone()));
-        fields.insert("provider".to_string(), Value::String(provider_id.to_string()));
+        fields.insert(
+            "provider".to_string(),
+            Value::String(provider_id.to_string()),
+        );
         fields.insert(
             "name".to_string(),
             Value::String(truncate_chars(&record_name, 100)),
@@ -146,7 +149,12 @@ impl AccountStore {
         fields.insert("priority".to_string(), Value::from(priority));
         fields.insert(
             "enabled".to_string(),
-            Value::Bool(existing.as_ref().map(StoredAccount::enabled).unwrap_or(true)),
+            Value::Bool(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::enabled)
+                    .unwrap_or(true),
+            ),
         );
         // 本家没有「从桌面端导入登录态」这条路（ZCode 客户端的凭证在它自己的
         // 加密存储里，没有 auth.json 那种稳定可读的形态），因此恒为 false
@@ -166,13 +174,22 @@ impl AccountStore {
         // 有效期（账号页「有效期」列读它，键名见 `ui/accounts-groups.js` 给本家
         // 登记的那一行：`expiry: 'expiresAt'`）。解不出就**不写** —— 保留既有值
         // （重新添加时不该把上次的时间洗掉），也从编一个假时间。
-        if let Some(expires_at) = crate::server::core::providers::zcode::credentials::expires_at_ms(
-            credentials,
-        ) {
+        if let Some(expires_at) =
+            crate::server::core::providers::zcode::credentials::expires_at_ms(credentials)
+        {
             fields.insert("expiresAt".to_string(), Value::from(expires_at));
         }
         // 清掉别家形状的遗留键（同一条记录被换家复用时才会存在）
-        for key in ["edition", "endpoint", "prefixPath", "platform", "access", "refresh", "expires", "pat"] {
+        for key in [
+            "edition",
+            "endpoint",
+            "prefixPath",
+            "platform",
+            "access",
+            "refresh",
+            "expires",
+            "pat",
+        ] {
             fields.remove(key);
         }
         let record = StoredAccount::from_map(fields);
@@ -251,7 +268,10 @@ impl AccountStore {
         );
         public.insert(
             "rateLimits".to_string(),
-            record.get("rateLimits").cloned().unwrap_or_else(|| json!({})),
+            record
+                .get("rateLimits")
+                .cloned()
+                .unwrap_or_else(|| json!({})),
         );
         public.insert("desktop".to_string(), Value::Bool(false));
         public.insert("available".to_string(), Value::Bool(available));
@@ -370,7 +390,9 @@ impl AccountStore {
         let cleared = self.clear_all_rate_limits(account_id);
         let mut changes = vec![format!("套餐通道 → {}", zcode::plan_label(plan))];
         if cleared > 0 {
-            changes.push(format!("已清除 {cleared} 个模型的限额标记（换通道后旧记录不再适用）"));
+            changes.push(format!(
+                "已清除 {cleared} 个模型的限额标记（换通道后旧记录不再适用）"
+            ));
         }
         Ok(changes)
     }
@@ -472,10 +494,7 @@ pub(crate) const _ZCODE_PROVIDER_ID: &str = kind_id(ProviderKind::Zcode);
 fn anonymous_account_id(region: Region) -> Result<String, AccountStoreError> {
     let mut bytes = [0u8; 6];
     getrandom::getrandom(&mut bytes).map_err(|_| {
-        AccountStoreError::new(
-            "无法生成安全的随机账号 id（系统随机源不可用），请重试",
-            500,
-        )
+        AccountStoreError::new("无法生成安全的随机账号 id（系统随机源不可用），请重试", 500)
     })?;
     let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
     Ok(format!("{}anon-{hex}", region.account_id_prefix()))

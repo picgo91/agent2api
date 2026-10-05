@@ -99,7 +99,10 @@ fn catalog(region: Region) -> &'static RwLock<CatalogState> {
 /// 「搬回来」：不重新归一 —— 两处各写一份映射迟早分叉。
 fn restored_state(region: Region) -> CatalogState {
     match catalog_cache::load(cache_scope(region)) {
-        Some(cached) => CatalogState { models: cached.models, fetched_at: cached.fetched_at },
+        Some(cached) => CatalogState {
+            models: cached.models,
+            fetched_at: cached.fetched_at,
+        },
         None => CatalogState::default(),
     }
 }
@@ -303,10 +306,7 @@ pub async fn refresh(
                         "AutoClaw 登录态已失效，请重新登录或刷新凭证",
                     );
                 }
-                return ModelRefreshOutcome::failed(format!(
-                    "上游返回 HTTP {}",
-                    response.status
-                ));
+                return ModelRefreshOutcome::failed(format!("上游返回 HTTP {}", response.status));
             }
             response.payload.unwrap_or(Value::Null)
         }
@@ -338,10 +338,7 @@ pub async fn refresh(
     }
     logging::log(
         "[Models]",
-        &format!(
-            "✅ AutoClaw {}模型目录已更新（{count} 个）",
-            region.label()
-        ),
+        &format!("✅ AutoClaw {}模型目录已更新（{count} 个）", region.label()),
     );
     ModelRefreshOutcome::refreshed(count)
 }

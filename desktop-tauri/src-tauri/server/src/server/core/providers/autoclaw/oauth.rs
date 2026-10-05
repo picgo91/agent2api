@@ -402,7 +402,10 @@ pub async fn exchange_code(
     if token.is_empty() {
         logging::log(
             "[Login]",
-            &format!("❌ AutoClaw {} 登录成功但上游未返回 access_token", vendor.label()),
+            &format!(
+                "❌ AutoClaw {} 登录成功但上游未返回 access_token",
+                vendor.label()
+            ),
         );
         return Err(GatewayError::with_status(
             502,

@@ -98,7 +98,8 @@ fn create_key_file(path: &std::path::Path) -> Result<[u8; 32], String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|error| format!("创建配置目录失败: {error}"))?;
     }
-    std::fs::write(path, key).map_err(|error| format!("写入密钥文件 {} 失败: {error}", path.display()))?;
+    std::fs::write(path, key)
+        .map_err(|error| format!("写入密钥文件 {} 失败: {error}", path.display()))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt as _;
@@ -118,8 +119,8 @@ fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<String, String> {
     use aes_gcm::aead::{consts::U12, Aead as _};
     use aes_gcm::{Aes256Gcm, KeyInit as _, Nonce};
 
-    let cipher = Aes256Gcm::new_from_slice(key)
-        .map_err(|_| "密钥长度不受 AES-256 支持".to_string())?;
+    let cipher =
+        Aes256Gcm::new_from_slice(key).map_err(|_| "密钥长度不受 AES-256 支持".to_string())?;
     let mut nonce_bytes = [0u8; NONCE_LEN];
     getrandom::getrandom(&mut nonce_bytes).map_err(|error| format!("系统随机源不可用: {error}"))?;
     let nonce = Nonce::<U12>::try_from(nonce_bytes.as_slice())
@@ -150,13 +151,13 @@ fn decrypt(envelope: &str) -> Result<String, String> {
         return Err("密文长度异常".to_string());
     }
     let key = secret_key()?;
-    let cipher = Aes256Gcm::new_from_slice(&key)
-        .map_err(|_| "密钥长度不受 AES-256 支持".to_string())?;
+    let cipher =
+        Aes256Gcm::new_from_slice(&key).map_err(|_| "密钥长度不受 AES-256 支持".to_string())?;
     let nonce = Nonce::<U12>::try_from(&blob[..NONCE_LEN])
         .map_err(|_| "密文 nonce 长度异常".to_string())?;
-    let plaintext = cipher
-        .decrypt(&nonce, &blob[NONCE_LEN..])
-        .map_err(|_| format!("AES-GCM 解密失败（密钥文件 {KEY_FILE} 是否被删除或更换？重存一次令牌即可自愈）"))?;
+    let plaintext = cipher.decrypt(&nonce, &blob[NONCE_LEN..]).map_err(|_| {
+        format!("AES-GCM 解密失败（密钥文件 {KEY_FILE} 是否被删除或更换？重存一次令牌即可自愈）")
+    })?;
     String::from_utf8(plaintext).map_err(|_| "解密结果不是合法 UTF-8 文本".to_string())
 }
 
@@ -235,7 +236,10 @@ pub fn set_token(token: Option<&str>) -> Result<TokenUpdate, String> {
     if token.len() > MAX_TOKEN_LEN {
         return Err(format!("令牌过长（最多 {MAX_TOKEN_LEN} 字符）"));
     }
-    if !token.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-') {
+    if !token
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+    {
         return Err("令牌只能包含字母、数字、下划线与连字符".to_string());
     }
     // 与已存令牌逐字比较（解不开时存储侧那一份算「非现值」，会正确判为变化）

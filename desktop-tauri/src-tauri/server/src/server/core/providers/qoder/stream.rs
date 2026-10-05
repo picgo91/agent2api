@@ -110,7 +110,10 @@ pub fn parse_sse_line(data: &str) -> SseEvent {
 
 /// 一行 SSE 输出的形态：`data: <payload>\n\n`
 pub fn sse_frame(value: &Value) -> String {
-    format!("data: {}\n\n", serde_json::to_string(value).unwrap_or_else(|_| "{}".to_string()))
+    format!(
+        "data: {}\n\n",
+        serde_json::to_string(value).unwrap_or_else(|_| "{}".to_string())
+    )
 }
 
 /// `data: [DONE]\n\n`
@@ -374,9 +377,7 @@ impl ThinkingParser {
                 }
                 let close_len = THINK_TAGS
                     .iter()
-                    .filter(|(_, close)| {
-                        self.buffer[close_at..].starts_with(*close)
-                    })
+                    .filter(|(_, close)| self.buffer[close_at..].starts_with(*close))
                     .map(|(_, close)| close.len())
                     .max()
                     .unwrap_or(0);

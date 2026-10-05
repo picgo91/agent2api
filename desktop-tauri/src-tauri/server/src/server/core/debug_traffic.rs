@@ -290,7 +290,10 @@ pub fn record(mut entry: TrafficEntry) {
 /// 同 id 多行时取**最后写入的那一份**（`ORDER BY ts DESC, rowid DESC LIMIT 1`），
 /// 与改造前「内存里从尾部往前找第一个匹配」逐字一致。
 pub fn get(id: &str) -> Option<TrafficEntry> {
-    db()?.with(|conn| sql::select_one(conn, id)).and_then(Result::ok).flatten()
+    db()?
+        .with(|conn| sql::select_one(conn, id))
+        .and_then(Result::ok)
+        .flatten()
 }
 
 /// 清空（设置页 / 请求日志「清空」时一并调用）

@@ -43,8 +43,8 @@ use serde_json::{json, Value};
 
 use crate::server::core::account_store::AccountStore;
 use crate::server::core::auth::{
-    anonymous_headers, context_for_edition, send_public_request, unwrap_public_response, urlencoding,
-    with_expires_at, AuthService, WorkBuddyAuthError, SERVER_CODE_RETRY_FETCH_TOKEN,
+    anonymous_headers, context_for_edition, send_public_request, unwrap_public_response,
+    urlencoding, with_expires_at, AuthService, WorkBuddyAuthError, SERVER_CODE_RETRY_FETCH_TOKEN,
 };
 use crate::server::core::endpoints::{resolve_edition, Context, DEFAULT_EDITION};
 use crate::server::core::providers::adapter::adapter_for;
@@ -147,7 +147,10 @@ struct TaskTable {
 impl LoginTasks {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(TaskTable { by_state: HashMap::new(), next_ticket: 1 })),
+            inner: Arc::new(Mutex::new(TaskTable {
+                by_state: HashMap::new(),
+                next_ticket: 1,
+            })),
         }
     }
 
@@ -163,10 +166,12 @@ impl LoginTasks {
     /// 下次任何一次取任务都会把它扫掉。
     fn sweep(table: &mut TaskTable) {
         let now = logging::now_ms();
-        table.by_state.retain(|_, handle| match handle.lock().finished_at {
-            Some(finished) => now - finished < TASK_RETENTION_MS,
-            None => true,
-        });
+        table
+            .by_state
+            .retain(|_, handle| match handle.lock().finished_at {
+                Some(finished) => now - finished < TASK_RETENTION_MS,
+                None => true,
+            });
     }
 
     pub fn get(&self, state: &str) -> Option<LoginTaskHandle> {
@@ -216,9 +221,7 @@ impl LoginTasks {
             let mut table = self.lock();
             // 按 state 或按句柄（state 未入表时用 ticket 兜底，两者必居其一）
             let ticket = handle.ticket();
-            table
-                .by_state
-                .retain(|_, item| item.ticket() != ticket);
+            table.by_state.retain(|_, item| item.ticket() != ticket);
         }
         logging::log("[Login]", "登录任务已取消（用户放弃等待）");
         true
@@ -261,7 +264,8 @@ pub struct LoginService {
     /// 它的值是**活对象**（持有本机回调监听器），既不能序列化给 `/wait`，
     /// 也不该让别的 provider 每次轮询都陪着带一份别人用不到的东西。
     /// 表里同一时刻最多一条（见 `login/trae.rs` 模块头）。
-    trae_login: Arc<Mutex<HashMap<String, Arc<crate::server::core::providers::trae::login::Session>>>>,
+    trae_login:
+        Arc<Mutex<HashMap<String, Arc<crate::server::core::providers::trae::login::Session>>>>,
 }
 
 impl LoginService {
@@ -280,7 +284,10 @@ impl LoginService {
     }
 
     /// Trae 登录的待办表（`login/trae.rs` 用它挂这一轮的回调监听器）。
-    pub(crate) fn trae_login(&self) -> &Arc<Mutex<HashMap<String, Arc<crate::server::core::providers::trae::login::Session>>>> {
+    pub(crate) fn trae_login(
+        &self,
+    ) -> &Arc<Mutex<HashMap<String, Arc<crate::server::core::providers::trae::login::Session>>>>
+    {
         &self.trae_login
     }
 
@@ -330,7 +337,10 @@ impl LoginService {
 
     /// 建一个任务句柄但不启动后台任务（`/auth/login` 的同步登录用它 ——
     /// 那条路径自己 await 登录流程，不能再起一个后台任务重复登录）
-    fn new_handle(&self, info: &'static crate::server::core::endpoints::EditionInfo) -> LoginTaskHandle {
+    fn new_handle(
+        &self,
+        info: &'static crate::server::core::endpoints::EditionInfo,
+    ) -> LoginTaskHandle {
         self.new_handle_for_provider(info, DEFAULT_PROVIDER_ID)
     }
 
@@ -389,7 +399,10 @@ impl LoginService {
             task.auth_url = Some(auth_url);
         });
         self.tasks.register(&state, handle.clone());
-        logging::log("[Login]", &format!("发起{label}网页登录（等待浏览器回调…）"));
+        logging::log(
+            "[Login]",
+            &format!("发起{label}网页登录（等待浏览器回调…）"),
+        );
         Ok(handle)
     }
 
@@ -604,7 +617,10 @@ impl LoginService {
     ) -> Result<String, GatewayError> {
         let state = state.trim();
         if state.is_empty() {
-            return Err(GatewayError::with_status(400, "缺少 state，无法确认这次回调归属"));
+            return Err(GatewayError::with_status(
+                400,
+                "缺少 state，无法确认这次回调归属",
+            ));
         }
         let Some(handle) = self.tasks.get(state) else {
             return Err(GatewayError::with_status(
@@ -659,11 +675,17 @@ impl LoginService {
             Err(error) => {
                 // 校验失败也要落定任务：否则前端会一直等到 5 分钟超时
                 finish_task_error(&handle, &error.message);
-                logging::log("[Login]", &format!("❌ 网页登录回调校验失败: {}", error.message));
+                logging::log(
+                    "[Login]",
+                    &format!("❌ 网页登录回调校验失败: {}", error.message),
+                );
                 return Err(error);
             }
         };
-        match adapter_for(kind).exchange_login_code(&self.store, &code, state).await {
+        match adapter_for(kind)
+            .exchange_login_code(&self.store, &code, state)
+            .await
+        {
             Ok(account_id) => {
                 let session = json!({
                     "accountUid": account_id,
@@ -680,7 +702,10 @@ impl LoginService {
             }
             Err(error) => {
                 finish_task_error(&handle, &error.message);
-                logging::log("[Login]", &format!("❌ 网页登录换取凭证失败: {}", error.message));
+                logging::log(
+                    "[Login]",
+                    &format!("❌ 网页登录换取凭证失败: {}", error.message),
+                );
                 Err(error)
             }
         }
@@ -817,12 +842,9 @@ impl LoginService {
                         "登录成功但获取账号信息失败（缺少 uid），请重试",
                     ));
                 }
-                let saved = self
-                    .store
-                    .add_account(&session, None)
-                    .map_err(|error| {
-                        WorkBuddyAuthError::with_status(error.status_code, error.message)
-                    })?;
+                let saved = self.store.add_account(&session, None).map_err(|error| {
+                    WorkBuddyAuthError::with_status(error.status_code, error.message)
+                })?;
                 let name = saved
                     .get("name")
                     .and_then(Value::as_str)

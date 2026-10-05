@@ -180,9 +180,16 @@ pub fn unwrap_api_data(value: Value) -> Result<Value, CatPawError> {
                     })
                     .map(str::to_string)
                     .unwrap_or_else(|| format!("上游 API 返回错误 code={code_number}"));
-                let status = object.get("httpStatus").and_then(Value::as_i64).unwrap_or(502);
+                let status = object
+                    .get("httpStatus")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(502);
                 return Err(CatPawError {
-                    status: if (100..600).contains(&status) { status as i32 } else { 502 },
+                    status: if (100..600).contains(&status) {
+                        status as i32
+                    } else {
+                        502
+                    },
                     message,
                     code: Some(code_number),
                     unify_code: object.get("unifyCode").and_then(Value::as_i64),
@@ -209,17 +216,32 @@ fn response_error(data: &Value) -> Option<CatPawError> {
         .get("message")
         .and_then(Value::as_str)
         .filter(|text| !text.is_empty())
-        .or_else(|| object.get("msg").and_then(Value::as_str).filter(|text| !text.is_empty()))
+        .or_else(|| {
+            object
+                .get("msg")
+                .and_then(Value::as_str)
+                .filter(|text| !text.is_empty())
+        })
         .map(str::to_string)
         .unwrap_or_else(|| {
             format!(
                 "上游返回错误 code={}",
-                object.get("code").map(|code| code.to_string()).unwrap_or_else(|| "unknown".to_string())
+                object
+                    .get("code")
+                    .map(|code| code.to_string())
+                    .unwrap_or_else(|| "unknown".to_string())
             )
         });
-    let status = object.get("httpStatus").and_then(Value::as_i64).unwrap_or(502);
+    let status = object
+        .get("httpStatus")
+        .and_then(Value::as_i64)
+        .unwrap_or(502);
     Some(CatPawError {
-        status: if (100..600).contains(&status) { status as i32 } else { 502 },
+        status: if (100..600).contains(&status) {
+            status as i32
+        } else {
+            502
+        },
         message,
         code: object.get("code").and_then(Value::as_i64),
         unify_code: object.get("unifyCode").and_then(Value::as_i64),
@@ -285,11 +307,7 @@ impl TurnTranslator {
     }
 
     /// 消费一个事件：把增量写成帧交给 `pending`。
-    pub fn consume(
-        &mut self,
-        event: &Value,
-        pending: &mut Vec<Bytes>,
-    ) -> Result<(), CatPawError> {
+    pub fn consume(&mut self, event: &Value, pending: &mut Vec<Bytes>) -> Result<(), CatPawError> {
         self.latest = Some(event.clone());
         if let Some(error) = response_error(event) {
             return Err(error);
@@ -299,7 +317,11 @@ impl TurnTranslator {
             return Ok(());
         };
         let delta = self.message_delta(&message);
-        if delta.as_object().map(|object| !object.is_empty()).unwrap_or(false) {
+        if delta
+            .as_object()
+            .map(|object| !object.is_empty())
+            .unwrap_or(false)
+        {
             pending.push(self.chunk_frame(delta, None, None));
         }
         if message.get("finished").and_then(Value::as_bool) == Some(true) {
@@ -323,7 +345,11 @@ impl TurnTranslator {
         };
         let calls = self.check_choice(&message)?;
         // 收尾帧：finish_reason 由「有没有工具调用」决定（原实现 `toolFinishReason`）
-        let finish_reason = if calls.is_empty() { "stop" } else { "tool_calls" };
+        let finish_reason = if calls.is_empty() {
+            "stop"
+        } else {
+            "tool_calls"
+        };
         pending.push(self.chunk_frame(json!({}), Some(finish_reason), None));
         if self.include_usage {
             let usage = self.final_usage();
@@ -346,14 +372,18 @@ impl TurnTranslator {
         match &self.choice {
             super::tools::ToolChoice::None => {
                 if !all.is_empty() {
-                    return Err(CatPawError::upstream("tool_choice=none 时上游仍返回了 tool_call"));
+                    return Err(CatPawError::upstream(
+                        "tool_choice=none 时上游仍返回了 tool_call",
+                    ));
                 }
                 Ok(Vec::new())
             }
             super::tools::ToolChoice::Auto => Ok(all),
             super::tools::ToolChoice::Required => {
                 if all.is_empty() {
-                    return Err(CatPawError::upstream("tool_choice=required 时上游未返回 tool_call"));
+                    return Err(CatPawError::upstream(
+                        "tool_choice=required 时上游未返回 tool_call",
+                    ));
                 }
                 Ok(all)
             }
@@ -361,7 +391,8 @@ impl TurnTranslator {
                 let selected: Vec<Value> = all
                     .into_iter()
                     .filter(|call| {
-                        call.pointer("/function/name").and_then(Value::as_str) == Some(name.as_str())
+                        call.pointer("/function/name").and_then(Value::as_str)
+                            == Some(name.as_str())
                     })
                     .collect();
                 if selected.is_empty() {
@@ -391,7 +422,10 @@ impl TurnTranslator {
     pub fn error_frame(&self, message: &str, status: i32) -> Bytes {
         let mut body = Map::new();
         body.insert("id".to_string(), Value::String(self.chat_id.clone()));
-        body.insert("object".to_string(), Value::String("chat.completion.chunk".to_string()));
+        body.insert(
+            "object".to_string(),
+            Value::String("chat.completion.chunk".to_string()),
+        );
         body.insert("created".to_string(), Value::from(logging::now_ms() / 1000));
         body.insert("model".to_string(), Value::String(self.model.clone()));
         body.insert(
@@ -413,9 +447,9 @@ impl TurnTranslator {
         self.latest
             .as_ref()
             .and_then(usage_from_response)
-            .unwrap_or_else(|| {
-                json!({ "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0 })
-            })
+            .unwrap_or_else(
+                || json!({ "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0 }),
+            )
     }
 
     /// 事件里的 conversationId（写回注册表与诊断用）
@@ -482,7 +516,10 @@ impl TurnTranslator {
             ) else {
                 continue;
             };
-            let args = block.get("toolParams").and_then(Value::as_str).unwrap_or("");
+            let args = block
+                .get("toolParams")
+                .and_then(Value::as_str)
+                .unwrap_or("");
             let previous = self
                 .tools
                 .get(id)
@@ -492,7 +529,8 @@ impl TurnTranslator {
                 .to_string();
             let seen = self.tools.contains_key(id);
             let args_delta = suffix_after(args, &previous);
-            self.tools.insert(id.to_string(), json!({ "args": args, "name": name }));
+            self.tools
+                .insert(id.to_string(), json!({ "args": args, "name": name }));
             let tool_index = match self.order.iter().position(|item| item == id) {
                 Some(index) => index,
                 None => {
@@ -532,7 +570,12 @@ impl TurnTranslator {
     ///
     /// `usage` 存在时 `choices` 是**空数组**（OpenAI 的 usage 帧形态，
     /// 原实现 `catpaw-upstream-openai.mjs` 的 include_usage 分支同）。
-    fn chunk_frame(&self, delta: Value, finish_reason: Option<&str>, usage: Option<Value>) -> Bytes {
+    fn chunk_frame(
+        &self,
+        delta: Value,
+        finish_reason: Option<&str>,
+        usage: Option<Value>,
+    ) -> Bytes {
         let choices = match &usage {
             Some(_) => json!([]),
             None => json!([{
@@ -543,7 +586,10 @@ impl TurnTranslator {
         };
         let mut body = Map::new();
         body.insert("id".to_string(), Value::String(self.chat_id.clone()));
-        body.insert("object".to_string(), Value::String("chat.completion.chunk".to_string()));
+        body.insert(
+            "object".to_string(),
+            Value::String("chat.completion.chunk".to_string()),
+        );
         body.insert("created".to_string(), Value::from(logging::now_ms() / 1000));
         body.insert("model".to_string(), Value::String(self.model.clone()));
         body.insert("choices".to_string(), choices);
@@ -590,9 +636,9 @@ pub struct TurnResult {
 impl TurnResult {
     /// 本轮 usage（已修正；上游没给就是三个 0）
     pub fn final_usage(&self) -> Value {
-        usage_from_response(&self.raw).unwrap_or_else(|| {
-            json!({ "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0 })
-        })
+        usage_from_response(&self.raw).unwrap_or_else(
+            || json!({ "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0 }),
+        )
     }
 
     /// OpenAI 的 `finish_reason`（有工具调用就是 tool_calls）
@@ -613,7 +659,11 @@ pub fn openai_message(message: &Value, calls: &[Value]) -> Value {
     out.insert("role".to_string(), Value::String("assistant".to_string()));
     out.insert(
         "content".to_string(),
-        if text.is_empty() { Value::Null } else { Value::String(text) },
+        if text.is_empty() {
+            Value::Null
+        } else {
+            Value::String(text)
+        },
     );
     if !reasoning.is_empty() {
         out.insert("reasoning_content".to_string(), Value::String(reasoning));
@@ -641,7 +691,10 @@ pub fn extract_tool_calls(message: &Value) -> Result<Vec<Value>, CatPawError> {
         if block.get("type").and_then(Value::as_str) != Some("tool_use") {
             continue;
         }
-        let id = block.get("toolCallId").and_then(Value::as_str).unwrap_or_default();
+        let id = block
+            .get("toolCallId")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
         if ids.contains(&id) {
             return Err(CatPawError::upstream(format!(
                 "上游返回重复的 tool_call_id: {id}"
@@ -728,5 +781,7 @@ pub fn usage_from_response(data: &Value) -> Option<Value> {
 /// 数字字段（`as_i64` 对 1.0 这类浮点形态会失败，所以补一次 f64 转换）
 fn number_of(value: Option<&Value>) -> Option<i64> {
     let value = value?;
-    value.as_i64().or_else(|| value.as_f64().map(|number| number.round() as i64))
+    value
+        .as_i64()
+        .or_else(|| value.as_f64().map(|number| number.round() as i64))
 }

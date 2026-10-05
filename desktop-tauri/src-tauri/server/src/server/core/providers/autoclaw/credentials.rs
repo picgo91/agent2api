@@ -215,7 +215,9 @@ impl AutoClawCredentials {
     /// 只挂在维护任务那条低频路径上 —— 见那里的说明。
     pub fn is_expiring(&self) -> bool {
         match self.expires_at {
-            Some(expires_at) => expires_at - PROACTIVE_REFRESH_MARGIN_MS <= logging::now_ms() as f64,
+            Some(expires_at) => {
+                expires_at - PROACTIVE_REFRESH_MARGIN_MS <= logging::now_ms() as f64
+            }
             None => false,
         }
     }
@@ -327,9 +329,10 @@ fn read_json_file(path: &Path, label: &str) -> Result<FileSnapshot, String> {
     if meta.len() == 0 || meta.len() > MAX_AUTH_FILE_SIZE {
         return Err(format!("{label}文件大小异常"));
     }
-    let text = std::fs::read_to_string(path).map_err(|error| format!("无法读取{label}: {error}"))?;
-    let value =
-        serde_json::from_str::<Value>(&text).map_err(|_| format!("{label}无法解析（不是有效 JSON）"))?;
+    let text =
+        std::fs::read_to_string(path).map_err(|error| format!("无法读取{label}: {error}"))?;
+    let value = serde_json::from_str::<Value>(&text)
+        .map_err(|_| format!("{label}无法解析（不是有效 JSON）"))?;
     let Value::Object(json) = value else {
         return Err(format!("{label}根节点不是 JSON 对象"));
     };
@@ -542,8 +545,10 @@ fn from_auth_file(region: Region) -> Result<AutoClawCredentials, String> {
         ));
     }
     let token = crypto::strip_bearer(&crypto::decrypt_enc_value(&raw_token, aes_key.as_deref())?);
-    let refresh_token =
-        crypto::strip_bearer(&crypto::decrypt_enc_value(&raw_refresh, aes_key.as_deref())?);
+    let refresh_token = crypto::strip_bearer(&crypto::decrypt_enc_value(
+        &raw_refresh,
+        aes_key.as_deref(),
+    )?);
     if token.is_empty() {
         return Err("AutoClaw auth.json token 解密结果为空".to_string());
     }
@@ -914,8 +919,7 @@ pub fn snapshot_for(
     region: Region,
 ) -> Result<AutoClawCredentials, GatewayError> {
     let Some(record) = record else {
-        return local_credentials(region)
-            .or_else(|error| env_credentials(region).ok_or(error));
+        return local_credentials(region).or_else(|error| env_credentials(region).ok_or(error));
     };
     let is_desktop = record
         .get("desktop")

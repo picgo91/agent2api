@@ -49,12 +49,11 @@ pub async fn entry(State(state): State<ServerState>, request: axum::extract::Req
     let method = request.method().clone();
     let full_path = request.uri().path().to_string();
     let query = request.uri().query().unwrap_or("").to_string();
-    let body = match axum::body::to_bytes(request.into_body(), crate::server::http::MAX_BODY_SIZE)
-        .await
-    {
-        Ok(bytes) => bytes,
-        Err(error) => return management_error(413, format!("请求体读取失败或过大: {error}")),
-    };
+    let body =
+        match axum::body::to_bytes(request.into_body(), crate::server::http::MAX_BODY_SIZE).await {
+            Ok(bytes) => bytes,
+            Err(error) => return management_error(413, format!("请求体读取失败或过大: {error}")),
+        };
     dispatch(&state, method, &full_path, &query, &body).await
 }
 
@@ -124,7 +123,10 @@ async fn dispatch(
                 }))
             }
             Err(error) => {
-                logging::log("[Update]", &format!("❌ 更新出网线路保存失败: {}", error.message));
+                logging::log(
+                    "[Update]",
+                    &format!("❌ 更新出网线路保存失败: {}", error.message),
+                );
                 GatewayError::bad_request(error.message).into_response()
             }
         };
@@ -147,7 +149,8 @@ async fn dispatch(
             Err(error) => return GatewayError::new(error.message).into_response(),
         };
         let Some(raw) = payload.get("token").cloned() else {
-            return GatewayError::bad_request("请求体缺少 token 字段（清除请传 null）").into_response();
+            return GatewayError::bad_request("请求体缺少 token 字段（清除请传 null）")
+                .into_response();
         };
         if !raw.is_null() && raw.as_str().is_none() {
             return GatewayError::bad_request("token 必须是字符串或 null").into_response();

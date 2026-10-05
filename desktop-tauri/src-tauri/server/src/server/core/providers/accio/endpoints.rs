@@ -241,6 +241,9 @@ pub fn api_headers(region: Region) -> Vec<(String, String)> {
             "x-app-version".to_string(),
             env_text("ACCIO_APP_VERSION").unwrap_or_else(|| DEFAULT_APP_VERSION.to_string()),
         ),
-        ("x-package-region".to_string(), region.package_region().to_string()),
+        (
+            "x-package-region".to_string(),
+            region.package_region().to_string(),
+        ),
     ]
 }

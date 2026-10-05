@@ -244,7 +244,11 @@ fn error_message(payload: &Value) -> String {
 fn number_or_null(value: Option<&Value>) -> Option<f64> {
     match value? {
         Value::Number(number) => number.as_f64().filter(|item| item.is_finite()),
-        Value::String(text) => text.trim().parse::<f64>().ok().filter(|item| item.is_finite()),
+        Value::String(text) => text
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|item| item.is_finite()),
         _ => None,
     }
 }

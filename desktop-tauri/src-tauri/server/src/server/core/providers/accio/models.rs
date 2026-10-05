@@ -82,16 +82,96 @@ const CACHE_TTL_MS: i64 = 60 * 60 * 1000;
 /// 远程清单走「读 `protocol`」，两条路都不再按模型名猜。
 const FALLBACK: &[(&str, &str, u64, bool, &[&str], bool, EffortPlacement)] = &[
     // (modelCode, 展示名, contextWindow, multimodal, reasoningEfforts, isDefault, 档位落点)
-    ("gemini-3-flash-preview", "Gemini 3 Flash", 1_000_000, true, &["low", "high"], true, EffortPlacement::Top),
-    ("gemini-3.1-pro-preview", "Gemini 3.1 Pro", 1_000_000, true, &["low", "high"], false, EffortPlacement::Top),
-    ("qwen3.6-plus", "Qwen 3.6 Plus", 991_808, false, &[], false, EffortPlacement::Top),
-    ("qwen3-max-2026-01-23", "Qwen 3 Max", 262_144, false, &[], false, EffortPlacement::Top),
-    ("gpt-5.4", "GPT 5.4", 1_050_000, true, &["low", "high"], false, EffortPlacement::Properties),
-    ("gpt-5.2-1211", "GPT 5.2", 400_000, true, &["low", "high"], false, EffortPlacement::Properties),
-    ("claude-sonnet-4-6", "Claude Sonnet 4.6", 1_000_000, true, &["low", "medium", "high", "max"], false, EffortPlacement::Top),
-    ("claude-opus-4-6", "Claude Opus 4.6", 1_000_000, true, &["low", "medium", "high", "max"], false, EffortPlacement::Top),
-    ("glm-5", "GLM-5", 200_000, false, &[], false, EffortPlacement::Top),
-    ("MiniMax-M2.5", "MiniMax M2.5", 204_800, true, &[], false, EffortPlacement::Properties),
+    (
+        "gemini-3-flash-preview",
+        "Gemini 3 Flash",
+        1_000_000,
+        true,
+        &["low", "high"],
+        true,
+        EffortPlacement::Top,
+    ),
+    (
+        "gemini-3.1-pro-preview",
+        "Gemini 3.1 Pro",
+        1_000_000,
+        true,
+        &["low", "high"],
+        false,
+        EffortPlacement::Top,
+    ),
+    (
+        "qwen3.6-plus",
+        "Qwen 3.6 Plus",
+        991_808,
+        false,
+        &[],
+        false,
+        EffortPlacement::Top,
+    ),
+    (
+        "qwen3-max-2026-01-23",
+        "Qwen 3 Max",
+        262_144,
+        false,
+        &[],
+        false,
+        EffortPlacement::Top,
+    ),
+    (
+        "gpt-5.4",
+        "GPT 5.4",
+        1_050_000,
+        true,
+        &["low", "high"],
+        false,
+        EffortPlacement::Properties,
+    ),
+    (
+        "gpt-5.2-1211",
+        "GPT 5.2",
+        400_000,
+        true,
+        &["low", "high"],
+        false,
+        EffortPlacement::Properties,
+    ),
+    (
+        "claude-sonnet-4-6",
+        "Claude Sonnet 4.6",
+        1_000_000,
+        true,
+        &["low", "medium", "high", "max"],
+        false,
+        EffortPlacement::Top,
+    ),
+    (
+        "claude-opus-4-6",
+        "Claude Opus 4.6",
+        1_000_000,
+        true,
+        &["low", "medium", "high", "max"],
+        false,
+        EffortPlacement::Top,
+    ),
+    (
+        "glm-5",
+        "GLM-5",
+        200_000,
+        false,
+        &[],
+        false,
+        EffortPlacement::Top,
+    ),
+    (
+        "MiniMax-M2.5",
+        "MiniMax M2.5",
+        204_800,
+        true,
+        &[],
+        false,
+        EffortPlacement::Properties,
+    ),
 ];
 
 /// 老模型名 → 上游**展示名**（`modelDisplayName`）。
@@ -173,7 +253,10 @@ fn cache_scope(region: Region) -> &'static str {
 /// 「搬回来」：不重新归一 —— 两处各写一份映射迟早分叉。
 fn restored_cache(region: Region) -> RegionCache {
     match catalog_cache::load(cache_scope(region)) {
-        Some(cached) => RegionCache { models: cached.models, fetched_at: cached.fetched_at },
+        Some(cached) => RegionCache {
+            models: cached.models,
+            fetched_at: cached.fetched_at,
+        },
         None => RegionCache::default(),
     }
 }
@@ -181,25 +264,27 @@ fn restored_cache(region: Region) -> RegionCache {
 fn fallback_models() -> Vec<Value> {
     FALLBACK
         .iter()
-        .map(|(code, name, window, multimodal, efforts, is_default, placement)| {
-            let mut item = normalize_entry(&json!({
-                "modelCode": code,
-                "modelDisplayName": name,
-                "contextWindow": window,
-                "multimodal": multimodal,
-                "reasoningEfforts": efforts,
-                "isDefault": is_default,
-            }));
-            // 静态表自己带着落点（没有上游的 `protocol` 可读），写进去覆盖
-            // `normalize_entry` 的兜底值
-            if let Some(object) = item.as_object_mut() {
-                object.insert(
-                    "protocolKind".to_string(),
-                    Value::String(placement.as_str().to_string()),
-                );
-            }
-            item
-        })
+        .map(
+            |(code, name, window, multimodal, efforts, is_default, placement)| {
+                let mut item = normalize_entry(&json!({
+                    "modelCode": code,
+                    "modelDisplayName": name,
+                    "contextWindow": window,
+                    "multimodal": multimodal,
+                    "reasoningEfforts": efforts,
+                    "isDefault": is_default,
+                }));
+                // 静态表自己带着落点（没有上游的 `protocol` 可读），写进去覆盖
+                // `normalize_entry` 的兜底值
+                if let Some(object) = item.as_object_mut() {
+                    object.insert(
+                        "protocolKind".to_string(),
+                        Value::String(placement.as_str().to_string()),
+                    );
+                }
+                item
+            },
+        )
         .collect()
 }
 
@@ -223,11 +308,20 @@ fn normalize_entry(entry: &Value) -> Value {
         .get("contextWindow")
         .and_then(Value::as_u64)
         .unwrap_or(0);
-    let multimodal = entry.get("multimodal").and_then(Value::as_bool).unwrap_or(false);
+    let multimodal = entry
+        .get("multimodal")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let efforts: Vec<Value> = entry
         .get("reasoningEfforts")
         .and_then(Value::as_array)
-        .map(|items| items.iter().filter_map(Value::as_str).map(|text| Value::String(text.to_string())).collect())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(|text| Value::String(text.to_string()))
+                .collect()
+        })
         .unwrap_or_default();
     json!({
         // 对外 id 用老名字（能用的话），上游发送名走 `upstreamKey`
@@ -315,7 +409,9 @@ fn effort_placement(entry: &Value) -> EffortPlacement {
 /// 当前清单：远程（有的话）优先，按 id 去重后拼接兜底。
 fn region_models(region: Region) -> Vec<Value> {
     let cached = {
-        let guard = cache_slot(region).read().unwrap_or_else(|error| error.into_inner());
+        let guard = cache_slot(region)
+            .read()
+            .unwrap_or_else(|error| error.into_inner());
         guard.models.clone()
     };
     if !cached.is_empty() {
@@ -334,7 +430,10 @@ pub fn list() -> Vec<Value> {
                 continue;
             }
             if merged.iter().any(|existing| {
-                existing.get("id").and_then(Value::as_str).map(str::to_ascii_lowercase)
+                existing
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .map(str::to_ascii_lowercase)
                     == Some(id.to_ascii_lowercase())
             }) {
                 continue;
@@ -347,13 +446,17 @@ pub fn list() -> Vec<Value> {
 
 /// 某地区最近一次远程刷新是否成功过（模型管理页「来源」列用）
 pub fn remote_models(region: Region) -> Vec<Value> {
-    let guard = cache_slot(region).read().unwrap_or_else(|error| error.into_inner());
+    let guard = cache_slot(region)
+        .read()
+        .unwrap_or_else(|error| error.into_inner());
     guard.models.clone()
 }
 
 /// 某地区最近一次刷新的时刻（毫秒；0 = 从未）
 pub fn last_refreshed_at(region: Region) -> i64 {
-    let guard = cache_slot(region).read().unwrap_or_else(|error| error.into_inner());
+    let guard = cache_slot(region)
+        .read()
+        .unwrap_or_else(|error| error.into_inner());
     guard.fetched_at
 }
 
@@ -377,7 +480,10 @@ pub fn resolve(model_name: &str, region: Region) -> Option<Value> {
         for item in list() {
             let id = item.get("id").and_then(Value::as_str).unwrap_or("");
             if !merged.iter().any(|existing| {
-                existing.get("id").and_then(Value::as_str).map(str::to_ascii_lowercase)
+                existing
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .map(str::to_ascii_lowercase)
                     == Some(id.to_ascii_lowercase())
             }) {
                 merged.push(item);
@@ -427,7 +533,10 @@ pub async fn refresh(
     let body = json!({ "token": credentials.access_token, "supportAutoModel": true });
     let mut last_error: Option<String> = None;
     let mut models: Vec<Value> = Vec::new();
-    for path in [endpoints::MODEL_CONFIG_PATH, endpoints::MODEL_CONFIG_PATH_V2] {
+    for path in [
+        endpoints::MODEL_CONFIG_PATH,
+        endpoints::MODEL_CONFIG_PATH_V2,
+    ] {
         let response = match auth::post_json(region, path, &body, proxy).await {
             Ok(response) => response,
             Err(error) => {
@@ -482,7 +591,9 @@ pub async fn refresh(
     // —— 缓存写入要拿库连接锁，两把锁不能嵌套。scope 与格子一一对应。
     catalog_cache::save(cache_scope(region), &models, now);
     {
-        let mut guard = cache_slot(region).write().unwrap_or_else(|error| error.into_inner());
+        let mut guard = cache_slot(region)
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
         guard.models = models;
         guard.fetched_at = now;
     }
@@ -530,7 +641,10 @@ fn parse_catalog(payload: &Value) -> Vec<Value> {
                 continue;
             }
             if models.iter().any(|existing| {
-                existing.get("id").and_then(Value::as_str).map(str::to_ascii_lowercase)
+                existing
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .map(str::to_ascii_lowercase)
                     == Some(id.to_ascii_lowercase())
             }) {
                 continue;
@@ -555,7 +669,8 @@ fn parse_catalog(payload: &Value) -> Vec<Value> {
 /// 填上这个字段时，宁可多收一个也不要把正常模型挡在门外（少个模型是静默的，
 /// 多一个奇怪的模型至少看得见）。
 fn is_chat_entry(entry: &Value) -> bool {
-    const NON_CHAT_OPERATIONS: &[&str] = &["VIDEO_GENERATION", "IMAGE_GENERATION", "AUDIO_GENERATION"];
+    const NON_CHAT_OPERATIONS: &[&str] =
+        &["VIDEO_GENERATION", "IMAGE_GENERATION", "AUDIO_GENERATION"];
     entry
         .get("supportedOperationList")
         .and_then(Value::as_array)

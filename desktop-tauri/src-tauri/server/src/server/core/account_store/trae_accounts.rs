@@ -22,7 +22,9 @@
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
-use crate::server::core::providers::trae::credentials::{INTL_UNSUPPORTED, Credential, is_intl_variant};
+use crate::server::core::providers::trae::credentials::{
+    is_intl_variant, Credential, INTL_UNSUPPORTED,
+};
 use crate::server::core::providers::trae::PROVIDER_ID;
 use crate::server::logging;
 
@@ -84,22 +86,35 @@ impl AccountStore {
             .records_for_provider(&guard, PROVIDER_ID)
             .into_iter()
             .find(|record| {
-                let same_uid = !uid.is_empty() && record.get("uid").and_then(Value::as_str) == Some(uid.as_str());
+                let same_uid = !uid.is_empty()
+                    && record.get("uid").and_then(Value::as_str) == Some(uid.as_str());
                 let same_token = !credential.access_token.is_empty()
-                    && record.get("accessToken").and_then(Value::as_str) == Some(credential.access_token.as_str());
+                    && record.get("accessToken").and_then(Value::as_str)
+                        == Some(credential.access_token.as_str());
                 same_uid || same_token
             });
         if existing.is_none() && self.record_by_id(&guard, &id).is_some() {
-            return Err(AccountStoreError::new("Trae 账号 ID 已被其它账号占用，请先核对账号记录", 409));
+            return Err(AccountStoreError::new(
+                "Trae 账号 ID 已被其它账号占用，请先核对账号记录",
+                409,
+            ));
         }
         let record_name = name
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_string)
-            .or_else(|| existing.as_ref().map(StoredAccount::name).filter(|value| !value.is_empty()))
+            .or_else(|| {
+                existing
+                    .as_ref()
+                    .map(StoredAccount::name)
+                    .filter(|value| !value.is_empty())
+            })
             .or_else(|| Some(credential.nickname.clone()).filter(|value| !value.trim().is_empty()))
             .unwrap_or_else(|| format!("Trae {}", truncate_chars(&variant, 20)));
-        let mut fields = existing.as_ref().map(|record| record.fields().clone()).unwrap_or_default();
+        let mut fields = existing
+            .as_ref()
+            .map(|record| record.fields().clone())
+            .unwrap_or_default();
         // 只并**非空**字段（见模块头"空值不覆盖"）。
         for (key, value) in credential.patch_fields() {
             if value.is_null() || matches!(&value, Value::String(text) if text.is_empty()) {
@@ -119,28 +134,55 @@ impl AccountStore {
         let priority = match existing.as_ref() {
             Some(record) => record.priority(),
             None => {
-                let used = self.with_conn(&guard, |conn| sql::priorities_all(conn)).unwrap_or_default();
+                let used = self
+                    .with_conn(&guard, |conn| sql::priorities_all(conn))
+                    .unwrap_or_default();
                 next_free_priority(&used)
             }
         };
         fields.insert("id".to_string(), Value::String(id.clone()));
-        fields.insert("provider".to_string(), Value::String(PROVIDER_ID.to_string()));
-        fields.insert("name".to_string(), Value::String(truncate_chars(&record_name, 100)));
-        fields.insert("tokenTail".to_string(), Value::String(token_tail_of(&credential.access_token)));
+        fields.insert(
+            "provider".to_string(),
+            Value::String(PROVIDER_ID.to_string()),
+        );
+        fields.insert(
+            "name".to_string(),
+            Value::String(truncate_chars(&record_name, 100)),
+        );
+        fields.insert(
+            "tokenTail".to_string(),
+            Value::String(token_tail_of(&credential.access_token)),
+        );
         fields.insert("priority".to_string(), Value::from(priority));
-        fields.insert("enabled".to_string(), Value::Bool(existing.as_ref().map(StoredAccount::enabled).unwrap_or(true)));
+        fields.insert(
+            "enabled".to_string(),
+            Value::Bool(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::enabled)
+                    .unwrap_or(true),
+            ),
+        );
         // 本家没有"桌面端登录态导入"这条来源（那是 CPA 那侧的账本），恒 false。
         fields.insert("desktop".to_string(), Value::Bool(false));
         fields.insert("source".to_string(), Value::String(source.to_string()));
         fields.insert(
             "addedAt".to_string(),
-            Value::from(existing.as_ref().map(StoredAccount::added_at).unwrap_or_else(logging::now_ms)),
+            Value::from(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::added_at)
+                    .unwrap_or_else(logging::now_ms),
+            ),
         );
         fields.insert("updatedAt".to_string(), Value::from(logging::now_ms()));
         fields.insert("rateLimits".to_string(), json!({}));
         let record = StoredAccount::from_map(fields);
         self.with_conn(&guard, |conn| sql::put(conn, &record))?;
-        logging::log("[Accounts]", &format!("✅ Trae 账号已保存（{}，优先级 {priority}）", record_name));
+        logging::log(
+            "[Accounts]",
+            &format!("✅ Trae 账号已保存（{}，优先级 {priority}）", record_name),
+        );
         Ok(self.public_account(&record))
     }
 
@@ -156,10 +198,19 @@ impl AccountStore {
     ) -> Result<CredentialWrite, AccountStoreError> {
         let id = expected.get("id").and_then(Value::as_str).unwrap_or("");
         let guard = self.guard();
-        let Some(mut record) = self.record_by_id(&guard, id).filter(|record| record.provider() == PROVIDER_ID) else {
+        let Some(mut record) = self
+            .record_by_id(&guard, id)
+            .filter(|record| record.provider() == PROVIDER_ID)
+        else {
             return Ok(CredentialWrite::Stale);
         };
-        for key in ["accessToken", "refreshToken", "uid", "deviceId", "machineId"] {
+        for key in [
+            "accessToken",
+            "refreshToken",
+            "uid",
+            "deviceId",
+            "machineId",
+        ] {
             if record.get(key) != expected.get(key) {
                 return Ok(CredentialWrite::Stale);
             }
@@ -170,7 +221,10 @@ impl AccountStore {
             }
             record.fields_mut().insert(key.to_string(), value);
         }
-        record.set("tokenTail", Value::String(token_tail_of(&credential.access_token)));
+        record.set(
+            "tokenTail",
+            Value::String(token_tail_of(&credential.access_token)),
+        );
         record.set_updated_at(logging::now_ms());
         self.with_conn(&guard, |conn| sql::update_in_place(conn, &record))?;
         Ok(CredentialWrite::Written)
@@ -194,13 +248,21 @@ impl AccountStore {
             "expiresAt",
             "variant",
         ] {
-            public.insert(key.to_string(), record.get(key).cloned().unwrap_or(Value::Null));
+            public.insert(
+                key.to_string(),
+                record.get(key).cloned().unwrap_or(Value::Null),
+            );
         }
         // 到期读数统一成**毫秒**并补一个可读串：面板与别家共用同一列，
         // 而本家的落盘值历史上在秒与毫秒之间漂过（见 credentials.rs）。
         public.insert(
             "expiresAtMs".to_string(),
-            Value::from(credential.as_ref().map(|value| value.effective_expiry_ms()).unwrap_or(0)),
+            Value::from(
+                credential
+                    .as_ref()
+                    .map(|value| value.effective_expiry_ms())
+                    .unwrap_or(0),
+            ),
         );
         public.insert("hasRefreshToken".to_string(), Value::Bool(can_refresh));
         public.insert("priority".to_string(), Value::from(record.priority()));
@@ -211,10 +273,19 @@ impl AccountStore {
             "proxy".to_string(),
             crate::server::core::proxies::describe_account_proxy(Some(&record.proxy())),
         );
-        public.insert("rateLimits".to_string(), record.get("rateLimits").cloned().unwrap_or_else(|| json!({})));
+        public.insert(
+            "rateLimits".to_string(),
+            record
+                .get("rateLimits")
+                .cloned()
+                .unwrap_or_else(|| json!({})),
+        );
         public.insert("desktop".to_string(), Value::Bool(false));
         public.insert("available".to_string(), Value::Bool(available));
-        public.insert("maxConcurrent".to_string(), Value::from(max_concurrent_public(record.get("maxConcurrent"))));
+        public.insert(
+            "maxConcurrent".to_string(),
+            Value::from(max_concurrent_public(record.get("maxConcurrent"))),
+        );
         Value::Object(public)
     }
 }
@@ -233,7 +304,8 @@ mod tests {
     /// 临时账号库 + **删文件的守卫**。调用点必须写成
     /// `let (store, _db) = store("x");` —— 只拿 store 就等于回到"每轮留一批垃圾"。
     fn store(label: &str) -> (AccountStore, crate::server::db::test_temp::TempDb) {
-        let (db, guard) = crate::server::db::test_temp::TempDb::open(&format!("trae-accounts-{label}"));
+        let (db, guard) =
+            crate::server::db::test_temp::TempDb::open(&format!("trae-accounts-{label}"));
         (AccountStore::with_db(Some(db)), guard)
     }
 
@@ -287,15 +359,32 @@ mod tests {
         // 参考实现 v0.12.25 那条用户报告（同一账号登两次出两个账号）的形态
         // 在账号层这一侧的兜底：去重键是 uid，不是令牌尾巴也不是随机数。
         let (store, _db) = store("dedup");
-        let first = store.add_trae_account(&credential("u-1", "A1", "R1"), None, "web").expect("首次要能落");
-        let second = store.add_trae_account(&credential("u-1", "A2", "R2"), None, "web").expect("重复登录要能落");
+        let first = store
+            .add_trae_account(&credential("u-1", "A1", "R1"), None, "web")
+            .expect("首次要能落");
+        let second = store
+            .add_trae_account(&credential("u-1", "A2", "R2"), None, "web")
+            .expect("重复登录要能落");
         assert_eq!(first.get("id"), second.get("id"), "同 uid 必须是同一条记录");
         let snapshot = store.list_accounts();
-        let rows = snapshot.get("accounts").and_then(Value::as_array).expect("快照里有 accounts 数组");
-        assert_eq!(1, rows.len(), "同 uid 重复登录必须只有一条记录，实际 {rows:?}");
+        let rows = snapshot
+            .get("accounts")
+            .and_then(Value::as_array)
+            .expect("快照里有 accounts 数组");
+        assert_eq!(
+            1,
+            rows.len(),
+            "同 uid 重复登录必须只有一条记录，实际 {rows:?}"
+        );
         let record = store.trae_account_record("").expect("队首要能读回");
-        assert_eq!("A2", record.get("accessToken").and_then(Value::as_str).unwrap());
-        assert_eq!("R2", record.get("refreshToken").and_then(Value::as_str).unwrap());
+        assert_eq!(
+            "A2",
+            record.get("accessToken").and_then(Value::as_str).unwrap()
+        );
+        assert_eq!(
+            "R2",
+            record.get("refreshToken").and_then(Value::as_str).unwrap()
+        );
     }
 
     #[test]
@@ -303,12 +392,30 @@ mod tests {
         // 手工粘贴常常只有 accessToken。把 refreshToken 写成空串等于让这条
         // 凭据"到期即死"，而它原本是能续的 —— 空值不覆盖是硬纪律。
         let (store, _db) = store("keep");
-        store.add_trae_account(&credential("u-2", "A1", "R1"), None, "web").expect("首次要能落");
-        let partial = Credential { uid: "u-2".into(), access_token: "A2".into(), ..Default::default() };
-        let account = store.add_trae_account(&partial, None, "manual").expect("半个凭据也要能更新");
-        let record = store.trae_account_record(account.get("id").and_then(Value::as_str).unwrap()).expect("要能读回");
-        assert_eq!("A2", record.get("accessToken").and_then(Value::as_str).unwrap(), "给了的要生效");
-        assert_eq!("R1", record.get("refreshToken").and_then(Value::as_str).unwrap(), "没给的不能被空串洗掉");
+        store
+            .add_trae_account(&credential("u-2", "A1", "R1"), None, "web")
+            .expect("首次要能落");
+        let partial = Credential {
+            uid: "u-2".into(),
+            access_token: "A2".into(),
+            ..Default::default()
+        };
+        let account = store
+            .add_trae_account(&partial, None, "manual")
+            .expect("半个凭据也要能更新");
+        let record = store
+            .trae_account_record(account.get("id").and_then(Value::as_str).unwrap())
+            .expect("要能读回");
+        assert_eq!(
+            "A2",
+            record.get("accessToken").and_then(Value::as_str).unwrap(),
+            "给了的要生效"
+        );
+        assert_eq!(
+            "R1",
+            record.get("refreshToken").and_then(Value::as_str).unwrap(),
+            "没给的不能被空串洗掉"
+        );
     }
 
     #[test]
@@ -316,17 +423,40 @@ mod tests {
         // 参考实现摔过的那条：预刷新走"重建"路径，refreshToken 保住了但设备
         // 密钥被抹掉，之后是一串看不出门道的 401。
         let (store, _db) = store("keys");
-        let account = store.add_trae_account(&credential("u-3", "A1", "R1"), None, "web").expect("首次要能落");
-        let record = store.trae_account_record(account.get("id").and_then(Value::as_str).unwrap()).expect("要能读回");
-        assert!(record.get("devicePublicKey").and_then(Value::as_str).is_some_and(|value| !value.is_empty()));
-        assert!(record.get("devicePrivateKey").and_then(Value::as_str).is_some_and(|value| !value.is_empty()));
+        let account = store
+            .add_trae_account(&credential("u-3", "A1", "R1"), None, "web")
+            .expect("首次要能落");
+        let record = store
+            .trae_account_record(account.get("id").and_then(Value::as_str).unwrap())
+            .expect("要能读回");
+        assert!(record
+            .get("devicePublicKey")
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.is_empty()));
+        assert!(record
+            .get("devicePrivateKey")
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.is_empty()));
         let mut renewed = credential("u-3", "A2", "R2");
         renewed.device_public_key.clear();
         renewed.device_private_key.clear();
-        store.update_trae_credentials_if_current(&record, &renewed).expect("写回不该失败");
-        let after = store.trae_account_record(account.get("id").and_then(Value::as_str).unwrap()).expect("要能读回");
-        assert_eq!("A2", after.get("accessToken").and_then(Value::as_str).unwrap());
-        assert!(after.get("devicePrivateKey").and_then(Value::as_str).is_some_and(|value| !value.is_empty()), "密钥不能从写回里消失");
+        store
+            .update_trae_credentials_if_current(&record, &renewed)
+            .expect("写回不该失败");
+        let after = store
+            .trae_account_record(account.get("id").and_then(Value::as_str).unwrap())
+            .expect("要能读回");
+        assert_eq!(
+            "A2",
+            after.get("accessToken").and_then(Value::as_str).unwrap()
+        );
+        assert!(
+            after
+                .get("devicePrivateKey")
+                .and_then(Value::as_str)
+                .is_some_and(|value| !value.is_empty()),
+            "密钥不能从写回里消失"
+        );
     }
 
     #[test]
@@ -334,38 +464,85 @@ mod tests {
         // refreshToken 一次一换：并发续期里"后完成的那个"若不做比较-再写，
         // 会把前一个刚落盘的新串覆盖成旧串 —— 旧串在服务端已作废，账号就废了。
         let (store, _db) = store("stale");
-        let account = store.add_trae_account(&credential("u-4", "A1", "R1"), None, "web").expect("首次要能落");
-        let record = store.trae_account_record(account.get("id").and_then(Value::as_str).unwrap()).expect("要能读回");
+        let account = store
+            .add_trae_account(&credential("u-4", "A1", "R1"), None, "web")
+            .expect("首次要能落");
+        let record = store
+            .trae_account_record(account.get("id").and_then(Value::as_str).unwrap())
+            .expect("要能读回");
         let mut moved = record.clone();
         moved["refreshToken"] = json!("R-CURRENT");
-        let wrote = store.update_trae_credentials_if_current(&record, &credential("u-4", "A2", "R2")).unwrap_or_else(|error| panic!("写入不该失败：{}", error.message));
-        assert!(matches!(wrote, CredentialWrite::Written), "记录没动过时就该写进去");
-        let stale = store.update_trae_credentials_if_current(&moved, &credential("u-4", "A3", "R3")).unwrap_or_else(|error| panic!("写入不该失败：{}", error.message));
-        assert!(matches!(stale, CredentialWrite::Stale), "手里那份已过期时必须拒写");
-        let after = store.trae_account_record(account.get("id").and_then(Value::as_str).unwrap()).expect("要能读回");
-        assert_eq!("A2", after.get("accessToken").and_then(Value::as_str).unwrap(), "拒写要保持第一次的结果");
+        let wrote = store
+            .update_trae_credentials_if_current(&record, &credential("u-4", "A2", "R2"))
+            .unwrap_or_else(|error| panic!("写入不该失败：{}", error.message));
+        assert!(
+            matches!(wrote, CredentialWrite::Written),
+            "记录没动过时就该写进去"
+        );
+        let stale = store
+            .update_trae_credentials_if_current(&moved, &credential("u-4", "A3", "R3"))
+            .unwrap_or_else(|error| panic!("写入不该失败：{}", error.message));
+        assert!(
+            matches!(stale, CredentialWrite::Stale),
+            "手里那份已过期时必须拒写"
+        );
+        let after = store
+            .trae_account_record(account.get("id").and_then(Value::as_str).unwrap())
+            .expect("要能读回");
+        assert_eq!(
+            "A2",
+            after.get("accessToken").and_then(Value::as_str).unwrap(),
+            "拒写要保持第一次的结果"
+        );
     }
 
     #[test]
     fn the_public_form_states_expiry_in_milliseconds_and_refreshability() {
         let (store, _db) = store("public");
-        let account = store.add_trae_account(&credential("u-5", "A1", "R1"), None, "web").expect("首次要能落");
+        let account = store
+            .add_trae_account(&credential("u-5", "A1", "R1"), None, "web")
+            .expect("首次要能落");
         assert_eq!("u-5", account.get("uid").and_then(Value::as_str).unwrap());
-        assert_eq!("用户1", account.get("nickname").and_then(Value::as_str).unwrap());
-        assert_eq!(1_900_000_000_000, account.get("expiresAtMs").and_then(Value::as_i64).unwrap(), "落盘是秒也要回毫秒");
-        assert!(account.get("hasRefreshToken").and_then(Value::as_bool).unwrap());
+        assert_eq!(
+            "用户1",
+            account.get("nickname").and_then(Value::as_str).unwrap()
+        );
+        assert_eq!(
+            1_900_000_000_000,
+            account.get("expiresAtMs").and_then(Value::as_i64).unwrap(),
+            "落盘是秒也要回毫秒"
+        );
+        assert!(account
+            .get("hasRefreshToken")
+            .and_then(Value::as_bool)
+            .unwrap());
         assert!(account.get("available").and_then(Value::as_bool).unwrap());
-        assert_eq!("trae", account.get("provider").and_then(Value::as_str).unwrap());
-        assert_eq!("solo", account.get("variant").and_then(Value::as_str).unwrap());
+        assert_eq!(
+            "trae",
+            account.get("provider").and_then(Value::as_str).unwrap()
+        );
+        assert_eq!(
+            "solo",
+            account.get("variant").and_then(Value::as_str).unwrap()
+        );
         assert!(account.get("accessToken").is_none(), "公开形态不许带令牌");
     }
 
     #[test]
     fn a_credential_with_nothing_to_refresh_is_rejected_not_stored_empty() {
         let (store, _db) = store("reject");
-        let bare = Credential { uid: "u-6".into(), ..Default::default() };
-        let error = store.add_trae_account(&bare, None, "manual").expect_err("两把令牌都没有要拒");
-        assert!(error.message.contains("accessToken"), "文案要指出缺什么：{}", error.message);
+        let bare = Credential {
+            uid: "u-6".into(),
+            ..Default::default()
+        };
+        let error = store
+            .add_trae_account(&bare, None, "manual")
+            .expect_err("两把令牌都没有要拒");
+        assert!(
+            error.message.contains("accessToken"),
+            "文案要指出缺什么：{}",
+            error.message
+        );
         assert_eq!(400, error.status_code);
     }
 }

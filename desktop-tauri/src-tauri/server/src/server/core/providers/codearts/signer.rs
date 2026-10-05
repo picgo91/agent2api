@@ -129,7 +129,10 @@ fn path_unescape(input: &str) -> Option<Vec<u8>> {
 /// 字母数字加上 `- _ . ! ~ * ' ( )`，其余按**字节**百分号编码、大写十六进制。
 fn unreserved(byte: u8) -> bool {
     byte.is_ascii_alphanumeric()
-        || matches!(byte, b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')')
+        || matches!(
+            byte,
+            b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')'
+        )
 }
 
 /// JS `encodeURIComponent` 的百分号编码。**签名与授权页地址共用这一份**：
@@ -220,8 +223,12 @@ fn query_pairs(raw: &str) -> Vec<(Vec<u8>, Vec<u8>)> {
             None => (part, ""),
         };
         // 键为空 Go 也照收（只有整对为空才跳过），这里保持同一行为
-        let Some(key) = query_unescape(key) else { continue };
-        let Some(value) = query_unescape(value) else { continue };
+        let Some(key) = query_unescape(key) else {
+            continue;
+        };
+        let Some(value) = query_unescape(value) else {
+            continue;
+        };
         pairs.push((key, value));
     }
     pairs
@@ -259,7 +266,10 @@ fn hmac_sha256_hex(key: &[u8], message: &str) -> String {
 
 /// 只有 PUT / PATCH / POST 被视为「带体」，其余恒签空体摘要。
 fn request_carries_body(method: &str) -> bool {
-    matches!(method.to_ascii_uppercase().as_str(), "PUT" | "PATCH" | "POST")
+    matches!(
+        method.to_ascii_uppercase().as_str(),
+        "PUT" | "PATCH" | "POST"
+    )
 }
 
 /// 头集合：按插入顺序保名值，**同名（大小写无关）覆盖前值、位置不变**。
@@ -295,7 +305,9 @@ impl Headers {
 
     fn contains_name(&self, name: &str) -> bool {
         let lower = name.to_ascii_lowercase();
-        self.items.iter().any(|(existing, _)| existing.to_ascii_lowercase() == lower)
+        self.items
+            .iter()
+            .any(|(existing, _)| existing.to_ascii_lowercase() == lower)
     }
 
     fn value_of(&self, name: &str) -> Option<&str> {
@@ -349,7 +361,10 @@ fn sign_material(
     if include_host && !out.contains_name("host") {
         out.set("Host", &parsed.authority);
     }
-    let date = out.value_of(HEADER_XSDK_DATE).unwrap_or_default().to_string();
+    let date = out
+        .value_of(HEADER_XSDK_DATE)
+        .unwrap_or_default()
+        .to_string();
 
     // 规范头视图：名字转小写、值去空白、按名字排序
     let mut canonical: Vec<(String, String)> = out
@@ -362,7 +377,11 @@ fn sign_material(
         .iter()
         .map(|(name, value)| format!("{name}:{value}\n"))
         .collect::<String>();
-    let signed_headers = canonical.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>().join(";");
+    let signed_headers = canonical
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect::<Vec<_>>()
+        .join(";");
 
     let mut payload_hash = sha256_hex(body);
     let override_hash = canonical
@@ -385,13 +404,27 @@ fn sign_material(
         &payload_hash,
     ]
     .join("\n");
-    let string_to_sign = [SIGNING_ALGORITHM, &date, &sha256_hex(canonical_request.as_bytes())].join("\n");
+    let string_to_sign = [
+        SIGNING_ALGORITHM,
+        &date,
+        &sha256_hex(canonical_request.as_bytes()),
+    ]
+    .join("\n");
     let signature = hmac_sha256_hex(credential.secret_access_key.as_bytes(), &string_to_sign);
     out.set(
         HEADER_AUTHORIZATION,
-        &format!("{SIGNING_ALGORITHM} Access={}, SignedHeaders={signed_headers}, Signature={signature}", credential.access_key_id),
+        &format!(
+            "{SIGNING_ALGORITHM} Access={}, SignedHeaders={signed_headers}, Signature={signature}",
+            credential.access_key_id
+        ),
     );
-    Ok(Material { headers: out.items, canonical_request, string_to_sign, signed_headers, signature })
+    Ok(Material {
+        headers: out.items,
+        canonical_request,
+        string_to_sign,
+        signed_headers,
+        signature,
+    })
 }
 
 /// 给请求签名，返回**应当发出去**的头集合（入参头 + 注入项 + `Authorization`）。
@@ -449,30 +482,50 @@ mod tests {
             // JSON 对象不带顺序；向量里每对键值都唯一，所以排序后即为确定输入
             let mut headers: Vec<(String, String)> = case["headers"]
                 .as_object()
-                .map(|map| map.iter().map(|(key, value)| (key.clone(), value.as_str().unwrap_or("").to_string())).collect())
+                .map(|map| {
+                    map.iter()
+                        .map(|(key, value)| (key.clone(), value.as_str().unwrap_or("").to_string()))
+                        .collect()
+                })
                 .unwrap_or_default();
             headers.sort();
-            let body = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, get("body_b64"))
-                .unwrap_or_default();
+            let body =
+                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, get("body_b64"))
+                    .unwrap_or_default();
             let expected_error = get("expected_error");
             let kind = get("expected_error_kind");
             if !expected_error.is_empty() || !kind.is_empty() {
-                let error = sign(&get("method"), &get("url"), &headers, &body, &credential, include_host)
-                    .expect_err(&format!("{name}: 期望报错，却签名成功"));
+                let error = sign(
+                    &get("method"),
+                    &get("url"),
+                    &headers,
+                    &body,
+                    &credential,
+                    include_host,
+                )
+                .expect_err(&format!("{name}: 期望报错，却签名成功"));
                 // 两边的报错文案语言不同（Go 是英文短句），所以按「因为什么而错」
                 // 比对：不登记这一层映射的话，Rust 侧随便抛点什么都能算过
                 let want = match kind.as_str() {
                     "url_parse" => "转义非法",
                     "incomplete_credential" => "凭据不完整",
-                    other => panic!("{name}: 未登记的报错种类 {other:?}（在 signer.rs 的测试里补一条映射）"),
+                    other => panic!(
+                        "{name}: 未登记的报错种类 {other:?}（在 signer.rs 的测试里补一条映射）"
+                    ),
                 };
-                assert!(error.contains(want), "{name}: 报错文本 {error:?} 不含 {want:?}（Go 侧原文：{expected_error}）");
+                assert!(
+                    error.contains(want),
+                    "{name}: 报错文本 {error:?} 不含 {want:?}（Go 侧原文：{expected_error}）"
+                );
                 errored += 1;
                 continue;
             }
             // 没给日期的向量由签名器注入「当时」的 UTC 时刻：把参考实现那次注入
             // 的值补进入参再签，比的是同一串而不是「现在几点」
-            if !headers.iter().any(|(key, _)| key.eq_ignore_ascii_case(HEADER_XSDK_DATE)) {
+            if !headers
+                .iter()
+                .any(|(key, _)| key.eq_ignore_ascii_case(HEADER_XSDK_DATE))
+            {
                 let injected = case["headers_out"]
                     .as_object()
                     .and_then(|map| {
@@ -484,11 +537,30 @@ mod tests {
                 headers.push((HEADER_XSDK_DATE.to_string(), injected.to_string()));
                 headers.sort();
             }
-            let material = sign_material(&get("method"), &get("url"), &headers, &body, &credential, include_host)
-                .unwrap_or_else(|error| panic!("{name}: 签名失败 {error}"));
-            assert_eq!(get("canonical_request"), material.canonical_request, "{name}: 规范请求串");
-            assert_eq!(get("string_to_sign"), material.string_to_sign, "{name}: 待签串");
-            assert_eq!(get("signed_headers"), material.signed_headers, "{name}: 签名头集合");
+            let material = sign_material(
+                &get("method"),
+                &get("url"),
+                &headers,
+                &body,
+                &credential,
+                include_host,
+            )
+            .unwrap_or_else(|error| panic!("{name}: 签名失败 {error}"));
+            assert_eq!(
+                get("canonical_request"),
+                material.canonical_request,
+                "{name}: 规范请求串"
+            );
+            assert_eq!(
+                get("string_to_sign"),
+                material.string_to_sign,
+                "{name}: 待签串"
+            );
+            assert_eq!(
+                get("signed_headers"),
+                material.signed_headers,
+                "{name}: 签名头集合"
+            );
             assert_eq!(get("signature"), material.signature, "{name}: 签名");
             // Authorization 必须是「SDK-HMAC-SHA256 Access=…, SignedHeaders=…, Signature=…」
             let authorization = material
@@ -498,15 +570,24 @@ mod tests {
                 .map(|(_, value)| value.clone())
                 .unwrap_or_default();
             assert_eq!(
-                format!("{SIGNING_ALGORITHM} Access={}, SignedHeaders={}, Signature={}", credential.access_key_id, material.signed_headers, material.signature),
+                format!(
+                    "{SIGNING_ALGORITHM} Access={}, SignedHeaders={}, Signature={}",
+                    credential.access_key_id, material.signed_headers, material.signature
+                ),
                 authorization,
                 "{name}: Authorization 头形状"
             );
             // 签名头集合里绝不能出现 authorization 自己
-            assert!(!material.signed_headers.contains("authorization"), "{name}: Authorization 被签进去了");
+            assert!(
+                !material.signed_headers.contains("authorization"),
+                "{name}: Authorization 被签进去了"
+            );
             signed += 1;
         }
-        assert!(signed >= 10, "只比对了 {signed} 条签名向量，向量文件可能被截断");
+        assert!(
+            signed >= 10,
+            "只比对了 {signed} 条签名向量，向量文件可能被截断"
+        );
         assert!(errored >= 2, "只比对了 {errored} 条报错向量");
     }
 
@@ -519,7 +600,11 @@ mod tests {
             ("/already/", "/already/"),
             ("", "/"),
         ] {
-            assert_eq!(want, canonical_uri(input.as_bytes()), "canonicalURI({input:?})");
+            assert_eq!(
+                want,
+                canonical_uri(input.as_bytes()),
+                "canonicalURI({input:?})"
+            );
         }
     }
 
@@ -546,7 +631,15 @@ mod tests {
             security_token: String::new(),
             domain_id: String::new(),
         };
-        assert!(sign("POST", "https://example.invalid/x", &[], b"{}", &credential, false).is_err());
+        assert!(sign(
+            "POST",
+            "https://example.invalid/x",
+            &[],
+            b"{}",
+            &credential,
+            false
+        )
+        .is_err());
     }
 
     /// 打一次**真**上游，验证签名不只是「与参考实现对得上」，而是「上游认」。
@@ -567,7 +660,12 @@ mod tests {
         let mut given = 0;
         let mut pick = |key: &str| {
             let value = std::env::var(key).unwrap_or_default();
-            if value.is_empty() { value } else { given += 1; value }
+            if value.is_empty() {
+                value
+            } else {
+                given += 1;
+                value
+            }
         };
         let credential = Credential {
             access_key_id: pick("CODEARTS_AK"),
@@ -604,7 +702,10 @@ mod tests {
         let response = request.send().await.expect("请求发不出去（网络或代理）");
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        println!("HTTP {status}\n{}", body.chars().take(600).collect::<String>());
+        println!(
+            "HTTP {status}\n{}",
+            body.chars().take(600).collect::<String>()
+        );
         assert!(status.is_success(), "上游没认这个签名：{status}");
         assert!(body.contains("model_id"), "200 但响应里看不到模型目录");
     }

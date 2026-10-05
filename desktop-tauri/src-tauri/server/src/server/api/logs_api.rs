@@ -88,7 +88,10 @@ fn effective_limit(raw: Option<&String>) -> usize {
 }
 
 /// GET /api/logs
-pub async fn query_logs(State(_state): State<ServerState>, Query(params): Query<Params>) -> Response {
+pub async fn query_logs(
+    State(_state): State<ServerState>,
+    Query(params): Query<Params>,
+) -> Response {
     let store = match store_or_error() {
         Ok(store) => store,
         Err(response) => return response,
@@ -146,12 +149,19 @@ pub async fn stats_logs(State(_state): State<ServerState>) -> Response {
 /// （不带的空请求给 400）—— 护栏的理由见下面 `explicit_all` 的注释。
 /// 全清沿用 `clear()` 的原语义（id 重新从 1 数起，导航徽标的已读水位有对应处理）。
 /// 响应带删除后的统计，有删除时另带 `removed`（删除条数）。
-pub async fn clear_logs(State(_state): State<ServerState>, Query(params): Query<Params>) -> Response {
+pub async fn clear_logs(
+    State(_state): State<ServerState>,
+    Query(params): Query<Params>,
+) -> Response {
     let store = match store_or_error() {
         Ok(store) => store,
         Err(response) => return response,
     };
-    let non_empty = |key: &str| params.get(key).map_or(false, |value| !value.trim().is_empty());
+    let non_empty = |key: &str| {
+        params
+            .get(key)
+            .map_or(false, |value| !value.trim().is_empty())
+    };
     let has_filters = non_empty("level")
         || non_empty("category")
         || non_empty("keyword")
@@ -192,10 +202,7 @@ pub async fn clear_logs(State(_state): State<ServerState>, Query(params): Query<
         end: parse_query_ms(params.get("end")),
     };
     let (removed, stats) = store.clear_where(&query);
-    logging::log(
-        "[Logs]",
-        &format!("已按筛选条件清空 {removed} 条日志"),
-    );
+    logging::log("[Logs]", &format!("已按筛选条件清空 {removed} 条日志"));
     match serde_json::to_value(stats) {
         Ok(mut value) => {
             if let Some(object) = value.as_object_mut() {
@@ -228,7 +235,9 @@ pub async fn download_logs(State(_state): State<ServerState>) -> Response {
 
     // 文件名/长度用 HeaderValue 构造（含非 ASCII 的兜底不 panic）
     if let Ok(value) = HeaderValue::from_str(&format!("attachment; filename=\"{filename}\"")) {
-        response.headers_mut().insert(header::CONTENT_DISPOSITION, value);
+        response
+            .headers_mut()
+            .insert(header::CONTENT_DISPOSITION, value);
     }
     response
 }
@@ -238,7 +247,12 @@ pub async fn download_logs(State(_state): State<ServerState>) -> Response {
 fn attach_dictionary(object: &mut serde_json::Map<String, Value>) {
     object.insert(
         "levels".to_string(),
-        Value::Array(logs_store::LEVELS.iter().map(|item| Value::String(item.to_string())).collect()),
+        Value::Array(
+            logs_store::LEVELS
+                .iter()
+                .map(|item| Value::String(item.to_string()))
+                .collect(),
+        ),
     );
     let mut categories = serde_json::Map::new();
     for (key, label) in logs_store::CATEGORIES {

@@ -48,8 +48,8 @@ use crate::server::core::auth_http::send_raw;
 use crate::server::errors::GatewayError;
 
 use super::credentials::{self, AutoClawCredentials};
-use super::region::Region;
 use super::refresh::signed_auth_headers;
+use super::region::Region;
 
 /// 积分 / 订阅接口的请求超时（源实现 `REQUEST_TIMEOUT_MS`）
 const REQUEST_TIMEOUT_MS: u64 = 20_000;
@@ -193,118 +193,114 @@ async fn query_points(credentials: &AutoClawCredentials) -> Result<Value, Gatewa
     let wallet_payload = userapi_get(credentials, POINTS_WALLET_PATH, "积分查询").await?;
     if let Some(code) = wallet_payload.get("code").and_then(Value::as_i64) {
         if AUTH_EXPIRED_CODES.contains(&code) {
-            return Err(GatewayError::with_status(
-                401,
-                "登录态已过期，无法查询积分",
-            ));
+            return Err(GatewayError::with_status(401, "登录态已过期，无法查询积分"));
         }
     }
 
     let data = wallet_payload.get("data").cloned().unwrap_or(Value::Null);
     let code_ok = wallet_payload.get("code").and_then(Value::as_i64) == Some(0);
-    let (total_balance, wallets, raw) = if code_ok
-        && data.get("wallets").and_then(Value::as_array).is_some()
-    {
-        let wallets = data
-            .get("wallets")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        // 源实现按 `priority` 升序（缺失视为 MAX_SAFE_INTEGER，即排在最后）。
-        // 先把 priority 提到结构里，再排序，避免排序闭包每次都回原数组里找一遍。
-        let mut mapped: Vec<(i64, Value)> = wallets
-            .iter()
-            // 源实现 `filter(wallet => wallet?.display)`：`display` 为假值的不展示
-            .filter(|wallet| js_truthy(wallet.get("display")))
-            .map(|wallet| {
-                let priority = wallet
-                    .get("priority")
-                    .and_then(Value::as_i64)
-                    .unwrap_or(i64::MAX);
-                let entry = json!({
-                    "type": wallet
-                        .get("public_wallet_type")
-                        .cloned()
-                        .unwrap_or(Value::Null),
-                    "displayName": wallet
-                        .get("display_name")
-                        .and_then(Value::as_str)
-                        .filter(|text| !text.is_empty())
-                        .map(str::to_string)
-                        .or_else(|| {
-                            wallet
-                                .get("public_wallet_type")
-                                .and_then(Value::as_str)
-                                .filter(|text| !text.is_empty())
-                                .map(str::to_string)
-                        })
-                        .unwrap_or_else(|| "积分".to_string()),
-                    "balance": number_or_null(wallet.get("balance")),
-                    // 上游给的展示串（带千分位/单位这类格式）；缺失时按数值拼
-                    "balanceView": wallet
-                        .get("balance_view")
-                        .and_then(Value::as_str)
-                        .filter(|text| !text.is_empty())
-                        .map(str::to_string)
-                        .or_else(|| {
-                            wallet
-                                .get("balance")
-                                .and_then(Value::as_f64)
-                                .map(json_number_text)
-                        })
-                        .unwrap_or_default(),
-                });
-                (priority, entry)
-            })
-            .collect();
-        mapped.sort_by_key(|(priority, _)| *priority);
-        (
-            data.get("total_balance").cloned().unwrap_or(Value::Null),
-            mapped.into_iter().map(|(_, entry)| entry).collect(),
-            data.clone(),
-        )
-    } else {
-        // v2 拿不到（code 非 0 或没有 wallets 数组）→ v1 兜底
-        let legacy = userapi_get(credentials, POINTS_WALLET_LEGACY_PATH, "积分查询").await?;
-        if let Some(code) = legacy.get("code").and_then(Value::as_i64) {
-            if AUTH_EXPIRED_CODES.contains(&code) {
-                return Err(GatewayError::with_status(
-                    401,
-                    "登录态已过期，无法查询积分",
-                ));
+    let (total_balance, wallets, raw) =
+        if code_ok && data.get("wallets").and_then(Value::as_array).is_some() {
+            let wallets = data
+                .get("wallets")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            // 源实现按 `priority` 升序（缺失视为 MAX_SAFE_INTEGER，即排在最后）。
+            // 先把 priority 提到结构里，再排序，避免排序闭包每次都回原数组里找一遍。
+            let mut mapped: Vec<(i64, Value)> = wallets
+                .iter()
+                // 源实现 `filter(wallet => wallet?.display)`：`display` 为假值的不展示
+                .filter(|wallet| js_truthy(wallet.get("display")))
+                .map(|wallet| {
+                    let priority = wallet
+                        .get("priority")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(i64::MAX);
+                    let entry = json!({
+                        "type": wallet
+                            .get("public_wallet_type")
+                            .cloned()
+                            .unwrap_or(Value::Null),
+                        "displayName": wallet
+                            .get("display_name")
+                            .and_then(Value::as_str)
+                            .filter(|text| !text.is_empty())
+                            .map(str::to_string)
+                            .or_else(|| {
+                                wallet
+                                    .get("public_wallet_type")
+                                    .and_then(Value::as_str)
+                                    .filter(|text| !text.is_empty())
+                                    .map(str::to_string)
+                            })
+                            .unwrap_or_else(|| "积分".to_string()),
+                        "balance": number_or_null(wallet.get("balance")),
+                        // 上游给的展示串（带千分位/单位这类格式）；缺失时按数值拼
+                        "balanceView": wallet
+                            .get("balance_view")
+                            .and_then(Value::as_str)
+                            .filter(|text| !text.is_empty())
+                            .map(str::to_string)
+                            .or_else(|| {
+                                wallet
+                                    .get("balance")
+                                    .and_then(Value::as_f64)
+                                    .map(json_number_text)
+                            })
+                            .unwrap_or_default(),
+                    });
+                    (priority, entry)
+                })
+                .collect();
+            mapped.sort_by_key(|(priority, _)| *priority);
+            (
+                data.get("total_balance").cloned().unwrap_or(Value::Null),
+                mapped.into_iter().map(|(_, entry)| entry).collect(),
+                data.clone(),
+            )
+        } else {
+            // v2 拿不到（code 非 0 或没有 wallets 数组）→ v1 兜底
+            let legacy = userapi_get(credentials, POINTS_WALLET_LEGACY_PATH, "积分查询").await?;
+            if let Some(code) = legacy.get("code").and_then(Value::as_i64) {
+                if AUTH_EXPIRED_CODES.contains(&code) {
+                    return Err(GatewayError::with_status(401, "登录态已过期，无法查询积分"));
+                }
             }
-        }
-        let legacy_data = legacy.get("data").cloned().unwrap_or(Value::Null);
-        if legacy.get("code").and_then(Value::as_i64) != Some(0) || legacy_data.is_null() {
-            let message = legacy
-                .get("msg")
-                .and_then(Value::as_str)
-                .filter(|text| !text.is_empty())
-                .map(str::to_string)
-                .unwrap_or_else(|| {
-                    format!(
-                        "积分查询返回异常 code={}",
-                        legacy
-                            .get("code")
-                            .and_then(Value::as_i64)
-                            .or_else(|| wallet_payload.get("code").and_then(Value::as_i64))
-                            .map(|value| value.to_string())
-                            .unwrap_or_else(|| "null".to_string())
-                    )
-                });
-            return Err(GatewayError::with_status(502, message));
-        }
-        let instances = legacy_data
-            .get("wallet_instances")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        (
-            legacy_data.get("total_balance").cloned().unwrap_or(Value::Null),
-            normalize_legacy_wallets(&instances),
-            legacy_data,
-        )
-    };
+            let legacy_data = legacy.get("data").cloned().unwrap_or(Value::Null);
+            if legacy.get("code").and_then(Value::as_i64) != Some(0) || legacy_data.is_null() {
+                let message = legacy
+                    .get("msg")
+                    .and_then(Value::as_str)
+                    .filter(|text| !text.is_empty())
+                    .map(str::to_string)
+                    .unwrap_or_else(|| {
+                        format!(
+                            "积分查询返回异常 code={}",
+                            legacy
+                                .get("code")
+                                .and_then(Value::as_i64)
+                                .or_else(|| wallet_payload.get("code").and_then(Value::as_i64))
+                                .map(|value| value.to_string())
+                                .unwrap_or_else(|| "null".to_string())
+                        )
+                    });
+                return Err(GatewayError::with_status(502, message));
+            }
+            let instances = legacy_data
+                .get("wallet_instances")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            (
+                legacy_data
+                    .get("total_balance")
+                    .cloned()
+                    .unwrap_or(Value::Null),
+                normalize_legacy_wallets(&instances),
+                legacy_data,
+            )
+        };
 
     // 「即将过期」是附加信息：失败不阻塞余额展示（源实现把这条调用包在
     // 自己的 try/catch 里，注释写明「即将过期查询失败不阻塞余额展示」）
@@ -356,7 +352,11 @@ fn normalize_legacy_wallets(instances: &[Value]) -> Vec<Value> {
             .unwrap_or("")
             .to_lowercase()
             .replace("wallet_scope_", "");
-        let scope = if scope.is_empty() { "other".to_string() } else { scope };
+        let scope = if scope.is_empty() {
+            "other".to_string()
+        } else {
+            scope
+        };
         let balance = number_or_null(instance.get("balance")).unwrap_or(0.0);
         match merged.iter_mut().find(|(kind, _)| kind == &scope) {
             Some((_, total)) => *total += balance,
@@ -401,10 +401,7 @@ async fn query_subscription(credentials: &AutoClawCredentials) -> Result<Value, 
     .await?;
     if let Some(code) = payload.get("code").and_then(Value::as_i64) {
         if AUTH_EXPIRED_CODES.contains(&code) {
-            return Err(GatewayError::with_status(
-                401,
-                "登录态已过期，无法查询订阅",
-            ));
+            return Err(GatewayError::with_status(401, "登录态已过期，无法查询订阅"));
         }
         if code != 0 {
             let message = payload
@@ -432,10 +429,16 @@ async fn query_subscription(credentials: &AutoClawCredentials) -> Result<Value, 
 fn normalize_subscription(data: &Value) -> Value {
     // 根 + 第一个候选容器（源实现 `findDeep` 的 `queue = [root, nested]`）。
     // 两个根在，因此每个键都有两次命中机会：先根后容器（源实现的遍历顺序）。
-    let nested = ["subscribeInfo", "subscribe", "data", "memberInfo", "vipInfo"]
-        .iter()
-        .filter_map(|key| data.get(*key))
-        .find(|value| value.is_object());
+    let nested = [
+        "subscribeInfo",
+        "subscribe",
+        "data",
+        "memberInfo",
+        "vipInfo",
+    ]
+    .iter()
+    .filter_map(|key| data.get(*key))
+    .find(|value| value.is_object());
     let mut roots: Vec<&Value> = vec![data];
     if let Some(nested) = nested {
         roots.push(nested);

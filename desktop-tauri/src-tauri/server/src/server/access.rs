@@ -88,47 +88,48 @@ fn env_admin() -> Option<&'static (String, String)> {
     // OnceLock<Option<(String, String)>>：首次调用时读入，此后返回静态引用。
     // 密码有两个变量：HASH（已是 bcrypt 哈希）优先；PASSWORD（明文）则
     // 现场 bcrypt::hash 一次 —— 内存与落库从此都只有哈希形态。
-    ENV_ADMIN.get_or_init(|| {
-        let user = std::env::var("AIAPI_ADMIN_USER")
-            .or_else(|_| std::env::var("AGENT2API_ADMIN_USER")) // 改名前的旧名，兼容读
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
-        let from_hash = std::env::var("AIAPI_ADMIN_PASSWORD_HASH")
-            .or_else(|_| std::env::var("AGENT2API_ADMIN_PASSWORD_HASH")) // 改名前的旧名
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
-            // 兼容 `htpasswd -nBC` 的整行输出（"user:$2y$…"）：冒号后面是
-            // bcrypt 哈希就只取哈希 —— 部署者把生成命令的输出整行粘进来
-            // 就能用，不必手工剥前缀
-            .map(|value| match value.split_once(':') {
-                Some((_, hash)) if hash.starts_with("$2") => hash.to_string(),
-                _ => value,
-            });
-        let hash = match from_hash {
-            Some(hash) => Some(hash),
-            None => std::env::var("AIAPI_ADMIN_PASSWORD")
-                .or_else(|_| std::env::var("AGENT2API_ADMIN_PASSWORD")) // 改名前的旧名
+    ENV_ADMIN
+        .get_or_init(|| {
+            let user = std::env::var("AIAPI_ADMIN_USER")
+                .or_else(|_| std::env::var("AGENT2API_ADMIN_USER")) // 改名前的旧名，兼容读
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty());
+            let from_hash = std::env::var("AIAPI_ADMIN_PASSWORD_HASH")
+                .or_else(|_| std::env::var("AGENT2API_ADMIN_PASSWORD_HASH")) // 改名前的旧名
                 .ok()
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
-                .and_then(|plain| match bcrypt::hash(plain, 10) {
-                    Ok(hash) => Some(hash),
-                    // bcrypt 拒绝的密码（如超过 72 字节）：报出来，别静默
-                    // 失效让部署者以为账号已预置成功
-                    Err(error) => {
-                        eprintln!("❌ AIAPI_ADMIN_PASSWORD 无法转成哈希: {error}");
-                        None
-                    }
-                }),
-        };
-        match (user, hash) {
-            (Some(user), Some(hash)) => Some((user, hash)),
-            _ => None,
-        }
-    })
-    .as_ref()
+                // 兼容 `htpasswd -nBC` 的整行输出（"user:$2y$…"）：冒号后面是
+                // bcrypt 哈希就只取哈希 —— 部署者把生成命令的输出整行粘进来
+                // 就能用，不必手工剥前缀
+                .map(|value| match value.split_once(':') {
+                    Some((_, hash)) if hash.starts_with("$2") => hash.to_string(),
+                    _ => value,
+                });
+            let hash = match from_hash {
+                Some(hash) => Some(hash),
+                None => std::env::var("AIAPI_ADMIN_PASSWORD")
+                    .or_else(|_| std::env::var("AGENT2API_ADMIN_PASSWORD")) // 改名前的旧名
+                    .ok()
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty())
+                    .and_then(|plain| match bcrypt::hash(plain, 10) {
+                        Ok(hash) => Some(hash),
+                        // bcrypt 拒绝的密码（如超过 72 字节）：报出来，别静默
+                        // 失效让部署者以为账号已预置成功
+                        Err(error) => {
+                            eprintln!("❌ AIAPI_ADMIN_PASSWORD 无法转成哈希: {error}");
+                            None
+                        }
+                    }),
+            };
+            match (user, hash) {
+                (Some(user), Some(hash)) => Some((user, hash)),
+                _ => None,
+            }
+        })
+        .as_ref()
 }
 
 /// 库里的注册记录（`kv` 的 `panelAdmin`：{username, hash}）。
@@ -214,7 +215,8 @@ pub fn sync_env_admin_to_store() {
 }
 
 /// 校验账号密码。bcrypt 哈希兼容 `htpasswd -nBC` 的输出格式。
-fn verify_credentials(username: &str, password: &str, expected: &(String, String)) -> bool {    let user_ok = constant_time_eq(username.as_bytes(), expected.0.as_bytes());
+fn verify_credentials(username: &str, password: &str, expected: &(String, String)) -> bool {
+    let user_ok = constant_time_eq(username.as_bytes(), expected.0.as_bytes());
     let pass_ok = bcrypt::verify(password, &expected.1).unwrap_or(false);
     // 两个都算完再返回，避免「用户名对不对」的时序差异
     user_ok && pass_ok
@@ -355,12 +357,16 @@ impl IssuedSession {
         let refresh_token = random_hex(48);
         match access_tokens().lock() {
             Ok(mut table) => {
-                table.insert(access_token.clone(), (session.clone(), Instant::now() + ACCESS_TTL));
+                table.insert(
+                    access_token.clone(),
+                    (session.clone(), Instant::now() + ACCESS_TTL),
+                );
             }
             Err(poisoned) => {
-                poisoned
-                    .into_inner()
-                    .insert(access_token.clone(), (session.clone(), Instant::now() + ACCESS_TTL));
+                poisoned.into_inner().insert(
+                    access_token.clone(),
+                    (session.clone(), Instant::now() + ACCESS_TTL),
+                );
             }
         }
         match refresh_tokens().lock() {
@@ -540,9 +546,10 @@ pub fn record_login_failure(source: IpAddr) {
         Ok(table) => table,
         Err(poisoned) => poisoned.into_inner(),
     };
-    let attempt = table
-        .entry(source)
-        .or_insert(Attempt { failures: 0, locked_until: None });
+    let attempt = table.entry(source).or_insert(Attempt {
+        failures: 0,
+        locked_until: None,
+    });
     attempt.failures += 1;
     if attempt.failures >= LOCKOUT_THRESHOLD {
         attempt.locked_until = Some(Instant::now() + LOCKOUT_DURATION);

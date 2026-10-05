@@ -22,13 +22,13 @@
 
 use serde_json::Value;
 
+use super::conversation::ConversationRequest;
 use super::image_compress::compress_if_needed;
 use super::messages::{normalize_messages, NormalizeOptions};
 use super::models::{
     resolve_context_window, resolve_effort, resolve_model_request, CatPawError, ModelResolution,
 };
 use super::tools::{normalize_tools, select_tools, tool_choice_mode, ToolChoice};
-use super::conversation::ConversationRequest;
 
 /// 一次请求的全部「已归一化素材」
 pub(super) struct Prepared {
@@ -58,8 +58,7 @@ pub(super) struct Prepared {
     pub selected_tools: Vec<Value>,
 }
 
-impl Prepared {
-}
+impl Prepared {}
 
 /// 归一化 + 参数解析（原实现 `prepareRequest` 在网关语义下的形态）。
 ///
@@ -80,7 +79,10 @@ pub(super) async fn prepare(request: &ConversationRequest) -> Result<Prepared, C
     let selected_tools = select_tools(&all_tools, &choice)?;
     // `parallel_tool_calls` 只做类型校验：上游的 turn 请求体里没有对应字段，
     // 原实现也是「收了但不用」（校验失败报 400，避免客户端以为它生效了）
-    if let Some(value) = body.get("parallel_tool_calls").filter(|value| !value.is_null()) {
+    if let Some(value) = body
+        .get("parallel_tool_calls")
+        .filter(|value| !value.is_null())
+    {
         if !value.is_boolean() {
             return Err(CatPawError::bad_request("parallel_tool_calls 必须是布尔值"));
         }
@@ -148,7 +150,9 @@ async fn compress_images(messages: Vec<Value>) -> Vec<Value> {
     }
     let urls: Vec<String> = targets.iter().map(|(_, _, url)| url.clone()).collect();
     let compressed = tokio::task::spawn_blocking(move || {
-        urls.into_iter().map(|url| compress_if_needed(&url)).collect::<Vec<_>>()
+        urls.into_iter()
+            .map(|url| compress_if_needed(&url))
+            .collect::<Vec<_>>()
     })
     .await;
     let Ok(compressed) = compressed else {

@@ -112,9 +112,9 @@ impl CliLogin {
             }
         })?;
 
-        let payload = response.payload.ok_or_else(|| {
-            GatewayError::with_status(502, "ZCode 登录发起：上游响应不是 JSON")
-        })?;
+        let payload = response
+            .payload
+            .ok_or_else(|| GatewayError::with_status(502, "ZCode 登录发起：上游响应不是 JSON"))?;
         if let Some(message) = envelope_error(&payload) {
             return Err(GatewayError::with_status(502, message));
         }
@@ -190,20 +190,16 @@ impl CliLogin {
             "authorization".to_string(),
             format!("Bearer {}", self.poll_token),
         )];
-        let response = match send_raw("GET", &url, None, &headers, None, Some(REQUEST_TIMEOUT_MS))
-            .await
-        {
-            Ok(response) => response,
-            // 网络错误当 pending（模块头第 2 条）：一次没问成不是「被拒」
-            Err(_) => return Ok(None),
-        };
+        let response =
+            match send_raw("GET", &url, None, &headers, None, Some(REQUEST_TIMEOUT_MS)).await {
+                Ok(response) => response,
+                // 网络错误当 pending（模块头第 2 条）：一次没问成不是「被拒」
+                Err(_) => return Ok(None),
+            };
 
         // 5xx 当 pending；4xx 里 408（超时）/ 429（限流）也当 pending ——
         // 它们是「这次没问成」，其余 4xx 是「问成了但被拒」
-        if response.status >= 500
-            || response.status == 408
-            || response.status == 429
-        {
+        if response.status >= 500 || response.status == 408 || response.status == 429 {
             return Ok(None);
         }
         let payload = match response.payload {
@@ -260,10 +256,7 @@ impl CliLogin {
             .filter(|value| !value.is_empty())
             .map(str::to_string)
             .ok_or_else(|| {
-                GatewayError::with_status(
-                    502,
-                    format!("ZCode 登录响应缺少 {key}.access_token"),
-                )
+                GatewayError::with_status(502, format!("ZCode 登录响应缺少 {key}.access_token"))
             })?;
         let jwt = data
             .get("token")
@@ -383,9 +376,7 @@ fn required_str(data: &Value, key: &str) -> Result<String, GatewayError> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
-        .ok_or_else(|| {
-            GatewayError::with_status(502, format!("ZCode 登录响应缺少 {key}"))
-        })
+        .ok_or_else(|| GatewayError::with_status(502, format!("ZCode 登录响应缺少 {key}")))
 }
 
 /// 32 随机字节的十六进制串（poll token；参考实现 `randomBytes(32).toString("hex")`）。

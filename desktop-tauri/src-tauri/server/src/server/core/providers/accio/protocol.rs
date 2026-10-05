@@ -77,7 +77,13 @@ const QUOTA_HINTS: &[&str] = &[
 ];
 
 /// 鉴权类信号
-const AUTH_HINTS: &[&str] = &["unauthorized", "not logged in", "invalid token", "token expired", "invalid_token"];
+const AUTH_HINTS: &[&str] = &[
+    "unauthorized",
+    "not logged in",
+    "invalid token",
+    "token expired",
+    "invalid_token",
+];
 
 /// 上游错误的粗分类（转发层据此决定换账号 / 刷新 / 透传）
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -210,10 +216,21 @@ fn assistant_tool_calls_parts(tool_calls: &Value) -> Vec<Value> {
     items
         .iter()
         .map(|call| {
-            let id = call.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+            let id = call
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
             let function = call.get("function").cloned().unwrap_or(Value::Null);
-            let name = function.get("name").and_then(Value::as_str).unwrap_or("").to_string();
-            let args = function.get("arguments").and_then(Value::as_str).unwrap_or("{}");
+            let name = function
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let args = function
+                .get("arguments")
+                .and_then(Value::as_str)
+                .unwrap_or("{}");
             json!({ "function_call": {
                 "id": id,
                 "name": name,
@@ -225,8 +242,16 @@ fn assistant_tool_calls_parts(tool_calls: &Value) -> Vec<Value> {
 
 /// 工具结果（role = tool）→ ADK 的 function_response part
 fn tool_result_part(message: &Value) -> Value {
-    let id = message.get("tool_call_id").and_then(Value::as_str).unwrap_or("").to_string();
-    let name = message.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+    let id = message
+        .get("tool_call_id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let name = message
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     let content = match message.get("content") {
         Some(Value::String(text)) => text.clone(),
         Some(other) => other.to_string(),
@@ -269,7 +294,11 @@ pub fn build_upstream_body(
     let mut contents: Vec<Value> = Vec::new();
     let mut system_parts: Vec<String> = Vec::new();
     let mut pending_parts: Vec<Value> = Vec::new();
-    let messages = body.get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
+    let messages = body
+        .get("messages")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
 
     // ── 消息归一 ────────────────────────────────────────────────
     // OpenAI 允许同一角色连续出现（工具轮次尤其常见），ADK 侧按「相邻同角色合并」
@@ -291,7 +320,10 @@ pub fn build_upstream_body(
     };
 
     for message in &messages {
-        let role = message.get("role").and_then(Value::as_str).unwrap_or("user");
+        let role = message
+            .get("role")
+            .and_then(Value::as_str)
+            .unwrap_or("user");
         match role {
             "system" | "developer" => {
                 let mut parts = Vec::new();
@@ -360,13 +392,22 @@ pub fn build_upstream_body(
     // ── 生成参数与思考档位 ──────────────────────────────────────
     let mut properties: Map<String, Value> = Map::new();
     // 客户端自己的归一化开关（桌面端每个请求都带它）
-    properties.insert("normalized_response".to_string(), Value::String("true".to_string()));
+    properties.insert(
+        "normalized_response".to_string(),
+        Value::String("true".to_string()),
+    );
 
     let request_id = crate::server::core::upstream::request::new_request_id();
     let mut payload = Map::new();
     payload.insert("model".to_string(), Value::String(model_code.to_string()));
-    payload.insert("tenant".to_string(), Value::String(super::endpoints::DEFAULT_TENANT.to_string()));
-    payload.insert("iai_tag".to_string(), Value::String(super::endpoints::DEFAULT_IAI_TAG.to_string()));
+    payload.insert(
+        "tenant".to_string(),
+        Value::String(super::endpoints::DEFAULT_TENANT.to_string()),
+    );
+    payload.insert(
+        "iai_tag".to_string(),
+        Value::String(super::endpoints::DEFAULT_IAI_TAG.to_string()),
+    );
     payload.insert("empid".to_string(), Value::String(String::new()));
     payload.insert("request_id".to_string(), Value::String(request_id.clone()));
     // `message_id` 是**必填**（2026-09 实测）：缺了它上游回
@@ -378,7 +419,10 @@ pub fn build_upstream_body(
     );
     payload.insert("token".to_string(), Value::String(token.to_string()));
     payload.insert("contents".to_string(), Value::Array(contents));
-    payload.insert("system_instruction".to_string(), Value::String(system_instruction));
+    payload.insert(
+        "system_instruction".to_string(),
+        Value::String(system_instruction),
+    );
     if !tools.is_empty() {
         payload.insert("tools".to_string(), Value::Array(tools));
         // 工具的流式参数（见模块头要点 1）；非 gemini 才加，这里一律加 ——
@@ -386,7 +430,8 @@ pub fn build_upstream_body(
         payload.insert(
             "tool_config".to_string(),
             Value::String(
-                json!({ "functionCallingConfig": { "streamFunctionCallArguments": true } }).to_string(),
+                json!({ "functionCallingConfig": { "streamFunctionCallArguments": true } })
+                    .to_string(),
             ),
         );
     }
@@ -423,12 +468,18 @@ pub fn build_upstream_body(
                 // `protocol` = responses / openai：只进 properties，顶层留空
                 // （桌面端的分法；实测 GPT 系只有这一种能出思考内容）
                 super::models::EffortPlacement::Properties => {
-                    properties.insert("reasoning_effort".to_string(), Value::String(effort.to_string()));
+                    properties.insert(
+                        "reasoning_effort".to_string(),
+                        Value::String(effort.to_string()),
+                    );
                 }
                 // 其余（Claude / Gemini 系）：顶层。放 properties 在 Gemini 系
                 // 是硬 400（`Unknown name "reasoning_effort"`）
                 super::models::EffortPlacement::Top => {
-                    payload.insert("reasoning_effort".to_string(), Value::String(effort.to_string()));
+                    payload.insert(
+                        "reasoning_effort".to_string(),
+                        Value::String(effort.to_string()),
+                    );
                 }
             }
         }

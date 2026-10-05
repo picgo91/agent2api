@@ -30,8 +30,8 @@
 //!   request.rs   端点表、调用选项、请求头、JS 语义工具
 //!   commodity.rs 积分包商品码与套餐分类
 
-pub mod checkin;
 mod activity;
+pub mod checkin;
 pub mod commodity;
 mod request;
 mod usage;
@@ -68,7 +68,11 @@ pub struct BillingError {
 
 impl BillingError {
     pub fn new(message: impl Into<String>, status_code: i32) -> Self {
-        Self { message: message.into(), status_code, upstream_code: None }
+        Self {
+            message: message.into(),
+            status_code,
+            upstream_code: None,
+        }
     }
 
     pub fn with_code(
@@ -76,7 +80,11 @@ impl BillingError {
         status_code: i32,
         upstream_code: Option<i64>,
     ) -> Self {
-        Self { message: message.into(), status_code, upstream_code }
+        Self {
+            message: message.into(),
+            status_code,
+            upstream_code,
+        }
     }
 
     /// 转成统一的网关错误。
@@ -153,7 +161,10 @@ impl BillingService {
         })?;
         match session {
             Some(session) if has_access_token(&session) => Ok(session),
-            _ => Err(BillingError::new("当前没有可用登录态：请先在桌面端完成登录", 401)),
+            _ => Err(BillingError::new(
+                "当前没有可用登录态：请先在桌面端完成登录",
+                401,
+            )),
         }
     }
 
@@ -211,7 +222,10 @@ impl BillingService {
 
         let mut extra: Vec<(String, String)> = Vec::new();
         if let Some(locale) = options.locale {
-            extra.push(("Accept-Language".to_string(), Self::accept_language(Some(locale))));
+            extra.push((
+                "Accept-Language".to_string(),
+                Self::accept_language(Some(locale)),
+            ));
         }
         if spec.whitelist_headers {
             extra.extend(whitelist_headers(&session));
@@ -312,7 +326,11 @@ impl BillingService {
             } else {
                 format!("计费接口返回 HTTP {}: {detail}", response.status)
             };
-            return Err(BillingError::with_code(message, response.status as i32, code));
+            return Err(BillingError::with_code(
+                message,
+                response.status as i32,
+                code,
+            ));
         }
         if let Some(code_value) = code {
             if code_value != RESPONSE_CODE_OK && options.expect_code_ok {
@@ -334,7 +352,13 @@ impl BillingService {
             .and_then(|value| value.get("data"))
             .cloned()
             .unwrap_or(Value::Null);
-        Ok(BillingCall { code, msg, request_id, data, raw: payload })
+        Ok(BillingCall {
+            code,
+            msg,
+            request_id,
+            data,
+            raw: payload,
+        })
     }
 
     // ─── 签到 ───────────────────────────────────────────────
@@ -350,7 +374,11 @@ impl BillingService {
         let result = self
             .call_billing(
                 BILLING_CHECKIN_STATUS,
-                CallOptions { session: Some(&active), expect_code_ok: false, ..Default::default() },
+                CallOptions {
+                    session: Some(&active),
+                    expect_code_ok: false,
+                    ..Default::default()
+                },
             )
             .await?;
         if result.code != Some(RESPONSE_CODE_OK) || result.data.is_null() {
@@ -363,7 +391,10 @@ impl BillingService {
     ///
     /// 幂等：已领取时上游返回非 0 code，这里原样返回 `{success:false, code, msg}` ——
     /// 「今天已签到」不是错误，前端面板会把它显示成一条 warn 提示。
-    pub async fn claim_daily_checkin(&self, session: Option<&Value>) -> Result<Value, BillingError> {
+    pub async fn claim_daily_checkin(
+        &self,
+        session: Option<&Value>,
+    ) -> Result<Value, BillingError> {
         let active = match session {
             Some(session) => session.clone(),
             None => self.require_session().await?,
@@ -372,7 +403,11 @@ impl BillingService {
         let result = self
             .call_billing(
                 BILLING_DAILY_CHECKIN,
-                CallOptions { session: Some(&active), expect_code_ok: false, ..Default::default() },
+                CallOptions {
+                    session: Some(&active),
+                    expect_code_ok: false,
+                    ..Default::default()
+                },
             )
             .await?;
         if result.code == Some(RESPONSE_CODE_OK) && !result.data.is_null() {

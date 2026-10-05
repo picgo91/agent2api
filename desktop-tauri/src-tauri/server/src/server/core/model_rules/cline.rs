@@ -97,9 +97,7 @@ pub fn seed_cline_defaults(provider: &str, ids: &[String]) -> Option<String> {
         // CatPaw / AutoClaw 的原生模型名，那不妨碍这里给它建别名 ——
         // 同一对外名由多家承载正是本项目主备路由的常态（见 `model_rules` 模块头），
         // 候选链会把两家一起列上，谁先谁后按账号优先级走。
-        if rules.has_alias(alias)
-            || ids.iter().any(|other| other.eq_ignore_ascii_case(alias))
-        {
+        if rules.has_alias(alias) || ids.iter().any(|other| other.eq_ignore_ascii_case(alias)) {
             continue;
         }
         rules.mappings.retain(|m| {
@@ -255,4 +253,3 @@ fn is_cline_channel(model_id: &str) -> bool {
         .iter()
         .any(|prefix| model_id.starts_with(prefix))
 }
-

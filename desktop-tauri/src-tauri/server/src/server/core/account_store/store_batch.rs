@@ -28,16 +28,14 @@ impl AccountStore {
     ///
     /// 语义上是「对每个选中账号各跑一次 update_account」，但整批只落盘一次。
     /// 单个账号失败不中断整批：结果里分别记 ok / failed（含原因）。
-    pub fn batch_update(
-        &self,
-        ids: &[String],
-        patch: &Value,
-    ) -> Result<Value, AccountStoreError> {
+    pub fn batch_update(&self, ids: &[String], patch: &Value) -> Result<Value, AccountStoreError> {
         if ids.is_empty() {
             return Err(AccountStoreError::bad_request("缺少要操作的账号 id"));
         }
         let Some(patch_object) = patch.as_object() else {
-            return Err(AccountStoreError::bad_request("批量修改内容必须是 JSON 对象"));
+            return Err(AccountStoreError::bad_request(
+                "批量修改内容必须是 JSON 对象",
+            ));
         };
         // 批量场景只开放「启用状态」与「代理」：优先级必须唯一，逐账号指定才有意义，
         // 备注名逐个改也说不通，都留给单账号设置面板
@@ -54,7 +52,9 @@ impl AccountStore {
             allowed.insert("proxy".to_string(), normalized);
         }
         if allowed.is_empty() {
-            return Err(AccountStoreError::bad_request("批量修改目前只支持启用状态与代理"));
+            return Err(AccountStoreError::bad_request(
+                "批量修改目前只支持启用状态与代理",
+            ));
         }
 
         let _guard = self.guard();
@@ -222,7 +222,9 @@ impl AccountStore {
         if targets.is_empty() {
             // 没有任何一条可删：不写库，直接给当前快照
             let state = self.load(&_guard);
-            return Ok(json!({ "removed": removed, "failed": failed, "list": self.snapshot(&state) }));
+            return Ok(
+                json!({ "removed": removed, "failed": failed, "list": self.snapshot(&state) }),
+            );
         }
         // 整批一个事务：删除要么全生效、要么一条都不删
         self.with_conn_mut(&_guard, |conn| {

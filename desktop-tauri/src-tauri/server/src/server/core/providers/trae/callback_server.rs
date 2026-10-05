@@ -77,8 +77,15 @@ impl CallbackListener {
         if let Ok(v6) = TcpListener::bind((Ipv6Addr::LOCALHOST, port)).await {
             spawn_server(v6, app, receiver);
         }
-        logging::log("[Login]", &format!("Trae OAuth 回调已监听 127.0.0.1:{port}{CALLBACK_PATH}"));
-        Ok(Self { port, shutdown, inbox: tokio::sync::Mutex::new(inbox) })
+        logging::log(
+            "[Login]",
+            &format!("Trae OAuth 回调已监听 127.0.0.1:{port}{CALLBACK_PATH}"),
+        );
+        Ok(Self {
+            port,
+            shutdown,
+            inbox: tokio::sync::Mutex::new(inbox),
+        })
     }
 
     /// 这一轮占到的端口（拼 `auth_callback_url` 用）。
@@ -130,7 +137,10 @@ fn router(sender: mpsc::UnboundedSender<String>) -> Router {
 /// 一次百分号解码，而 `authCodeInfo` 里装的是 URL 编码过的 JSON
 /// （`%7B%22authCode%22%3A%22…%22%7D`）：解两次会把里面的 `&`/`=` 变成字面量，
 /// `Callback::from_query` 再按 `&` 切就切坏了。键名候选与顺序本来就是它的活。
-async fn authorize(State(sender): State<mpsc::UnboundedSender<String>>, uri: OriginalUri) -> Response {
+async fn authorize(
+    State(sender): State<mpsc::UnboundedSender<String>>,
+    uri: OriginalUri,
+) -> Response {
     let query = uri.0.query().unwrap_or_default().to_string();
     let callback = Callback::from_query(&query);
     if !callback.resolves_login() {
@@ -139,7 +149,11 @@ async fn authorize(State(sender): State<mpsc::UnboundedSender<String>>, uri: Ori
     // 投递失败只可能是监听器已丢（超时/取消先走），此时回什么都无所谓 ——
     // 但**不能** panic，也不能把它当成一次成功登录。
     if sender.send(query).is_err() {
-        return callback_page(410, "Login expired", "这一轮登录已经结束，请回到面板重新发起。");
+        return callback_page(
+            410,
+            "Login expired",
+            "这一轮登录已经结束，请回到面板重新发起。",
+        );
     }
     if callback.error.is_empty() {
         callback_page(200, "Login successful", "You can close this window now.")
@@ -234,7 +248,11 @@ mod tests {
     #[tokio::test]
     async fn a_real_callback_is_delivered_once_and_answers_the_browser() {
         let listener = CallbackListener::bind().await.expect("本机端口应当能绑上");
-        let (status, body) = hit(listener.port(), "/authorize?authCode=AC-1&loginHost=www.trae.cn").await;
+        let (status, body) = hit(
+            listener.port(),
+            "/authorize?authCode=AC-1&loginHost=www.trae.cn",
+        )
+        .await;
         assert_eq!(200, status, "收到材料就要给浏览器一个收尾页");
         assert!(body.contains("Login successful"), "{body}");
         let query = tokio::time::timeout(Duration::from_secs(2), listener.next_callback())
@@ -279,7 +297,10 @@ mod tests {
             .await
             .map(|value| value.is_none())
             .expect("等待应当在超时前结束");
-        assert!(ended, "close 之后 next_callback 必须回 None，等待方才认这一轮已结束");
+        assert!(
+            ended,
+            "close 之后 next_callback 必须回 None，等待方才认这一轮已结束"
+        );
         // 端口随监听任务退出释放：同一个端口再绑一次要成功（绑不上就说明还占着）。
         let again = TcpListener::bind((Ipv4Addr::LOCALHOST, port)).await;
         assert!(again.is_ok(), "close 后端口 {port} 应当已归还系统");

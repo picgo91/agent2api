@@ -147,7 +147,11 @@ fn valid_port(value: Option<&Value>) -> Option<u16> {
 }
 
 fn text_of(value: &Value, key: &str) -> String {
-    value.get(key).and_then(Value::as_str).unwrap_or("").to_string()
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string()
 }
 
 /// 把 API 输入（新建 / 编辑的整份表单）归一成一条**手动**池条目。
@@ -172,9 +176,7 @@ fn normalize_item(input: &Value, existing: Option<&Value>) -> Result<Value, Stri
     }
 
     let now = logging::now_ms();
-    let id = existing
-        .map(|item| text_of(item, "id"))
-        .unwrap_or_default();
+    let id = existing.map(|item| text_of(item, "id")).unwrap_or_default();
     let id = if id.is_empty() { new_id() } else { id };
     let created_at = existing
         .and_then(|item| item.get("createdAt"))
@@ -191,7 +193,11 @@ fn normalize_item(input: &Value, existing: Option<&Value>) -> Result<Value, Stri
 
     let protocol = {
         let cleaned = clean_string(object.get("protocol"), 10).to_lowercase();
-        if cleaned.is_empty() { "http".to_string() } else { cleaned }
+        if cleaned.is_empty() {
+            "http".to_string()
+        } else {
+            cleaned
+        }
     };
     if protocol != "http" && protocol != "socks5" {
         return Err("代理协议只支持 http 或 socks5".to_string());
@@ -270,7 +276,9 @@ pub fn resolve_item(item: &Value) -> Option<ProxyResolution> {
 ///   `Ok(proxy)` 出口可用；
 ///   `Err(原因)` 条目不存在 / 被禁用 / 解析失败 —— 调用方原样报出去
 ///               （账号列表的「代理异常」气泡、转发时回退直连的日志）。
-pub fn resolve_reference(proxy_id: &str) -> Result<crate::server::core::proxies::ResolvedProxy, String> {
+pub fn resolve_reference(
+    proxy_id: &str,
+) -> Result<crate::server::core::proxies::ResolvedProxy, String> {
     let Some(item) = find_raw(proxy_id) else {
         return Err(format!("代理「{proxy_id}」不存在或已被删除"));
     };
@@ -286,7 +294,9 @@ pub fn resolve_reference(proxy_id: &str) -> Result<crate::server::core::proxies:
 /// 出口测试专用解析：与 `resolve_reference` 只差**不看禁用位** ——
 /// 「先测通、再启用」是常见操作顺序，禁用的条目也要能测（只有引用解析
 /// 那条链必须挡住禁用项，理由见 `resolve_reference`）。
-pub fn resolve_for_test(proxy_id: &str) -> Result<crate::server::core::proxies::ResolvedProxy, String> {
+pub fn resolve_for_test(
+    proxy_id: &str,
+) -> Result<crate::server::core::proxies::ResolvedProxy, String> {
     let Some(item) = find_raw(proxy_id) else {
         return Err(format!("代理「{proxy_id}」不存在或已被删除"));
     };
@@ -295,7 +305,11 @@ pub fn resolve_for_test(proxy_id: &str) -> Result<crate::server::core::proxies::
 
 fn display_name(item: &Value, fallback: &str) -> String {
     let name = text_of(item, "name");
-    if name.is_empty() { fallback.to_string() } else { name }
+    if name.is_empty() {
+        fallback.to_string()
+    } else {
+        name
+    }
 }
 
 fn resolve_entry(
@@ -565,14 +579,20 @@ pub fn sync_clash() -> ClashSyncReport {
 
     if changes > 0 {
         if let Err(error) = write_items(&items) {
-            return ClashSyncReport { changes: 0, error: Some(error) };
+            return ClashSyncReport {
+                changes: 0,
+                error: Some(error),
+            };
         }
         logging::log(
             "[Proxies]",
             &format!("🔄 已同步 Clash Verge 出口（{changes} 项变更）"),
         );
     }
-    ClashSyncReport { changes, error: None }
+    ClashSyncReport {
+        changes,
+        error: None,
+    }
 }
 
 /// 一次出口测试的结果（字段与 `egress::ConnectivityResult` 对应）。

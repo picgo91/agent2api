@@ -45,20 +45,20 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::server::config;
 use crate::server::core::account_store::AccountStore;
 use crate::server::core::egress;
 use crate::server::core::proxies::ResolvedProxy;
 use crate::server::core::upstream::usage::RequestTelemetry;
-use crate::server::core::upstream::{ForwardOutcome, stall};
+use crate::server::core::upstream::{stall, ForwardOutcome};
 use crate::server::errors::GatewayError;
 use crate::server::logging;
 
 use super::credentials::Credential;
 use super::errors::ErrorKind;
-use super::headers::{IDE_VERSION, solo_headers};
+use super::headers::{solo_headers, IDE_VERSION};
 use super::payload;
 use super::stream::{Frame, SoloStream};
 use super::{AGENT_BASE_URL, CHAT_PATH, PROVIDER_ID};
@@ -83,15 +83,26 @@ pub struct Plan {
 /// `prepare_body` 内部就做（它只剥一层，所以真以 `-solo` 结尾的 config 仍往返）。
 pub fn build_plan(credential: &Credential, body: &Value, base: &str) -> Result<Plan, GatewayError> {
     if credential.access_token.trim().is_empty() {
-        return Err(GatewayError::with_status(401, "Trae 账号缺少 accessToken，无法转发（请重新登录）"));
+        return Err(GatewayError::with_status(
+            401,
+            "Trae 账号缺少 accessToken，无法转发（请重新登录）",
+        ));
     }
     // 谱系闸门（**转发侧也放一份**，不只是落账号时）：账号可能是从迁移导入或
     // 手工写库进来的，那条路不经过 `add_trae_account`。Intl 凭据打到 CN host
     // 只会收到一句没头没尾的 401，与其让人猜，不如在这里说清楚。
     if super::credentials::is_intl_variant(credential.variant()) {
-        return Err(GatewayError::with_status(400, super::credentials::INTL_UNSUPPORTED));
+        return Err(GatewayError::with_status(
+            400,
+            super::credentials::INTL_UNSUPPORTED,
+        ));
     }
-    let requested = body.get("model").and_then(Value::as_str).unwrap_or("").trim().to_string();
+    let requested = body
+        .get("model")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
     let identity = super::headers::HeaderIdentity {
         access_token: credential.access_token.trim(),
         uid: credential.uid.trim(),
@@ -109,21 +120,29 @@ pub fn build_plan(credential: &Credential, body: &Value, base: &str) -> Result<P
 }
 
 /// 发一次请求（**不设总超时**：长推理会被总超时截断，读空闲由 `idle_guard` 兜）。
-async fn send(plan: &Plan, proxy: Option<&ResolvedProxy>) -> Result<reqwest::Response, GatewayError> {
+async fn send(
+    plan: &Plan,
+    proxy: Option<&ResolvedProxy>,
+) -> Result<reqwest::Response, GatewayError> {
     // **不设 reqwest 总超时**：`timeout(0)` 不是"不限时"而是"立刻超时"
     // （实测报 operation timed out，症状是随机 502），而不带总超时的长流
     // 才符合本家的形状 —— 读空闲由下面的 `idle_guard` 管，整流时长不该被截。
-    let mut request = egress::client_for(proxy)
-        .post(&plan.url)
-        .header("User-Agent", format!("Trae/{IDE_VERSION} antigravity-cockpit-tools"));
+    let mut request = egress::client_for(proxy).post(&plan.url).header(
+        "User-Agent",
+        format!("Trae/{IDE_VERSION} antigravity-cockpit-tools"),
+    );
     for (name, value) in &plan.headers {
         request = request.header(name.as_str(), value.clone());
     }
-    let response = request
-        .json(&plan.body)
-        .send()
-        .await
-        .map_err(|error| GatewayError::with_status(502, format!("Trae 请求发不出去：{}", egress::describe_error_detail(&error))))?;
+    let response = request.json(&plan.body).send().await.map_err(|error| {
+        GatewayError::with_status(
+            502,
+            format!(
+                "Trae 请求发不出去：{}",
+                egress::describe_error_detail(&error)
+            ),
+        )
+    })?;
     Ok(response)
 }
 
@@ -143,13 +162,39 @@ impl Limit {
         match kind {
             // 软限流与计划限额：冷却这个账号（上游不给恢复时刻，存储层落兜底时长）
             ErrorKind::SoftRate | ErrorKind::PlanLimit => {
-                self.store.mark_rate_limited(&self.account_id, &self.model, i64::from(status), None, None, message);
-                logging::log("[Trae]", &format!("⚠️ 账号 {} 对模型 {} 已限额（{status}），进入冷却", self.account_id, self.model));
+                self.store.mark_rate_limited(
+                    &self.account_id,
+                    &self.model,
+                    i64::from(status),
+                    None,
+                    None,
+                    message,
+                );
+                logging::log(
+                    "[Trae]",
+                    &format!(
+                        "⚠️ 账号 {} 对模型 {} 已限额（{status}），进入冷却",
+                        self.account_id, self.model
+                    ),
+                );
             }
             // 会话失效：上游明说这串凭据不行了，落同样的标记让它下一轮被跳过
             ErrorKind::SessionDead => {
-                self.store.mark_rate_limited(&self.account_id, &self.model, i64::from(status), None, None, message);
-                logging::log("[Trae]", &format!("⚠️ 账号 {} 会话失效（{status}），请重新登录", self.account_id));
+                self.store.mark_rate_limited(
+                    &self.account_id,
+                    &self.model,
+                    i64::from(status),
+                    None,
+                    None,
+                    message,
+                );
+                logging::log(
+                    "[Trae]",
+                    &format!(
+                        "⚠️ 账号 {} 会话失效（{status}），请重新登录",
+                        self.account_id
+                    ),
+                );
             }
             // 过大 / 通道不可用 / 其它：**请求级**，一个字都不写账号库
             _ => {}
@@ -181,7 +226,14 @@ async fn http_error(status: u16, response: reqwest::Response, limit: &Limit) -> 
     let kind = super::errors::classify(status, &head);
     let message = format!("上游返回 {status}: {head}");
     let status = limit.punish(kind, status_for(kind), &message);
-    GatewayError::with_status(i32::from(status), if head.is_empty() { format!("Trae 上游返回 HTTP {status}") } else { message })
+    GatewayError::with_status(
+        i32::from(status),
+        if head.is_empty() {
+            format!("Trae 上游返回 HTTP {status}")
+        } else {
+            message
+        },
+    )
 }
 
 /// 流内错误帧 → 网关错误（首包门专用：此时一个字节都还没下发）。
@@ -189,7 +241,8 @@ fn frame_error(code: i64, message: &str, limit: &Limit) -> GatewayError {
     let kind = super::errors::stream_error_kind(code, message);
     let text = format!("solo error code={code} msg={message}");
     let status = limit.punish(kind, status_for(kind), &text);
-    GatewayError::with_status(i32::from(status), format!("Trae 上游错误：{text}")).with_code(PROVIDER_ID)
+    GatewayError::with_status(i32::from(status), format!("Trae 上游错误：{text}"))
+        .with_code(PROVIDER_ID)
 }
 
 /// 预读流头：返回「已读出的内容帧」+「剩下的流」。第一帧是错误就直接 Err。
@@ -200,15 +253,26 @@ fn frame_error(code: i64, message: &str, limit: &Limit) -> GatewayError {
 pub(crate) async fn prefetch_head(
     response: reqwest::Response,
     limit: &Limit,
-) -> Result<(Vec<Frame>, futures::stream::BoxStream<'static, Result<bytes::Bytes, io::Error>>, SoloStream), GatewayError> {
-    let source = response.bytes_stream().map(|item| item.map_err(|error| io::Error::other(egress::describe_error_detail(&error))));
+) -> Result<
+    (
+        Vec<Frame>,
+        futures::stream::BoxStream<'static, Result<bytes::Bytes, io::Error>>,
+        SoloStream,
+    ),
+    GatewayError,
+> {
+    let source = response
+        .bytes_stream()
+        .map(|item| item.map_err(|error| io::Error::other(egress::describe_error_detail(&error))));
     let mut source = stall::idle_guard(Box::pin(source), stream_idle());
     let mut scanner = ByteLines::default();
     // `id` / `created` 从这里开始就得有值：预读到的帧要原样补发给客户端。
     let mut stream = SoloStream::new(request_id(), logging::now_ms() / 1000);
     let mut frames: Vec<Frame> = Vec::new();
     while let Some(item) = source.next().await {
-        let chunk = item.map_err(|error| GatewayError::with_status(502, format!("Trae 上游流式传输中断: {error}")))?;
+        let chunk = item.map_err(|error| {
+            GatewayError::with_status(502, format!("Trae 上游流式传输中断: {error}"))
+        })?;
         // ★ 一整段 chunk 处理完才返回 —— 中途 return 会把**同一段里后面的行**
         //   连同字节一起丢掉（那些行已经从 socket 读进来了，换手也换不回来）。
         //   上游经常把 `output`+`token_usage`+`done` 挤在同一段里，所以这不是
@@ -229,11 +293,15 @@ pub(crate) async fn prefetch_head(
             // 半行换手：缓冲区里还没成行的尾巴要拼回流头（见 `take_pending`）——
             // 不做这一步，被切在 chunk 边界的那一帧会静默丢内容。
             let leftover = scanner.take_pending();
-            let rest: futures::stream::BoxStream<'static, Result<bytes::Bytes, io::Error>> = if leftover.is_empty() {
-                source
-            } else {
-                Box::pin(futures::stream::once(async move { Ok(bytes::Bytes::from(leftover)) }).chain(source))
-            };
+            let rest: futures::stream::BoxStream<'static, Result<bytes::Bytes, io::Error>> =
+                if leftover.is_empty() {
+                    source
+                } else {
+                    Box::pin(
+                        futures::stream::once(async move { Ok(bytes::Bytes::from(leftover)) })
+                            .chain(source),
+                    )
+                };
             return Ok((frames, rest, stream));
         }
     }
@@ -260,7 +328,11 @@ impl ByteLines {
         while let Some(index) = self.pending.iter().position(|byte| *byte == b'\n') {
             let raw: Vec<u8> = self.pending.drain(..=index).collect();
             let raw = raw[..raw.len() - 1].to_vec(); // 去掉 '\n'
-            let raw = if raw.last() == Some(&b'\r') { raw[..raw.len() - 1].to_vec() } else { raw };
+            let raw = if raw.last() == Some(&b'\r') {
+                raw[..raw.len() - 1].to_vec()
+            } else {
+                raw
+            };
             lines.push(String::from_utf8_lossy(&raw).into_owned());
         }
         lines
@@ -289,13 +361,19 @@ fn render(frame: &Frame, requested: &str) -> Option<String> {
             }
             Some(format!("data: {chunk}\n\n"))
         }
-        Frame::Error { code, message, .. } => Some(format!("data: {}\n\n", json!({"error": {"message": format!("solo error code={code} msg={message}"), "type": "upstream_error"}}))),
+        Frame::Error { code, message, .. } => Some(format!(
+            "data: {}\n\n",
+            json!({"error": {"message": format!("solo error code={code} msg={message}"), "type": "upstream_error"}})
+        )),
         Frame::Done => Some("data: [DONE]\n\n".to_string()),
     }
 }
 
 fn request_id() -> String {
-    format!("chatcmpl-{}", logging::now_ms() * 1000 % 1_000_000_000_000_000)
+    format!(
+        "chatcmpl-{}",
+        logging::now_ms() * 1000 % 1_000_000_000_000_000
+    )
 }
 
 /// 用一条凭据打一次上游并产出对客户端可见的 outcome（有状态路径的入口）。
@@ -308,7 +386,16 @@ pub(crate) async fn forward(
     stream: bool,
     telemetry: &Arc<RequestTelemetry>,
 ) -> Result<ForwardOutcome, GatewayError> {
-    forward_at(store, account_id, body, proxy, stream, telemetry, AGENT_BASE_URL).await
+    forward_at(
+        store,
+        account_id,
+        body,
+        proxy,
+        stream,
+        telemetry,
+        AGENT_BASE_URL,
+    )
+    .await
 }
 
 /// 同上，但上游基址由调用方给。
@@ -328,12 +415,25 @@ pub(crate) async fn forward_at(
     base: &str,
 ) -> Result<ForwardOutcome, GatewayError> {
     if account_id.is_empty() {
-        return Err(GatewayError::with_status(503, "没有可用的 Trae 账号：请在账号页添加并启用账号"));
+        return Err(GatewayError::with_status(
+            503,
+            "没有可用的 Trae 账号：请在账号页添加并启用账号",
+        ));
     }
-    let record = store.trae_account_record(account_id).ok_or_else(|| GatewayError::with_status(401, "找不到该 Trae 账号"))?;
+    let record = store
+        .trae_account_record(account_id)
+        .ok_or_else(|| GatewayError::with_status(401, "找不到该 Trae 账号"))?;
     let mut credential = Credential::from_payload(&record).map_err(GatewayError::new)?;
     credential = super::adapter::renew_if_due(store, &record, &credential, proxy.as_ref()).await?;
-    let limit = Limit { store: Arc::new(store.clone()), account_id: account_id.to_string(), model: body.get("model").and_then(Value::as_str).unwrap_or("").to_string() };
+    let limit = Limit {
+        store: Arc::new(store.clone()),
+        account_id: account_id.to_string(),
+        model: body
+            .get("model")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+    };
     let account_proxy = super::adapter::account_proxy(&record)?;
     let effective = proxy.or(account_proxy);
 
@@ -346,7 +446,8 @@ pub(crate) async fn forward_at(
     // 401 只救一次：强制换发后重发（这条路径不换号，见模块头）。
     if response.status().as_u16() == 401 {
         let _ = response.text().await;
-        credential = super::adapter::renew_forced(store, &record, &credential, effective.as_ref()).await?;
+        credential =
+            super::adapter::renew_forced(store, &record, &credential, effective.as_ref()).await?;
         plan = build_plan(&credential, body, base)?;
         response = send(&plan, effective.as_ref()).await?;
     }
@@ -368,9 +469,15 @@ pub(crate) async fn forward_at(
     let telemetry = telemetry.clone();
     let requested = plan.requested_model.clone();
     crate::spawn_task(async move {
-        drive_stream(source, &mut solo, prefetched, &requested, &telemetry, &sender).await;
+        drive_stream(
+            source, &mut solo, prefetched, &requested, &telemetry, &sender,
+        )
+        .await;
     });
-    Ok(ForwardOutcome::Stream { status: 200, stream: Box::new(tokio_stream::wrappers::ReceiverStream::new(receiver)) })
+    Ok(ForwardOutcome::Stream {
+        status: 200,
+        stream: Box::new(tokio_stream::wrappers::ReceiverStream::new(receiver)),
+    })
 }
 
 /// 流式下发（在 spawn 的后台任务里跑）。
@@ -437,7 +544,9 @@ fn note(frame: &Frame, telemetry: &RequestTelemetry, usage_seen: &mut Option<Val
             // 取**内层**才对得上 `extract_usage` 的那三把键 —— 报外层的后果是
             // 账目静默为 0（`extract_usage` 找不到 `prompt_tokens` 就整个返回 None）。
             let inner = chunk.get("usage").and_then(|value| value.get("usage"));
-            let usage = inner.or_else(|| chunk.get("usage")).or_else(|| chunk.get("token_usage"));
+            let usage = inner
+                .or_else(|| chunk.get("usage"))
+                .or_else(|| chunk.get("token_usage"));
             if let Some(usage) = usage {
                 *usage_seen = Some(usage.clone());
                 telemetry.report_usage(usage);
@@ -457,12 +566,16 @@ async fn drive_aggregate(
     telemetry: &RequestTelemetry,
     limit: &Limit,
 ) -> Result<ForwardOutcome, GatewayError> {
-    let source = response.bytes_stream().map(|item| item.map_err(|error| io::Error::other(egress::describe_error_detail(&error))));
+    let source = response
+        .bytes_stream()
+        .map(|item| item.map_err(|error| io::Error::other(egress::describe_error_detail(&error))));
     let mut source = stall::idle_guard(Box::pin(source), stream_idle());
     let mut scanner = ByteLines::default();
     let mut text = String::new();
     while let Some(item) = source.next().await {
-        let chunk = item.map_err(|error| GatewayError::with_status(502, format!("Trae 上游流式传输中断: {error}")))?;
+        let chunk = item.map_err(|error| {
+            GatewayError::with_status(502, format!("Trae 上游流式传输中断: {error}"))
+        })?;
         for line in scanner.push(&chunk) {
             text.push_str(&line);
             text.push('\n');
@@ -513,8 +626,15 @@ mod tests {
                     async move {
                         let method = req.method().to_string();
                         let path = req.uri().path().to_string();
-                        captured.lock().unwrap_or_else(|error| error.into_inner()).push(format!("{method} {path}"));
-                        let stream = futures::stream::iter(chunks.into_iter().map(|chunk| Ok::<_, std::io::Error>(bytes::Bytes::from(chunk))));
+                        captured
+                            .lock()
+                            .unwrap_or_else(|error| error.into_inner())
+                            .push(format!("{method} {path}"));
+                        let stream = futures::stream::iter(
+                            chunks
+                                .into_iter()
+                                .map(|chunk| Ok::<_, std::io::Error>(bytes::Bytes::from(chunk))),
+                        );
                         axum::response::Response::builder()
                             .status(200)
                             .header("content-type", "text/event-stream")
@@ -523,21 +643,34 @@ mod tests {
                     }
                 }),
             );
-            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("假上游监听");
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("假上游监听");
             let address = listener.local_addr().expect("本地地址");
-            tokio::spawn(async move { axum::serve(listener, app).await.ok(); });
-            Self { base: format!("http://{address}"), seen }
+            tokio::spawn(async move {
+                axum::serve(listener, app).await.ok();
+            });
+            Self {
+                base: format!("http://{address}"),
+                seen,
+            }
         }
 
         fn path_seen(&self) -> String {
-            self.seen.lock().unwrap_or_else(|error| error.into_inner()).first().cloned().unwrap_or_default()
+            self.seen
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .first()
+                .cloned()
+                .unwrap_or_default()
         }
     }
 
     /// 一个只装本家账号的账号库（真 SQLite，临时文件）。
     /// 第二个返回值是**删文件的守卫**，调用点必须一起解构（见 `test_temp::TempDb`）。
     fn store_with_account(token: &str) -> (AccountStore, crate::server::db::test_temp::TempDb) {
-        let (db, guard) = crate::server::db::test_temp::TempDb::open(&format!("trae-forward-{token}"));
+        let (db, guard) =
+            crate::server::db::test_temp::TempDb::open(&format!("trae-forward-{token}"));
         let store = AccountStore::with_db(Some(db));
         store
             .add_trae_account(
@@ -591,7 +724,11 @@ mod tests {
 
     /// 把若干「事件」拼成上游方言的一条流（每个事件都是 `event:` + `data:` + 空行）。
     fn sse(events: &[(&str, &str)]) -> Vec<Vec<u8>> {
-        vec![events.iter().map(|(event, data)| format!("event: {event}\ndata: {data}\n\n")).collect::<String>().into_bytes()]
+        vec![events
+            .iter()
+            .map(|(event, data)| format!("event: {event}\ndata: {data}\n\n"))
+            .collect::<String>()
+            .into_bytes()]
     }
 
     #[test]
@@ -602,20 +739,32 @@ mod tests {
         // 本来就兜到 solo，所以这里只列真实会被写进凭据的那两个 Intl 值。
         for variant in ["intl", "solo-intl"] {
             let error = build_plan(
-                &Credential { access_token: "JWT".into(), variant: variant.into(), ..Default::default() },
+                &Credential {
+                    access_token: "JWT".into(),
+                    variant: variant.into(),
+                    ..Default::default()
+                },
                 &json!({"model": "glm-5.2-solo", "messages": []}),
                 "https://example.invalid",
             )
             .err()
             .unwrap_or_else(|| panic!("Intl 谱系（{variant}）不该被路由"));
             assert_eq!(400, error.status_code, "variant={variant}");
-            assert!(error.message.contains("国际版"), "文案要说明为什么：{}", error.message);
+            assert!(
+                error.message.contains("国际版"),
+                "文案要说明为什么：{}",
+                error.message
+            );
         }
         // 国内两个谱系在转发面等价（都发 solo_work_lite），不能一起拒了
         for variant in ["solo", "cn", ""] {
             assert!(
                 build_plan(
-                    &Credential { access_token: "JWT".into(), variant: variant.into(), ..Default::default() },
+                    &Credential {
+                        access_token: "JWT".into(),
+                        variant: variant.into(),
+                        ..Default::default()
+                    },
                     &json!({"model": "glm-5.2-solo", "messages": []}),
                     "https://example.invalid",
                 )
@@ -638,19 +787,46 @@ mod tests {
             bytes[..30].to_vec(),
             bytes[30..cut].to_vec(),
             bytes[cut..].to_vec(),
-            "event: done\ndata: {\"finish_reason\":\"stop\"}\n\n".as_bytes().to_vec(),
+            "event: done\ndata: {\"finish_reason\":\"stop\"}\n\n"
+                .as_bytes()
+                .to_vec(),
         ];
         let upstream = FakeUpstream::spawn(chunks).await;
         let telemetry = Arc::new(RequestTelemetry::new());
-        let outcome = forward_at(&store, &id, &body("glm-5.2-solo"), None, true, &telemetry, &upstream.base)
-            .await
-            .expect("流式转发应当成功");
+        let outcome = forward_at(
+            &store,
+            &id,
+            &body("glm-5.2-solo"),
+            None,
+            true,
+            &telemetry,
+            &upstream.base,
+        )
+        .await
+        .expect("流式转发应当成功");
         let text = drain(outcome).await;
-        assert!(text.contains("\"content\":\"你好\""), "内容被切碎的字节必须拼回来：{text}");
-        assert!(!text.contains('\u{FFFD}'), "不该出现替换字符（那就是按字节解码错了）：{text}");
-        assert!(text.contains("\"model\":\"glm-5.2-solo\""), "客户端要看见它请求的那个名字：{text}");
-        assert_eq!(1, text.matches("data: [DONE]").count(), "结束标记必须恰好一个（多了客户端会当成两段回答，少了会一直等）：{text}");
-        assert!(upstream.path_seen().ends_with(CHAT_PATH), "打的是本家的聊天路径：{}", upstream.path_seen());
+        assert!(
+            text.contains("\"content\":\"你好\""),
+            "内容被切碎的字节必须拼回来：{text}"
+        );
+        assert!(
+            !text.contains('\u{FFFD}'),
+            "不该出现替换字符（那就是按字节解码错了）：{text}"
+        );
+        assert!(
+            text.contains("\"model\":\"glm-5.2-solo\""),
+            "客户端要看见它请求的那个名字：{text}"
+        );
+        assert_eq!(
+            1,
+            text.matches("data: [DONE]").count(),
+            "结束标记必须恰好一个（多了客户端会当成两段回答，少了会一直等）：{text}"
+        );
+        assert!(
+            upstream.path_seen().ends_with(CHAT_PATH),
+            "打的是本家的聊天路径：{}",
+            upstream.path_seen()
+        );
     }
 
     #[tokio::test]
@@ -665,14 +841,33 @@ mod tests {
             )]))
             .await;
             let telemetry = Arc::new(RequestTelemetry::new());
-            let error = match forward_at(&store, &id, &body("glm-5.2-solo"), None, true, &telemetry, &upstream.base).await {
+            let error = match forward_at(
+                &store,
+                &id,
+                &body("glm-5.2-solo"),
+                None,
+                true,
+                &telemetry,
+                &upstream.base,
+            )
+            .await
+            {
                 Err(error) => error,
                 //  outcome 成功 = 首包门没拦住，那个错误就会以 200 + 半截流的形式
                 //  发到客户端脸上，所以这里必须 panic 而不是放宽。
                 Ok(_) => panic!("码 {code} 必须被首包门拦成错误，不能下发任何字节"),
             };
-            assert_eq!(i32::from(want), error.status_code, "码 {code} 的状态映射不对：{}", error.message);
-            assert!(error.message.contains(&code.to_string()), "文案要带上游码：{}", error.message);
+            assert_eq!(
+                i32::from(want),
+                error.status_code,
+                "码 {code} 的状态映射不对：{}",
+                error.message
+            );
+            assert!(
+                error.message.contains(&code.to_string()),
+                "文案要带上游码：{}",
+                error.message
+            );
         }
     }
 
@@ -686,16 +881,29 @@ mod tests {
         ]))
         .await;
         let telemetry = Arc::new(RequestTelemetry::new());
-        let outcome = forward_at(&store, &id, &body("glm-5.2-solo"), None, true, &telemetry, &upstream.base)
-            .await
-            .expect("内容已经出去，HTTP 只能 200");
-        let ForwardOutcome::Stream { status, .. } = &outcome else { panic!("流式") };
+        let outcome = forward_at(
+            &store,
+            &id,
+            &body("glm-5.2-solo"),
+            None,
+            true,
+            &telemetry,
+            &upstream.base,
+        )
+        .await
+        .expect("内容已经出去，HTTP 只能 200");
+        let ForwardOutcome::Stream { status, .. } = &outcome else {
+            panic!("流式")
+        };
         assert_eq!(200, *status);
         let text = drain(outcome).await;
         assert!(text.contains("先说一句"), "{text}");
         assert!(text.contains("\"error\""), "错误要原样进流里：{text}");
         assert!(text.ends_with("data: [DONE]\n\n"), "尾巴必须收住：{text}");
-        assert!(telemetry.snapshot().error.is_some(), "错误要进遥测（请求日志的「错误」列读它）");
+        assert!(
+            telemetry.snapshot().error.is_some(),
+            "错误要进遥测（请求日志的「错误」列读它）"
+        );
     }
 
     #[tokio::test]
@@ -706,20 +914,38 @@ mod tests {
         // 所以用量是随 finish 帧一起到的 —— 计费必须仍然读到它。
         let upstream = FakeUpstream::spawn(sse(&[
             ("output", "{\"response\":\"答\"}"),
-            ("token_usage", "{\"prompt_tokens\":7,\"completion_tokens\":5,\"total_tokens\":12}"),
+            (
+                "token_usage",
+                "{\"prompt_tokens\":7,\"completion_tokens\":5,\"total_tokens\":12}",
+            ),
             ("done", "{\"finish_reason\":\"stop\"}"),
         ]))
         .await;
         let telemetry = Arc::new(RequestTelemetry::new());
-        let outcome = forward_at(&store, &id, &body("kimi-k2.6-solo"), None, true, &telemetry, &upstream.base)
-            .await
-            .expect("转发应当成功");
+        let outcome = forward_at(
+            &store,
+            &id,
+            &body("kimi-k2.6-solo"),
+            None,
+            true,
+            &telemetry,
+            &upstream.base,
+        )
+        .await
+        .expect("转发应当成功");
         let text = drain(outcome).await;
         let snapshot = telemetry.snapshot();
-        assert_eq!(Some(7), (snapshot.prompt_tokens > 0).then_some(snapshot.prompt_tokens), "用量没记进遥测：{snapshot:?}");
+        assert_eq!(
+            Some(7),
+            (snapshot.prompt_tokens > 0).then_some(snapshot.prompt_tokens),
+            "用量没记进遥测：{snapshot:?}"
+        );
         assert_eq!(5, snapshot.completion_tokens);
         assert_eq!(12, snapshot.total_tokens);
-        assert!(text.contains("\"usage\""), "客户端也要拿到那一帧 usage：{text}");
+        assert!(
+            text.contains("\"usage\""),
+            "客户端也要拿到那一帧 usage：{text}"
+        );
     }
 
     #[tokio::test]
@@ -729,21 +955,40 @@ mod tests {
         let upstream = FakeUpstream::spawn(sse(&[
             ("output", "{\"response\":\"你\"}"),
             ("output", "{\"response\":\"好\"}"),
-            ("token_usage", "{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5}"),
+            (
+                "token_usage",
+                "{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5}",
+            ),
             ("done", "{\"finish_reason\":\"stop\"}"),
         ]))
         .await;
         let telemetry = Arc::new(RequestTelemetry::new());
-        let outcome = forward_at(&store, &id, &body("glm-5.2-solo"), None, false, &telemetry, &upstream.base)
-            .await
-            .expect("非流式应当内部聚合后整体返回");
-        let ForwardOutcome::Completion { body } = outcome else { panic!("非流式路径要给 Completion") };
+        let outcome = forward_at(
+            &store,
+            &id,
+            &body("glm-5.2-solo"),
+            None,
+            false,
+            &telemetry,
+            &upstream.base,
+        )
+        .await
+        .expect("非流式应当内部聚合后整体返回");
+        let ForwardOutcome::Completion { body } = outcome else {
+            panic!("非流式路径要给 Completion")
+        };
         assert_eq!(
             "你好",
-            body["choices"][0]["message"]["content"].as_str().unwrap_or(""),
+            body["choices"][0]["message"]["content"]
+                .as_str()
+                .unwrap_or(""),
             "聚合后的正文：{body}"
         );
-        assert_eq!("glm-5.2-solo", body["model"].as_str().unwrap_or(""), "回显客户端请求的名字");
+        assert_eq!(
+            "glm-5.2-solo",
+            body["model"].as_str().unwrap_or(""),
+            "回显客户端请求的名字"
+        );
         assert_eq!(Some(5), body["usage"]["total_tokens"].as_i64());
     }
 
@@ -753,25 +998,68 @@ mod tests {
         // 假成功（参考实现摔过的正是它），客户端界面上一句话都没有还不知道为什么。
         let (store, _db) = store_with_account("FW-AGGERR");
         let id = account_id(&store);
-        let upstream = FakeUpstream::spawn(sse(&[("error", "{\"code\":1005,\"message\":\"plan limit\"}")])).await;
+        let upstream = FakeUpstream::spawn(sse(&[(
+            "error",
+            "{\"code\":1005,\"message\":\"plan limit\"}",
+        )]))
+        .await;
         let telemetry = Arc::new(RequestTelemetry::new());
-        let error = match forward_at(&store, &id, &body("glm-5.2-solo"), None, false, &telemetry, &upstream.base).await {
+        let error = match forward_at(
+            &store,
+            &id,
+            &body("glm-5.2-solo"),
+            None,
+            false,
+            &telemetry,
+            &upstream.base,
+        )
+        .await
+        {
             Err(error) => error,
             Ok(_) => panic!("聚合路径拿到流内错误却返回了成功"),
         };
-        assert_eq!(429, error.status_code, "1005 = 计划限额 → 换账号信号：{}", error.message);
+        assert_eq!(
+            429, error.status_code,
+            "1005 = 计划限额 → 换账号信号：{}",
+            error.message
+        );
     }
 
     #[tokio::test]
     async fn the_outbound_body_is_the_solo_envelope_with_the_bare_model_name() {
         let (_store, _db) = store_with_account("FW-SHAPE");
-        let credential = Credential { access_token: "FW-SHAPE".into(), variant: "solo".into(), ..Default::default() };
-        let plan = build_plan(&credential, &body("kimi-k3-solo"), "https://example.invalid").expect("规划应当成功");
-        assert_eq!("kimi-k3", plan.body["config_name"].as_str().unwrap_or(""), "出站用裸 config 名");
+        let credential = Credential {
+            access_token: "FW-SHAPE".into(),
+            variant: "solo".into(),
+            ..Default::default()
+        };
+        let plan = build_plan(
+            &credential,
+            &body("kimi-k3-solo"),
+            "https://example.invalid",
+        )
+        .expect("规划应当成功");
+        assert_eq!(
+            "kimi-k3",
+            plan.body["config_name"].as_str().unwrap_or(""),
+            "出站用裸 config 名"
+        );
         assert!(plan.body["stream"].as_bool().unwrap_or(false), "上游恒流式");
-        assert_eq!("solo_work_lite", plan.body["function"].as_str().unwrap_or(""));
-        assert!(plan.url.starts_with("https://example.invalid"), "基址由调用方给：{}", plan.url);
+        assert_eq!(
+            "solo_work_lite",
+            plan.body["function"].as_str().unwrap_or("")
+        );
+        assert!(
+            plan.url.starts_with("https://example.invalid"),
+            "基址由调用方给：{}",
+            plan.url
+        );
         let names: Vec<&str> = plan.headers.iter().map(|(name, _)| name.as_str()).collect();
-        assert!(names.iter().any(|name| name.eq_ignore_ascii_case("x-ide-version-code")), "目录/版本闸门头要在：{names:?}");
+        assert!(
+            names
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case("x-ide-version-code")),
+            "目录/版本闸门头要在：{names:?}"
+        );
     }
 }

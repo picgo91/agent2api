@@ -150,7 +150,11 @@ impl ProviderAdapter for CatPawAdapter {
             .filter(|text| !text.is_empty())
             .unwrap_or("上游错误")
             .to_string();
-        UpstreamErrorClass::Fatal { status, message, upstream_code: None }
+        UpstreamErrorClass::Fatal {
+            status,
+            message,
+            upstream_code: None,
+        }
     }
 
     /// 思考等级绑定 → `reasoning_effort`（本家是**唯一需要归并档位**的一家）。
@@ -245,7 +249,11 @@ impl ProviderAdapter for CatPawAdapter {
                 ));
             }
             credentials::log_source(
-                if account_id.is_empty() { "默认登录态" } else { "账号记录" },
+                if account_id.is_empty() {
+                    "默认登录态"
+                } else {
+                    "账号记录"
+                },
                 account_id,
                 &credentials.uid,
             );
@@ -269,9 +277,7 @@ impl ProviderAdapter for CatPawAdapter {
         store: &'a AccountStore,
         account_id: &'a str,
         force: bool,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = ModelRefreshOutcome> + Send + 'a>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ModelRefreshOutcome> + Send + 'a>> {
         Box::pin(async move {
             // 凭证解析失败（没账号、也没桌面端登录态）→ 「没刷」而不是「失败」：
             // 一个不用 CatPaw 的用户点刷新时，红色失败会让他以为哪里坏了。
@@ -381,9 +387,8 @@ impl ProviderAdapter for CatPawAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>>
+    {
         Box::pin(async move { super::balance::query_usage(store, account_id).await })
     }
 
@@ -413,9 +418,7 @@ impl ProviderAdapter for CatPawAdapter {
         stream: bool,
         telemetry: &'a Arc<RequestTelemetry>,
     ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<Output = Result<ForwardOutcome, GatewayError>> + Send + 'a,
-        >,
+        Box<dyn std::future::Future<Output = Result<ForwardOutcome, GatewayError>> + Send + 'a>,
     > {
         Box::pin(async move {
             let credentials = resolve_credentials(store, account_id)?;
@@ -431,8 +434,7 @@ impl ProviderAdapter for CatPawAdapter {
             //
             // 开销：身份没变时注册表内部 O(1) 早退（一次 HashMap 查 + 一次比较），
             // 不扫表、不读盘、不发网络请求（凭证已在手上）。
-            let identity =
-                AccountIdentity::new(account_id, credentials.uid.as_str());
+            let identity = AccountIdentity::new(account_id, credentials.uid.as_str());
             conversation::registry().reconcile_identity(&identity);
             // 用 `ConversationRequest::new` 装配（它已经带好会话 id 的归一化与默认
             // 上游地址），再补两个「编排层才知道」的字段：base_url 走环境变量覆盖、
@@ -470,7 +472,11 @@ fn resolve_credentials(
     }
     let credentials = credentials::snapshot_for(store, account_id)?;
     credentials::log_source(
-        if account_id.is_empty() { "默认登录态" } else { "账号记录" },
+        if account_id.is_empty() {
+            "默认登录态"
+        } else {
+            "账号记录"
+        },
         account_id,
         &credentials.uid,
     );

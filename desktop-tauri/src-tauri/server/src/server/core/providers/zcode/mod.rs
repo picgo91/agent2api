@@ -185,4 +185,3 @@ pub fn plan_label(plan: &str) -> &'static str {
         _ => "编码套餐（Coding Plan）",
     }
 }
-

@@ -73,7 +73,10 @@ pub async fn post_config(State(_state): State<ServerState>, body: Bytes) -> Resp
             // null → 删除 key（对应 Node 版 delete config.apiKey + opts.apiKey = null）
             Value::Null => {
                 config::set_api_key(None);
-                logging::log("[Config]", "API Key 已清除，接口恢复免鉴权（仅监听 127.0.0.1）");
+                logging::log(
+                    "[Config]",
+                    "API Key 已清除，接口恢复免鉴权（仅监听 127.0.0.1）",
+                );
             }
             Value::String(text) => {
                 if text.chars().count() < MIN_API_KEY_LENGTH {
@@ -81,7 +84,10 @@ pub async fn post_config(State(_state): State<ServerState>, body: Bytes) -> Resp
                 }
                 config::set_api_key(Some(text.clone()));
                 // 不打印 key 本身（日志会被导出与截图），只说明已更新
-                logging::log("[Config]", "✅ API Key 已更新，客户端需带 Authorization: Bearer <key>");
+                logging::log(
+                    "[Config]",
+                    "✅ API Key 已更新，客户端需带 Authorization: Bearer <key>",
+                );
             }
             // 非 null 且非字符串 → 同一个 400 文案（照抄 Node 版判定）
             _ => return errors::management_error(400, API_KEY_TOO_SHORT),
@@ -103,4 +109,3 @@ pub async fn post_config(State(_state): State<ServerState>, body: Bytes) -> Resp
         "defaultModel": snapshot.default_model(),
     }))
 }
-

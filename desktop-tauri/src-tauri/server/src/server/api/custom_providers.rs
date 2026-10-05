@@ -150,10 +150,7 @@ pub async fn update_custom_provider(State(_state): State<ServerState>, body: Byt
         Err(message) => return errors::management_error(400, message),
     };
     let changes = describe_changes(before.as_ref(), &updated);
-    let label = updated
-        .get("name")
-        .and_then(Value::as_str)
-        .unwrap_or(&id);
+    let label = updated.get("name").and_then(Value::as_str).unwrap_or(&id);
     logging::log(
         "[CustomProvider]",
         &format!("✏️  自定义提供商「{label}」已更新（{changes}）"),

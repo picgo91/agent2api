@@ -95,8 +95,11 @@ impl LoginService {
             task.auth_url = Some(auth_url.clone());
         });
 
-        let outcome =
-            tokio::time::timeout(Duration::from_millis(LOGIN_TIMEOUT_MS), session.complete(None)).await;
+        let outcome = tokio::time::timeout(
+            Duration::from_millis(LOGIN_TIMEOUT_MS),
+            session.complete(None),
+        )
+        .await;
         let credential: Credential = match outcome {
             Ok(Ok(credential)) => credential,
             Ok(Err(error)) => {

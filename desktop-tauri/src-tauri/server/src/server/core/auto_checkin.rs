@@ -114,10 +114,7 @@ pub fn normalize_providers(value: Option<&Value>) -> Vec<String> {
     };
     let picked: Vec<String> = CHECKIN_PROVIDERS
         .iter()
-        .filter(|id| {
-            list.iter()
-                .any(|item| item.as_str() == Some(*id))
-        })
+        .filter(|id| list.iter().any(|item| item.as_str() == Some(*id)))
         .map(|id| id.to_string())
         .collect();
     if picked.is_empty() {
@@ -151,7 +148,10 @@ pub const CHECKIN_BUSY_STATUS: i32 = 400;
 
 impl AutoCheckinConfigError {
     fn new(message: impl Into<String>) -> Self {
-        Self { message: message.into(), status_code: 400 }
+        Self {
+            message: message.into(),
+            status_code: 400,
+        }
     }
 }
 
@@ -206,7 +206,9 @@ pub fn normalize_time(value: Option<&Value>) -> Result<String, AutoCheckinConfig
         })
         .and_then(|(head, tail)| Some((head.parse::<u32>().ok()?, tail.parse::<u32>().ok()?)));
     let Some((hour, minute)) = parsed else {
-        return Err(AutoCheckinConfigError::new("时间格式应为 HH:MM（例如 00:01）"));
+        return Err(AutoCheckinConfigError::new(
+            "时间格式应为 HH:MM（例如 00:01）",
+        ));
     };
     if hour > 23 || minute > 59 {
         return Err(AutoCheckinConfigError::new("时间超出范围（00:00 - 23:59）"));
@@ -297,7 +299,10 @@ fn read_state() -> CheckinState {
         .get("lastFiredDate")
         .and_then(Value::as_str)
         .map(str::to_string);
-    let last_result = raw.get("lastResult").filter(|value| value.is_object()).cloned();
+    let last_result = raw
+        .get("lastResult")
+        .filter(|value| value.is_object())
+        .cloned();
     CheckinState {
         enabled,
         time,
@@ -430,7 +435,9 @@ impl AutoCheckin {
                 return None;
             }
             inner.running = true;
-            RunningGuard { inner: self.inner.clone() }
+            RunningGuard {
+                inner: self.inner.clone(),
+            }
         };
 
         let today = local_date_key(Local::now());
@@ -471,12 +478,7 @@ impl AutoCheckin {
 
     /// 成功分支：汇总 + 记录 lastResult + 日志（对应 Node fire 里的 try 主体）
     fn record_success(&self, result: &Value, today: &str, reason: &str) -> Value {
-        let number = |key: &str| {
-            result
-                .get(key)
-                .and_then(Value::as_u64)
-                .unwrap_or(0)
-        };
+        let number = |key: &str| result.get(key).and_then(Value::as_u64).unwrap_or(0);
         let succeeded = number("succeeded");
         let total = number("total");
         let skipped = number("skipped");
@@ -516,7 +518,11 @@ impl AutoCheckin {
             "[Checkin]",
             &format!(
                 "定时签到完成: {succeeded}/{total} 个账号成功领取{}{}",
-                if skipped > 0 { format!("，跳过 {skipped} 个") } else { String::new() },
+                if skipped > 0 {
+                    format!("，跳过 {skipped} 个")
+                } else {
+                    String::new()
+                },
                 if failures.is_empty() {
                     String::new()
                 } else {
@@ -628,10 +634,16 @@ impl AutoCheckin {
         if let Some(value) = payload.get("enabled") {
             // Node: `enabled !== undefined` → `patch.enabled = enabled === true`，
             // 也就是说 null / 字符串 / 0 都会把开关置为 false（不是「忽略」）
-            patch.insert("enabled".to_string(), Value::Bool(value == &Value::Bool(true)));
+            patch.insert(
+                "enabled".to_string(),
+                Value::Bool(value == &Value::Bool(true)),
+            );
         }
         if let Some(value) = payload.get("time") {
-            patch.insert("time".to_string(), Value::String(normalize_time(Some(value))?));
+            patch.insert(
+                "time".to_string(),
+                Value::String(normalize_time(Some(value))?),
+            );
         }
         if let Some(value) = payload.get("providers") {
             // 勾选清单：只认注册过的提供商 id（去重、按注册顺序落盘）；

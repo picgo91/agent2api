@@ -236,7 +236,9 @@ impl Context {
         platform: Option<&str>,
         edition: Option<&str>,
     ) -> Context {
-        let explicit_edition = edition.map(|value| !value.trim().is_empty()).unwrap_or(false);
+        let explicit_edition = edition
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false);
         let info = resolve_edition(edition);
         let base_url = match endpoint.map(str::trim).filter(|value| !value.is_empty()) {
             Some(value) => normalize_endpoint(value),
@@ -297,7 +299,12 @@ pub fn default_context() -> Context {
     let edition = env_text("WORKBUDDY_EDITION");
     let endpoint = env_text("WORKBUDDY_ENDPOINT");
     let prefix = env_text("WORKBUDDY_PREFIX_PATH");
-    Context::make(endpoint.as_deref(), prefix.as_deref(), None, edition.as_deref())
+    Context::make(
+        endpoint.as_deref(),
+        prefix.as_deref(),
+        None,
+        edition.as_deref(),
+    )
 }
 
 /// 旧版单账号登录态文件（仅用于首次启动迁移到账号列表，见 account_store）

@@ -35,8 +35,8 @@ use crate::server::core::upstream::usage::{self, RequestTelemetry, TelemetrySnap
 use crate::server::errors::GatewayError;
 use crate::server::logging;
 use crate::server::request_stats::{
-    AttemptDetail, MAX_RAW_BODY_BYTES, NewRequestEntry, RequestStats, RetryEvent, RunningProgress,
-    SensitiveHit,
+    AttemptDetail, NewRequestEntry, RequestStats, RetryEvent, RunningProgress, SensitiveHit,
+    MAX_RAW_BODY_BYTES,
 };
 use crate::server::ServerState;
 
@@ -206,9 +206,10 @@ pub fn resolve_model(
     let requested_model = model_field_text(payload);
     // 按提供商区分启停后，404 判定是「路由全链（原生 + 映射）都不可用」
     if !requested_model.is_empty() && model_blocked_everywhere(&requested_model) {
-        return Err(GatewayError::with_status(404, format!(
-            "模型已在网关中关闭: {requested_model}。完整列表见 GET /v1/models"
-        ))
+        return Err(GatewayError::with_status(
+            404,
+            format!("模型已在网关中关闭: {requested_model}。完整列表见 GET /v1/models"),
+        )
         .with_code("model_not_found"));
     }
     // ③ 广告视图里没有 → 400（「列表里没有就拒绝」；例外见函数头说明）
@@ -253,9 +254,10 @@ pub fn resolve_model(
         if has_available_providers(state.store())
             && !key_scope::allows_model(scope, &requested_model)
         {
-            return Err(GatewayError::with_status(404, format!(
-                "模型 '{requested_model}' 不可用：不在这把网关 Key 的可用模型列表里"
-            ))
+            return Err(GatewayError::with_status(
+                404,
+                format!("模型 '{requested_model}' 不可用：不在这把网关 Key 的可用模型列表里"),
+            )
             .with_code("model_not_found"));
         }
     }
@@ -446,7 +448,9 @@ pub fn live_row_sink(
                 // 与收尾同口径：一次都没发出去（0）按 1 次算，理由见
                 // `TelemetrySnapshot::attempts` 的说明
                 attempts: snapshot.attempts.max(1),
-                first_response_ms: snapshot.first_response_at.map(|at| (at - started_at).max(0)),
+                first_response_ms: snapshot
+                    .first_response_at
+                    .map(|at| (at - started_at).max(0)),
                 // 阶段与阶段起点：起点为 None 只可能是「还停在初始阶段（连接中）、
                 // 一次都没切换过」——那个阶段的起点就是**请求开始时刻**（下面这个
                 // started_at，与插入在途行时写进 phase_started_at 的值同源），
@@ -646,7 +650,11 @@ struct TerminalScan {
 
 impl TerminalScan {
     fn new(frames: TerminalFrames) -> Self {
-        Self { frames, window: Vec::new(), seen: false }
+        Self {
+            frames,
+            window: Vec::new(),
+            seen: false,
+        }
     }
 
     /// 吃一段刚下发的字节，返回「本次是否首次命中收尾帧」。
@@ -662,7 +670,12 @@ impl TerminalScan {
             .any(|frame| contains(&self.window, frame));
         // 只留「最长特征 - 1」个字节：比这更长的残留接不上任何一帧的开头，
         // 留着只会让窗口随响应体积无界增长（一次 SSE 响应动辄数百 KB）
-        let longest = self.frames.iter().map(|frame| frame.len()).max().unwrap_or(0);
+        let longest = self
+            .frames
+            .iter()
+            .map(|frame| frame.len())
+            .max()
+            .unwrap_or(0);
         let keep = longest.saturating_sub(1);
         if self.window.len() > keep {
             let drop = self.window.len() - keep;
@@ -683,7 +696,9 @@ impl TerminalScan {
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
     !needle.is_empty()
         && haystack.len() >= needle.len()
-        && haystack.windows(needle.len()).any(|window| window == needle)
+        && haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
 }
 
 pub struct RecordingStream {
@@ -747,8 +762,17 @@ impl RecordingStream {
         context: RecordContext,
         frames: TerminalFrames,
     ) -> Self {
-        let terminal = if frames.is_empty() { None } else { Some(TerminalScan::new(frames)) };
-        Self { inner, context: Some(context), terminal, raw: RawCapture::new() }
+        let terminal = if frames.is_empty() {
+            None
+        } else {
+            Some(TerminalScan::new(frames))
+        };
+        Self {
+            inner,
+            context: Some(context),
+            terminal,
+            raw: RawCapture::new(),
+        }
     }
 
     /// 记账并清空上下文（幂等：第二次调用什么都不做）。
@@ -868,7 +892,11 @@ pub fn transformed_stream(
         };
         futures::stream::iter(frames.into_iter().map(Ok)).boxed()
     });
-    Box::new(RecordingStream::with_terminals(Box::new(converted), context, terminals))
+    Box::new(RecordingStream::with_terminals(
+        Box::new(converted),
+        context,
+        terminals,
+    ))
 }
 
 // ─── 响应构造 ───────────────────────────────────────────────
@@ -931,7 +959,10 @@ pub fn error_response(
 ) -> Response {
     let status = error.http_status().as_u16();
     // 记账里的状态码必须与客户端看到的那个一致
-    let recorded = RecordContext { status: i64::from(status), ..context };
+    let recorded = RecordContext {
+        status: i64::from(status),
+        ..context
+    };
     record_entry(&recorded, Some(error.message.clone()));
     convert(status, error)
 }

@@ -24,9 +24,9 @@
 use serde_json::{json, Value};
 
 use crate::server::core::account_store::MAX_TOKEN_LENGTH;
+use crate::server::core::upstream::request::new_request_id;
 use crate::server::errors::GatewayError;
 use crate::server::logging;
-use crate::server::core::upstream::request::new_request_id;
 
 use super::endpoints::Region;
 
@@ -54,7 +54,10 @@ impl Credentials {
     /// `token`），前端「填写凭证」与前端的导入路径都可能给不同形态。
     pub fn from_payload(payload: &Value) -> Result<Self, GatewayError> {
         if !payload.is_object() {
-            return Err(GatewayError::with_status(400, "Accio 账号内容必须是 JSON 对象"));
+            return Err(GatewayError::with_status(
+                400,
+                "Accio 账号内容必须是 JSON 对象",
+            ));
         }
         let region = Region::from_payload(payload)?;
         let access_token = secret(payload, &["accessToken", "access_token", "token"])?;
@@ -72,7 +75,10 @@ impl Credentials {
             expires_at,
             user_id: text(payload, &["userId", "user_id", "uid"]),
             email: text(payload, &["email"]).chars().take(320).collect(),
-            name: text(payload, &["nickname", "name"]).chars().take(100).collect(),
+            name: text(payload, &["nickname", "name"])
+                .chars()
+                .take(100)
+                .collect(),
             device_id: text(payload, &["deviceId", "device_id"]),
         })
     }
@@ -106,7 +112,11 @@ impl Credentials {
     /// 「空值不覆盖」，缺项不该把既有值洗成空）。
     pub fn to_value(&self) -> Value {
         let text_or_null = |value: &str| -> Value {
-            if value.is_empty() { Value::Null } else { Value::String(value.to_string()) }
+            if value.is_empty() {
+                Value::Null
+            } else {
+                Value::String(value.to_string())
+            }
         };
         json!({
             "mode": self.region.edition(),
@@ -146,11 +156,17 @@ pub fn secret(payload: &Value, keys: &[&str]) -> Result<String, GatewayError> {
                 .filter(|value| !value.is_empty())
         })
         .unwrap_or("");
-    if value.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("Bearer ")) {
+    if value
+        .get(..7)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("Bearer "))
+    {
         value = value[7..].trim();
     }
     if value.len() > MAX_TOKEN_LENGTH || value.chars().any(char::is_control) {
-        return Err(GatewayError::with_status(400, "Accio 凭证过长或包含非法控制字符"));
+        return Err(GatewayError::with_status(
+            400,
+            "Accio 凭证过长或包含非法控制字符",
+        ));
     }
     Ok(value.to_string())
 }

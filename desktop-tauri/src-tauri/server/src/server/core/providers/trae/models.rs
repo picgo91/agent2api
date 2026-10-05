@@ -60,17 +60,17 @@
 
 use std::sync::{OnceLock, RwLock};
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::server::core::providers::adapter::ModelRefreshOutcome;
 use crate::server::core::providers::catalog_cache;
-use crate::server::logging;
 use crate::server::core::proxies::ResolvedProxy;
+use crate::server::logging;
 
 use super::credentials::Credential;
 use super::errors::config_is_solo_agent_only;
-use super::headers::{IDE_VERSION_CODE, solo_headers, HeaderIdentity};
-use super::http::{Reply, post_json};
+use super::headers::{solo_headers, HeaderIdentity, IDE_VERSION_CODE};
+use super::http::{post_json, Reply};
 use super::{AGENT_BASE_URL, MODELS_PATH};
 
 /// 远程目录缓存有效期（与另外几家同为 1 小时；上游改表不需要秒级可见）。
@@ -92,14 +92,20 @@ fn slot() -> &'static RwLock<Cache> {
         // 首次初始化先从持久化缓存读回（上次成功拉到的那张表）：进程重启
         // 那一次刷新若失败，也不会退化成"本家模型全消失"。
         match catalog_cache::load(catalog_cache::SCOPE_TRAE) {
-            Some(cached) => RwLock::new(Cache { models: cached.models, fetched_at: cached.fetched_at }),
+            Some(cached) => RwLock::new(Cache {
+                models: cached.models,
+                fetched_at: cached.fetched_at,
+            }),
             None => RwLock::new(Cache::default()),
         }
     })
 }
 
 fn snapshot() -> Cache {
-    slot().read().unwrap_or_else(|error| error.into_inner()).clone()
+    slot()
+        .read()
+        .unwrap_or_else(|error| error.into_inner())
+        .clone()
 }
 
 /// 本家的清单（聚合目录认的形态）。
@@ -242,7 +248,10 @@ pub fn max_output_tokens(entry: &Value) -> Option<i64> {
 /// "这个模型会不会输出思考链"，后者是"官方客户端给不给这个账号开思考强度开关"
 /// （实测本账号 45 条全 false，属账号权益而非模型属性）。
 pub fn supports_reasoning(entry: &Value) -> Option<bool> {
-    let capability = entry.get("display_config").map(|config| text(config, "model_capability")).unwrap_or_default();
+    let capability = entry
+        .get("display_config")
+        .map(|config| text(config, "model_capability"))
+        .unwrap_or_default();
     match capability.as_str() {
         "reasoning_model" => Some(true),
         "chat_model" => Some(false),
@@ -256,15 +265,25 @@ pub fn supports_reasoning(entry: &Value) -> Option<bool> {
 /// 就有 1 条整个不带这个字段，替它说"不能看图"与本家一直防的"缺省当假"是
 /// 同一类错。取值本身经端到端实测，见模块头那张对照。
 pub fn supports_images(entry: &Value) -> Option<bool> {
-    entry.get("display_config").and_then(|config| config.get("multimodal")).and_then(Value::as_bool)
+    entry
+        .get("display_config")
+        .and_then(|config| config.get("multimodal"))
+        .and_then(Value::as_bool)
 }
 
 fn text(object: &Value, key: &str) -> String {
-    object.get(key).and_then(Value::as_str).unwrap_or("").trim().to_string()
+    object
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string()
 }
 
 fn value_as_i64(value: &Value) -> Option<i64> {
-    value.as_i64().or_else(|| value.as_f64().map(|number| number as i64))
+    value
+        .as_i64()
+        .or_else(|| value.as_f64().map(|number| number as i64))
 }
 
 /// 拉一次远程目录并落地（内存 + 持久化缓存）。
@@ -293,10 +312,23 @@ pub async fn refresh(
     // 先落一份 owning 的表再借出键 —— 不拿 `Box::leak` 糊过去：刷新是长期
     // 后台动作，每次泄漏十几条字符串不是"小开销"，是漏。
     let prepared: Vec<(String, String)> = solo_headers(&identity, false).into_iter().collect();
-    let headers: Vec<(&str, String)> = prepared.iter().map(|(name, value)| (name.as_str(), value.clone())).collect();
-    let reply: Reply = match post_json(&catalog_url(), &catalog_body(credential.variant()), &headers, std::time::Duration::from_secs(20), proxy).await {
+    let headers: Vec<(&str, String)> = prepared
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.clone()))
+        .collect();
+    let reply: Reply = match post_json(
+        &catalog_url(),
+        &catalog_body(credential.variant()),
+        &headers,
+        std::time::Duration::from_secs(20),
+        proxy,
+    )
+    .await
+    {
         Ok(reply) => reply,
-        Err(error) => return ModelRefreshOutcome::failed(format!("目录请求失败：{}", error.message)),
+        Err(error) => {
+            return ModelRefreshOutcome::failed(format!("目录请求失败：{}", error.message))
+        }
     };
     if reply.status >= 400 {
         return ModelRefreshOutcome::failed(describe_failure(reply.status, &reply.body));
@@ -322,7 +354,10 @@ pub async fn refresh(
         guard.models = models;
         guard.fetched_at = now;
     }
-    logging::log("[Models]", &format!("Trae 模型目录已刷新（{count} 个模型）"));
+    logging::log(
+        "[Models]",
+        &format!("Trae 模型目录已刷新（{count} 个模型）"),
+    );
     ModelRefreshOutcome::refreshed(count)
 }
 
@@ -366,18 +401,26 @@ mod tests {
         let want = &document["catalogRequest"];
         assert_eq!(want["method"].as_str().unwrap(), "POST");
         assert_eq!(want["path"].as_str().unwrap(), MODELS_PATH);
-        assert_eq!(catalog_url(), format!("https://trae-api-cn.mchost.guru{MODELS_PATH}"));
+        assert_eq!(
+            catalog_url(),
+            format!("https://trae-api-cn.mchost.guru{MODELS_PATH}")
+        );
         // 七个键逐个比（Go marshal 会按字母排序，所以比对象而不是比字节串）。
         let want_body: Value = serde_json::from_str(want["body"].as_str().unwrap()).unwrap();
         let got = catalog_body("solo");
         assert_eq!(want_body, got, "目录请求体的键与取值要和参考实现一致");
-        assert_eq!(7, want_body.as_object().unwrap().len(), "七个键一个不能多不能少（少了改不了形、多了上游拒）");
+        assert_eq!(
+            7,
+            want_body.as_object().unwrap().len(),
+            "七个键一个不能多不能少（少了改不了形、多了上游拒）"
+        );
     }
 
     #[test]
     fn catalog_filtering_matches_the_reference_implementation() {
         let document = document();
-        let payload: Value = serde_json::from_str(document["catalogFixture"].as_str().unwrap()).expect("fixture 是 JSON");
+        let payload: Value = serde_json::from_str(document["catalogFixture"].as_str().unwrap())
+            .expect("fixture 是 JSON");
         let got = parse_catalog(&payload);
         let want = document["catalog"].as_array().expect("catalog 段存在");
         assert_eq!(want.len(), got.len(), "过滤条数就不同：{got:?}");
@@ -389,14 +432,29 @@ mod tests {
                 "第 {} 条的 id 不对",
                 index + 1
             );
-            assert_eq!(entry["name"].as_str().unwrap(), line["name"].as_str().unwrap());
-            let context = line.get("maxInputTokens").and_then(Value::as_i64).unwrap_or(0);
-            assert_eq!(entry["contextWindow"].as_i64().unwrap(), context, "{} 的上下文窗口不对", entry["id"].as_str().unwrap());
+            assert_eq!(
+                entry["name"].as_str().unwrap(),
+                line["name"].as_str().unwrap()
+            );
+            let context = line
+                .get("maxInputTokens")
+                .and_then(Value::as_i64)
+                .unwrap_or(0);
+            assert_eq!(
+                entry["contextWindow"].as_i64().unwrap(),
+                context,
+                "{} 的上下文窗口不对",
+                entry["id"].as_str().unwrap()
+            );
             // 卷里 `maxTokens` **恒为 0**（参考实现不读明文的 `model_detail_list[].max_tokens`，
             // 只看到密文的 encrypted_model_params 就放弃了）。这里把这条事实读出来
             // 并断言它，是为了让"我们不跟"是一个**有记录的偏离**而不是静默分叉：
             // 本家改读明文，所以 fixture 里那些没带 model_detail_list 的条目仍不该有键。
-            assert_eq!(Some(0), entry["maxTokens"].as_i64(), "参考实现这一列恒 0（偏离的基准）");
+            assert_eq!(
+                Some(0),
+                entry["maxTokens"].as_i64(),
+                "参考实现这一列恒 0（偏离的基准）"
+            );
             assert!(
                 line.get("maxOutputTokens").is_none(),
                 "fixture 的条目没给 model_detail_list，就不该凭空冒出输出上限：{}",
@@ -410,11 +468,26 @@ mod tests {
         // 向量已经证明过一次，这里补的是**每条各一个**的可定位断言：
         // 将来某一条判错，报错要直接指出是哪一类漏进来了。
         let cases = [
-            ("invisible 内部通道", r#"{"config_info_list":[{"config_name":"sagitta","is_invisible_to_user":true,"display_config":{"display_name":"Sagitta"}}]}"#),
-            ("空 display_name 的占位模板", r#"{"config_info_list":[{"config_name":"custom_model_x","display_config":{"display_name":""}}]}"#),
-            ("config_switch=false 已下线", r#"{"config_info_list":[{"config_name":"legacy","config_switch":false,"display_config":{"display_name":"Legacy"}}]}"#),
-            ("solo_agent-only 死配置", r#"{"config_info_list":[{"config_name":"deepseek-v4-flash","display_config":{"display_name":"DS V4 Flash"}}]}"#),
-            ("空 config_name", r#"{"config_info_list":[{"config_name":"","display_config":{"display_name":"x"}}]}"#),
+            (
+                "invisible 内部通道",
+                r#"{"config_info_list":[{"config_name":"sagitta","is_invisible_to_user":true,"display_config":{"display_name":"Sagitta"}}]}"#,
+            ),
+            (
+                "空 display_name 的占位模板",
+                r#"{"config_info_list":[{"config_name":"custom_model_x","display_config":{"display_name":""}}]}"#,
+            ),
+            (
+                "config_switch=false 已下线",
+                r#"{"config_info_list":[{"config_name":"legacy","config_switch":false,"display_config":{"display_name":"Legacy"}}]}"#,
+            ),
+            (
+                "solo_agent-only 死配置",
+                r#"{"config_info_list":[{"config_name":"deepseek-v4-flash","display_config":{"display_name":"DS V4 Flash"}}]}"#,
+            ),
+            (
+                "空 config_name",
+                r#"{"config_info_list":[{"config_name":"","display_config":{"display_name":"x"}}]}"#,
+            ),
         ];
         for (label, body) in cases {
             let payload: Value = serde_json::from_str(body).unwrap();
@@ -430,12 +503,21 @@ mod tests {
         let models = parse_catalog(&payload);
         assert_eq!(1, models.len());
         assert_eq!("glm-5.2-solo", models[0]["id"].as_str().unwrap());
-        assert!(models[0].get("maxInputTokens").is_none(), "目录没给窗口就不写这个键（写 0 是谎报上限）");
+        assert!(
+            models[0].get("maxInputTokens").is_none(),
+            "目录没给窗口就不写这个键（写 0 是谎报上限）"
+        );
     }
 
     #[test]
     fn an_empty_or_malformed_payload_yields_no_models_rather_than_panicking() {
-        for body in ["{}", r#"{"config_info_list":[]}"#, "[]", r#"{"config_info_list":null}"#, "not json"] {
+        for body in [
+            "{}",
+            r#"{"config_info_list":[]}"#,
+            "[]",
+            r#"{"config_info_list":null}"#,
+            "not json",
+        ] {
             let payload = serde_json::from_str(body).unwrap_or(Value::Null);
             assert!(parse_catalog(&payload).is_empty(), "{body} 不该产出模型");
         }
@@ -444,9 +526,21 @@ mod tests {
     #[test]
     fn the_advertised_name_round_trips_to_the_upstream_config() {
         assert_eq!("glm-5.2", upstream_name("glm-5.2-solo"));
-        assert_eq!("glm-5.2", upstream_name("glm-5.2"), "裸名也认（用户照上游文档写名字）");
-        assert_eq!("x-solo", upstream_name("x-solo-solo"), "只剥一层：真以 -solo 结尾的 config 还能回来");
-        assert_eq!("deepseek-ai/deepseek-v4-pro", upstream_name("deepseek-ai/deepseek-v4-pro-solo"), "带斜杠的 config 名不能被切坏");
+        assert_eq!(
+            "glm-5.2",
+            upstream_name("glm-5.2"),
+            "裸名也认（用户照上游文档写名字）"
+        );
+        assert_eq!(
+            "x-solo",
+            upstream_name("x-solo-solo"),
+            "只剥一层：真以 -solo 结尾的 config 还能回来"
+        );
+        assert_eq!(
+            "deepseek-ai/deepseek-v4-pro",
+            upstream_name("deepseek-ai/deepseek-v4-pro-solo"),
+            "带斜杠的 config 名不能被切坏"
+        );
     }
 
     #[test]
@@ -476,13 +570,32 @@ mod tests {
         assert_eq!(Some(32000), models[0]["maxOutputTokens"].as_i64());
         assert_eq!(Some(true), models[0]["supportsReasoning"].as_bool());
         assert_eq!(Some(true), models[0]["supportsToolCall"].as_bool());
-        assert_eq!(Some(200000), models[0]["maxInputTokens"].as_i64(), "窗口仍取 context_window_tokens.dev");
+        assert_eq!(
+            Some(200000),
+            models[0]["maxInputTokens"].as_i64(),
+            "窗口仍取 context_window_tokens.dev"
+        );
         assert_eq!(Some(16000), models[1]["maxOutputTokens"].as_i64());
-        assert_eq!(Some(false), models[1]["supportsReasoning"].as_bool(), "chat_model 要如实标 false");
-        assert_eq!(Some(true), models[0]["supportsImages"].as_bool(), "multimodal=true 要接出来");
-        assert_eq!(Some(true), models[1]["supportsImages"].as_bool(), "agnes 也标了 true（识图与 capability 是两个维度）");
+        assert_eq!(
+            Some(false),
+            models[1]["supportsReasoning"].as_bool(),
+            "chat_model 要如实标 false"
+        );
+        assert_eq!(
+            Some(true),
+            models[0]["supportsImages"].as_bool(),
+            "multimodal=true 要接出来"
+        );
+        assert_eq!(
+            Some(true),
+            models[1]["supportsImages"].as_bool(),
+            "agnes 也标了 true（识图与 capability 是两个维度）"
+        );
         // 三态里的"缺"（本机那 45 条里有 1 条整个不带这个键）：不能替它说不能看图
-        assert!(models[2].get("supportsImages").is_none(), "上游没带 multimodal 时不能替它说不能看图");
+        assert!(
+            models[2].get("supportsImages").is_none(),
+            "上游没带 multimodal 时不能替它说不能看图"
+        );
         assert_eq!(
             Some(true),
             models[1]["supportsToolCall"].as_bool(),
@@ -493,7 +606,10 @@ mod tests {
             models[2]["maxOutputTokens"].as_i64(),
             "一个 config 有多条 detail 时取**最小**：广告出去的上限两条档位都得能用"
         );
-        assert!(models[2].get("supportsReasoning").is_none(), "capability 空串 = 上游没说，不写键");
+        assert!(
+            models[2].get("supportsReasoning").is_none(),
+            "capability 空串 = 上游没说，不写键"
+        );
     }
 
     #[test]
@@ -506,9 +622,16 @@ mod tests {
         let models = parse_catalog(&payload);
         assert_eq!(1, models.len());
         let item = &models[0];
-        assert!(item.get("maxOutputTokens").is_none(), "没给 detail 就不写输出上限");
+        assert!(
+            item.get("maxOutputTokens").is_none(),
+            "没给 detail 就不写输出上限"
+        );
         assert!(item.get("supportsReasoning").is_none());
-        assert_eq!(Some(true), item["supportsToolCall"].as_bool(), "这一条走的是通道事实兜底，不是上游标注");
+        assert_eq!(
+            Some(true),
+            item["supportsToolCall"].as_bool(),
+            "这一条走的是通道事实兜底，不是上游标注"
+        );
         assert!(item.get("maxInputTokens").is_none());
     }
 
@@ -519,6 +642,9 @@ mod tests {
         assert!(describe_failure(401, "").contains("重新登录"));
         assert!(describe_failure(500, "boom").contains("boom"));
         let with_version = format!("IdeVersionCode={IDE_VERSION_CODE}");
-        assert!(with_version.contains("2026"), "版本号要真的能印出来：{with_version}");
+        assert!(
+            with_version.contains("2026"),
+            "版本号要真的能印出来：{with_version}"
+        );
     }
 }

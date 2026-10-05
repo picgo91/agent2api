@@ -51,7 +51,10 @@ pub struct CheckinError {
 
 impl CheckinError {
     fn new(message: impl Into<String>, status_code: i32) -> Self {
-        Self { message: message.into(), status_code }
+        Self {
+            message: message.into(),
+            status_code,
+        }
     }
 }
 
@@ -200,12 +203,12 @@ pub fn resolve_checkin_targets(
 /// 优化。各分支的收尾（claim → 结果行 + 日志）完全一致，共用 [`claim_result`]；
 /// 各家的 claim 都由各自的实现对齐成 `{success, msg}` 形状。最后的兜底**只认**
 /// 默认那家（WorkBuddy），未知家明确报「未接入」——见那里的说明。
-pub async fn checkin_for(
-    store: &AccountStore,
-    billing: &BillingService,
-    account: &Value,
-) -> Value {
-    let id = account.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+pub async fn checkin_for(store: &AccountStore, billing: &BillingService, account: &Value) -> Value {
+    let id = account
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     let name = account.get("name").cloned().unwrap_or(Value::Null);
     let display = name.as_str().unwrap_or(&id).to_string();
     // 分派的键就是账号的 provider id（`provider_of` 已归一）；AutoClaw 两个
@@ -221,10 +224,9 @@ pub async fn checkin_for(
             claim_result(id, name, &display, true, claim)
         }
         "autoclaw" | "autoclaw-intl" => {
-            let region = crate::server::core::providers::autoclaw::Region::from_provider_id(
-                provider_id,
-            )
-            .unwrap_or(crate::server::core::providers::autoclaw::Region::Cn);
+            let region =
+                crate::server::core::providers::autoclaw::Region::from_provider_id(provider_id)
+                    .unwrap_or(crate::server::core::providers::autoclaw::Region::Cn);
             let claim = crate::server::core::providers::autoclaw::checkin::claim_daily_signin(
                 region, store, &id,
             )
@@ -286,7 +288,10 @@ fn claim_result(
 ) -> Value {
     match result {
         Ok(claim) => {
-            let success = claim.get("success").and_then(Value::as_bool).unwrap_or(false);
+            let success = claim
+                .get("success")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
             let msg = claim.get("msg").and_then(Value::as_str).unwrap_or("");
             if success {
                 if log_success_msg && !msg.is_empty() {
@@ -295,7 +300,10 @@ fn claim_result(
                     logging::log("[Accounts]", &format!("账号 {display}: 签到成功"));
                 }
             } else {
-                logging::log("[Accounts]", &format!("账号 {display}: 签到未领取（{msg}）"));
+                logging::log(
+                    "[Accounts]",
+                    &format!("账号 {display}: 签到未领取（{msg}）"),
+                );
             }
             json!({ "id": id, "name": name, "claim": claim, "error": Value::Null })
         }

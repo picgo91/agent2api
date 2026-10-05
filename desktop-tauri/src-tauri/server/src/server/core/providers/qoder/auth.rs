@@ -23,9 +23,11 @@ pub async fn request(
         .await
         .map_err(|error| {
             if error.is_timeout() {
-                GatewayError::with_status(504, "Qoder 请求超时，请检查网络后重试").with_code("qoder_transport")
+                GatewayError::with_status(504, "Qoder 请求超时，请检查网络后重试")
+                    .with_code("qoder_transport")
             } else {
-                GatewayError::with_status(502, "无法连接 Qoder，请检查网络或账号代理设置").with_code("qoder_transport")
+                GatewayError::with_status(502, "无法连接 Qoder，请检查网络或账号代理设置")
+                    .with_code("qoder_transport")
             }
         })
 }
@@ -42,8 +44,9 @@ pub fn payload(response: ApiResponse, action: &str) -> Result<Value, GatewayErro
             format!("Qoder {action}失败（HTTP {}）{hint}", response.status),
         ));
     }
-    response.payload.filter(Value::is_object)
-        .ok_or_else(|| GatewayError::with_status(502, format!("Qoder {action}未返回有效 JSON 对象")))
+    response.payload.filter(Value::is_object).ok_or_else(|| {
+        GatewayError::with_status(502, format!("Qoder {action}未返回有效 JSON 对象"))
+    })
 }
 
 pub fn account_proxy(record: &Value) -> Result<Option<ResolvedProxy>, GatewayError> {
@@ -65,7 +68,8 @@ pub async fn fetch_profile(
         None,
         &endpoints::open_api_headers(Some(token)),
         proxy,
-    ).await?;
+    )
+    .await?;
     payload(response, "用户信息查询")
 }
 
@@ -73,7 +77,10 @@ pub fn apply_profile(credentials: &mut Credentials, profile: &Value) -> Result<(
     let user_id = credentials::text(profile, &["id", "userId", "user_id"]);
     if !user_id.is_empty() {
         if !credentials.user_id.is_empty() && credentials.user_id != user_id {
-            return Err(GatewayError::with_status(400, "Qoder 凭证中的用户与账号资料不一致"));
+            return Err(GatewayError::with_status(
+                400,
+                "Qoder 凭证中的用户与账号资料不一致",
+            ));
         }
         credentials.user_id = user_id;
     }
@@ -95,7 +102,10 @@ pub async fn exchange_pat(
 ) -> Result<Credentials, GatewayError> {
     let pat = credentials::secret(&json!({ "pat": pat }), &["pat"])?;
     if pat.is_empty() || pat.contains('|') {
-        return Err(GatewayError::with_status(400, "请填写有效的 Qoder 个人访问令牌（PAT）"));
+        return Err(GatewayError::with_status(
+            400,
+            "请填写有效的 Qoder 个人访问令牌（PAT）",
+        ));
     }
     let response = request(
         "POST",
@@ -103,12 +113,16 @@ pub async fn exchange_pat(
         Some(&json!({ "personal_token": pat })),
         &endpoints::open_api_headers(None),
         proxy,
-    ).await?;
+    )
+    .await?;
     let data = payload(response, "PAT 换取令牌")?;
     let token = credentials::secret(&data, &["token"])?;
     let job_refresh = credentials::secret(&data, &["refresh_token"])?;
     if token.is_empty() || job_refresh.contains('|') {
-        return Err(GatewayError::with_status(502, "Qoder PAT 响应缺少有效 token 或 refresh_token 格式无效"));
+        return Err(GatewayError::with_status(
+            502,
+            "Qoder PAT 响应缺少有效 token 或 refresh_token 格式无效",
+        ));
     }
     let profile = fetch_profile(&token, region, proxy).await?;
     let user_id = credentials::text(&profile, &["id"]);
@@ -129,7 +143,10 @@ pub async fn exchange_pat(
 
 pub async fn prepare_account(payload: &Value) -> Result<Credentials, GatewayError> {
     if payload.get("importDesktop").and_then(Value::as_bool) == Some(true) {
-        return Err(GatewayError::with_status(400, "Qoder 请使用网页登录或个人访问令牌（PAT）添加"));
+        return Err(GatewayError::with_status(
+            400,
+            "Qoder 请使用网页登录或个人访问令牌（PAT）添加",
+        ));
     }
     let region = Region::from_payload(payload)?;
     let pat = credentials::secret(payload, &["pat", "personalAccessToken", "personal_token"])?;

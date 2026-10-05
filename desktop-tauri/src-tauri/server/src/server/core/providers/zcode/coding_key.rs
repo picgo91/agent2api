@@ -121,17 +121,12 @@ async fn z_login(host: &str, oauth_token: &str) -> Result<String, GatewayError> 
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            GatewayError::with_status(502, "ZCode 登录换取失败：上游未返回访问令牌")
-        })?;
+        .ok_or_else(|| GatewayError::with_status(502, "ZCode 登录换取失败：上游未返回访问令牌"))?;
     Ok(token.to_string())
 }
 
 /// 查默认机构与默认项目。
-async fn customer_info(
-    host: &str,
-    authorization: &str,
-) -> Result<(String, String), GatewayError> {
+async fn customer_info(host: &str, authorization: &str) -> Result<(String, String), GatewayError> {
     let url = format!("{host}/api/biz/customer/getCustomerInfo");
     let payload = biz_request("GET", &url, authorization, None).await?;
     let orgs = payload
@@ -153,9 +148,8 @@ async fn customer_info(
         .ok_or_else(|| {
             GatewayError::with_status(502, "ZCode 登录换取失败：该账号下没有可用机构")
         })?;
-    let org_id = pick_id(org, &["organizationId", "id", "orgId"]).ok_or_else(|| {
-        GatewayError::with_status(502, "ZCode 登录换取失败：机构缺少标识")
-    })?;
+    let org_id = pick_id(org, &["organizationId", "id", "orgId"])
+        .ok_or_else(|| GatewayError::with_status(502, "ZCode 登录换取失败：机构缺少标识"))?;
     let projects = org
         .get("projects")
         .and_then(Value::as_array)
@@ -174,9 +168,8 @@ async fn customer_info(
         .ok_or_else(|| {
             GatewayError::with_status(502, "ZCode 登录换取失败：默认机构下没有可用项目")
         })?;
-    let project_id = pick_id(project, &["projectId", "id"]).ok_or_else(|| {
-        GatewayError::with_status(502, "ZCode 登录换取失败：项目缺少标识")
-    })?;
+    let project_id = pick_id(project, &["projectId", "id"])
+        .ok_or_else(|| GatewayError::with_status(502, "ZCode 登录换取失败：项目缺少标识"))?;
     Ok((org_id, project_id))
 }
 
@@ -218,9 +211,7 @@ async fn find_or_create_api_key(
         .map(str::trim)
         .filter(|key| !key.is_empty())
         .map(str::to_string)
-        .ok_or_else(|| {
-            GatewayError::with_status(502, "ZCode 登录换取失败：上游未返回新建密钥")
-        })
+        .ok_or_else(|| GatewayError::with_status(502, "ZCode 登录换取失败：上游未返回新建密钥"))
 }
 
 /// 取密钥的 secret（`api_keys/copy/{apiKey}`）。
@@ -274,9 +265,9 @@ async fn biz_request(
                 GatewayError::with_status(502, format!("ZCode 登录换取失败: {error}"))
             }
         })?;
-    let payload = response.payload.ok_or_else(|| {
-        GatewayError::with_status(502, "ZCode 登录换取失败：上游响应不是 JSON")
-    })?;
+    let payload = response
+        .payload
+        .ok_or_else(|| GatewayError::with_status(502, "ZCode 登录换取失败：上游响应不是 JSON"))?;
     // 信封判定与参考实现同序：`code` 缺失视为成功（有的接口直接回数据体），
     // 取值 0 / 200（数字或字符串）都算成功。
     if let Some(code) = payload.get("code").or_else(|| payload.get("status")) {

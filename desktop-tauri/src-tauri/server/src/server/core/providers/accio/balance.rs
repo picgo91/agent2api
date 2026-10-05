@@ -51,7 +51,10 @@ pub async fn query(
     )
     .await?;
     if quota_response.status == 401 || quota_response.status == 403 {
-        return Err(GatewayError::with_status(401, "Accio 凭证已失效，请重新登录"));
+        return Err(GatewayError::with_status(
+            401,
+            "Accio 凭证已失效，请重新登录",
+        ));
     }
     let quota = auth::payload(quota_response, "额度查询").map(auth::unwrap_data)?;
     let usage_percent = quota

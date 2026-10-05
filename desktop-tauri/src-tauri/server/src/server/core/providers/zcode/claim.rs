@@ -160,13 +160,20 @@ pub async fn captcha_config(
         return Ok(None);
     }
     Ok(Some(CaptchaConfig {
-        enabled: captcha.get("enabled").and_then(Value::as_bool).unwrap_or(true),
+        enabled: captcha
+            .get("enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
         prefix,
         scene_id,
         // 缺省 `ga`：与 AutoClaw 那条链的兜底一致（阿里云的默认站点）
         region: {
             let value = text("region");
-            if value.is_empty() { "ga".to_string() } else { value }
+            if value.is_empty() {
+                "ga".to_string()
+            } else {
+                value
+            }
         },
     }))
 }
@@ -388,11 +395,13 @@ pub fn outcome_hold(outcome: &ClaimOutcome) -> NextAttempt {
         // 解引用是必需的：这里匹配的是 `&ClaimOutcome`，字段拿到的是
         // `&Option<i64>`（`Option<i64>` 是 Copy，`*` 出来即可）
         ClaimOutcome::Claimed { ends_at, .. } => NextAttempt::HoldUntil((*ends_at).unwrap_or(0)),
-        ClaimOutcome::Failed { failure, failure_ends_at, .. } => match failure {
+        ClaimOutcome::Failed {
+            failure,
+            failure_ends_at,
+            ..
+        } => match failure {
             // 已领过 = 本期的目标其实也达成了（可能是用户手动领的 / 另一台设备领的）
-            ClaimFailure::AlreadyClaimed => {
-                NextAttempt::HoldUntil((*failure_ends_at).unwrap_or(0))
-            }
+            ClaimFailure::AlreadyClaimed => NextAttempt::HoldUntil((*failure_ends_at).unwrap_or(0)),
             // 额度用尽：上游通常给出下一个窗口
             ClaimFailure::QuotaExhausted => match failure_ends_at {
                 Some(at) => NextAttempt::WaitWindow(*at),
@@ -432,7 +441,10 @@ pub async fn preview(
     let mut headers: Vec<(String, String)> = Vec::new();
     // 匿名探测：一个头都不带（**不是**带一个空 Bearer）
     if !jwt.trim().is_empty() {
-        headers.push(("Authorization".to_string(), format!("Bearer {}", jwt.trim())));
+        headers.push((
+            "Authorization".to_string(),
+            format!("Bearer {}", jwt.trim()),
+        ));
     }
     if let Some(mid) = device_mid.map(str::trim).filter(|value| !value.is_empty()) {
         headers.push(("X-Device-Mid".to_string(), mid.to_string()));
@@ -513,14 +525,26 @@ pub async fn claim(
     // 而报错文案是「验证码校验未通过」，指向完全错误的方向。
     // 因此有值才发；没有就让上游按它自己的规则判（要就回 3007，不要就放行）。
     let mut headers: Vec<(String, String)> = vec![
-        ("Authorization".to_string(), format!("Bearer {}", jwt.trim())),
+        (
+            "Authorization".to_string(),
+            format!("Bearer {}", jwt.trim()),
+        ),
         ("Content-Type".to_string(), "application/json".to_string()),
     ];
     if let Some(param) = Some(captcha_verify_param.trim()).filter(|value| !value.is_empty()) {
-        headers.push(("X-Aliyun-Captcha-Verify-Param".to_string(), param.to_string()));
+        headers.push((
+            "X-Aliyun-Captcha-Verify-Param".to_string(),
+            param.to_string(),
+        ));
     }
-    if let Some(value) = captcha_region.map(str::trim).filter(|value| !value.is_empty()) {
-        headers.push(("X-Aliyun-Captcha-Verify-Region".to_string(), value.to_string()));
+    if let Some(value) = captcha_region
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        headers.push((
+            "X-Aliyun-Captcha-Verify-Region".to_string(),
+            value.to_string(),
+        ));
     }
     headers.push(("X-ZCode-App-Version".to_string(), app_version()));
     headers.push(("X-Platform".to_string(), platform().to_string()));
@@ -598,7 +622,11 @@ fn error_message(payload: &Value, status: u16) -> String {
 
 /// 上游 `plans[]` 里的一条 → [`ClaimablePlan`]（缺 `plan_id` 的条目丢弃）
 fn parse_plan(raw: &Value) -> Option<ClaimablePlan> {
-    let plan_id = raw.get("plan_id").and_then(Value::as_str)?.trim().to_string();
+    let plan_id = raw
+        .get("plan_id")
+        .and_then(Value::as_str)?
+        .trim()
+        .to_string();
     if plan_id.is_empty() {
         return None;
     }

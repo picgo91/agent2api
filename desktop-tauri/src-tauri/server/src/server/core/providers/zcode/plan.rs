@@ -251,7 +251,10 @@ pub(super) fn build_request(
     let mut headers: Vec<(String, String)> = vec![
         ("Content-Type".to_string(), "application/json".to_string()),
         ("Authorization".to_string(), format!("Bearer {jwt}")),
-        ("anthropic-version".to_string(), ANTHROPIC_VERSION.to_string()),
+        (
+            "anthropic-version".to_string(),
+            ANTHROPIC_VERSION.to_string(),
+        ),
         (
             super::captcha::VERIFY_PARAM_HEADER.to_string(),
             captcha_param,
@@ -305,8 +308,12 @@ pub fn official_blocks_template() -> Option<GatewayBlocks> {
     Some(GatewayBlocks {
         identity: text_of(data, "cliPrefix"),
         stable: stable_joined(data),
-        dynamic: [dynamic_before(data), environment_template(data), dynamic_after(data)]
-            .join("\n\n"),
+        dynamic: [
+            dynamic_before(data),
+            environment_template(data),
+            dynamic_after(data),
+        ]
+        .join("\n\n"),
     })
 }
 
@@ -325,7 +332,10 @@ fn official_texts(data: &Value, model: &str, region: Region) -> GatewayBlocks {
 }
 
 fn text_of(data: &Value, key: &str) -> String {
-    data.get(key).and_then(Value::as_str).unwrap_or("").to_string()
+    data.get(key)
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string()
 }
 
 fn stable_joined(data: &Value) -> String {
@@ -454,8 +464,13 @@ fn apply_start_plan(
     strip_tool_cache_control(object);
     apply_cache_control(object);
     if let Some(user_id) = metadata_user_id(device_mid) {
-        let existing = object.get("metadata").filter(|value| value.is_object()).cloned();
-        let mut metadata = existing.and_then(|value| value.as_object().cloned()).unwrap_or_default();
+        let existing = object
+            .get("metadata")
+            .filter(|value| value.is_object())
+            .cloned();
+        let mut metadata = existing
+            .and_then(|value| value.as_object().cloned())
+            .unwrap_or_default();
         metadata.insert("user_id".to_string(), Value::String(user_id));
         object.insert("metadata".to_string(), Value::Object(metadata));
     }
@@ -556,7 +571,10 @@ fn text_block(text: String, cache_control: Option<Value>) -> Value {
 /// 里显示的那份，两条路径因此共用同一批行与标签 —— 用户改一行、删一行都不会出现
 /// 「界面上一套、实际发出去另一套」。
 fn environment_section(data: &Value, model: &str, region: Region) -> String {
-    substitute(&environment_template(data), &template_values(data, model, region))
+    substitute(
+        &environment_template(data),
+        &template_values(data, model, region),
+    )
 }
 
 /// Environment 段的模板形态（运行值换成占位符）。
@@ -670,7 +688,11 @@ fn context_prefix_message(data: &Value) -> Value {
             .to_string()
     };
     let date = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let section = format!("{}\n{}", text("currentDateHeading"), text("currentDateLine").replace("{date}", &date));
+    let section = format!(
+        "{}\n{}",
+        text("currentDateHeading"),
+        text("currentDateLine").replace("{date}", &date)
+    );
     // 空串那一行是官方装配里的空行（[intro, section, "", outro].join("\n")）
     let body = [text("intro"), section, String::new(), text("outro")].join("\n");
     let open = data

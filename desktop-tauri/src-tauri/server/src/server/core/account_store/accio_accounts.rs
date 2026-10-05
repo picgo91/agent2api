@@ -67,8 +67,8 @@ impl AccountStore {
                 if record_region != Some(region) {
                     return false;
                 }
-                let same_user = !credentials.user_id.is_empty()
-                    && record.user_id() == credentials.user_id;
+                let same_user =
+                    !credentials.user_id.is_empty() && record.user_id() == credentials.user_id;
                 let same_token = record
                     .get("accessToken")
                     .and_then(Value::as_str)
@@ -100,7 +100,12 @@ impl AccountStore {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_string)
-            .or_else(|| existing.as_ref().map(StoredAccount::name).filter(|value| !value.is_empty()))
+            .or_else(|| {
+                existing
+                    .as_ref()
+                    .map(StoredAccount::name)
+                    .filter(|value| !value.is_empty())
+            })
             .unwrap_or_else(|| {
                 if !credentials.name.is_empty() {
                     credentials.name.clone()
@@ -140,7 +145,10 @@ impl AccountStore {
         };
         fields.insert("id".to_string(), Value::String(id.clone()));
         fields.insert("provider".to_string(), Value::String(provider.to_string()));
-        fields.insert("name".to_string(), Value::String(truncate_chars(&record_name, 100)));
+        fields.insert(
+            "name".to_string(),
+            Value::String(truncate_chars(&record_name, 100)),
+        );
         fields.insert(
             "tokenTail".to_string(),
             Value::String(token_tail_of(&credentials.access_token)),
@@ -148,17 +156,36 @@ impl AccountStore {
         fields.insert("priority".to_string(), Value::from(priority));
         fields.insert(
             "enabled".to_string(),
-            Value::Bool(existing.as_ref().map(StoredAccount::enabled).unwrap_or(true)),
+            Value::Bool(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::enabled)
+                    .unwrap_or(true),
+            ),
         );
         fields.insert("desktop".to_string(), Value::Bool(false));
         fields.insert("source".to_string(), Value::String(source.to_string()));
         fields.insert(
             "addedAt".to_string(),
-            Value::from(existing.as_ref().map(StoredAccount::added_at).unwrap_or_else(logging::now_ms)),
+            Value::from(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::added_at)
+                    .unwrap_or_else(logging::now_ms),
+            ),
         );
         fields.insert("updatedAt".to_string(), Value::from(logging::now_ms()));
         fields.insert("rateLimits".to_string(), json!({}));
-        for key in ["edition", "endpoint", "prefixPath", "platform", "access", "refresh", "expires", "pat"] {
+        for key in [
+            "edition",
+            "endpoint",
+            "prefixPath",
+            "platform",
+            "access",
+            "refresh",
+            "expires",
+            "pat",
+        ] {
             fields.remove(key);
         }
         let record = StoredAccount::from_map(fields);
@@ -184,16 +211,26 @@ impl AccountStore {
         else {
             return Ok(CredentialWrite::Stale);
         };
-        for key in ["accessToken", "refreshToken", "userId", "deviceId", "addedAt"] {
+        for key in [
+            "accessToken",
+            "refreshToken",
+            "userId",
+            "deviceId",
+            "addedAt",
+        ] {
             if record.get(key) != expected.get(key) {
                 return Ok(CredentialWrite::Stale);
             }
         }
         if accio_region_of(&record) != Some(credentials.region) {
-            return Err(AccountStoreError::bad_request("Accio 刷新结果与原账号地区不一致"));
+            return Err(AccountStoreError::bad_request(
+                "Accio 刷新结果与原账号地区不一致",
+            ));
         }
         if !credentials.user_id.is_empty() && record.user_id() != credentials.user_id {
-            return Err(AccountStoreError::bad_request("Accio 刷新结果与原账号身份不一致"));
+            return Err(AccountStoreError::bad_request(
+                "Accio 刷新结果与原账号身份不一致",
+            ));
         }
         if let Value::Object(values) = credentials.to_value() {
             for (key, value) in values {
@@ -203,7 +240,10 @@ impl AccountStore {
                 record.fields_mut().insert(key, value);
             }
         }
-        record.set("tokenTail", Value::String(token_tail_of(&credentials.access_token)));
+        record.set(
+            "tokenTail",
+            Value::String(token_tail_of(&credentials.access_token)),
+        );
         record.set_updated_at(logging::now_ms());
         self.with_conn(&guard, |conn| sql::update_in_place(conn, &record))?;
         Ok(CredentialWrite::Written)
@@ -217,8 +257,21 @@ impl AccountStore {
             .map(|credentials| credentials.can_refresh())
             .unwrap_or(false);
         let mut public = Map::new();
-        for key in ["id", "provider", "name", "userId", "email", "nickname", "source", "tokenTail", "expiresAt"] {
-            public.insert(key.to_string(), record.get(key).cloned().unwrap_or(Value::Null));
+        for key in [
+            "id",
+            "provider",
+            "name",
+            "userId",
+            "email",
+            "nickname",
+            "source",
+            "tokenTail",
+            "expiresAt",
+        ] {
+            public.insert(
+                key.to_string(),
+                record.get(key).cloned().unwrap_or(Value::Null),
+            );
         }
         public.insert(
             "edition".to_string(),
@@ -243,7 +296,10 @@ impl AccountStore {
         );
         public.insert(
             "rateLimits".to_string(),
-            record.get("rateLimits").cloned().unwrap_or_else(|| json!({})),
+            record
+                .get("rateLimits")
+                .cloned()
+                .unwrap_or_else(|| json!({})),
         );
         public.insert("desktop".to_string(), Value::Bool(false));
         public.insert("available".to_string(), Value::Bool(available));

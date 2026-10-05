@@ -105,7 +105,10 @@ pub(super) fn level_counts(conn: &Connection) -> rusqlite::Result<Vec<(String, i
 
 /// 每分类计数（同上）
 pub(super) fn category_counts(conn: &Connection) -> rusqlite::Result<Vec<(String, i64)>> {
-    group_counts(conn, "SELECT category, COUNT(*) FROM logs GROUP BY category")
+    group_counts(
+        conn,
+        "SELECT category, COUNT(*) FROM logs GROUP BY category",
+    )
 }
 
 /// 分组计数的公共执行体。SQL 是**两条写死的语句**（不给列名做字符串插值）：
@@ -230,7 +233,11 @@ impl FilterPlan {
             .filter(|value| !value.is_empty())
             .map(str::to_lowercase);
 
-        Self { where_sql, binds, keyword }
+        Self {
+            where_sql,
+            binds,
+            keyword,
+        }
     }
 
     /// 这条消息是否命中关键词（`None` = 该条件不生效，恒真）。
@@ -362,10 +369,7 @@ pub(super) fn delete_by_ids(conn: &Connection, ids: &[u64]) -> rusqlite::Result<
     }
     let placeholders = vec!["?"; ids.len()].join(", ");
     let sql = format!("DELETE FROM logs WHERE id IN ({placeholders})");
-    let binds: Vec<SqlValue> = ids
-        .iter()
-        .map(|id| SqlValue::Integer(*id as i64))
-        .collect();
+    let binds: Vec<SqlValue> = ids.iter().map(|id| SqlValue::Integer(*id as i64)).collect();
     conn.execute(&sql, params_from_iter(binds.iter()))
 }
 

@@ -100,8 +100,7 @@ impl LoginService {
         let state = random_hex()?;
         let sid = random_hex()?;
         let redirect = format!("{}{}", callback_base.trim_end_matches('/'), CALLBACK_PATH);
-        let mut url = url::Url::parse(&entry)
-            .map_err(|_| "CatPaw 登录入口地址无效".to_string())?;
+        let mut url = url::Url::parse(&entry).map_err(|_| "CatPaw 登录入口地址无效".to_string())?;
         url.query_pairs_mut()
             .append_pair("state", &state)
             .append_pair("redirect", &redirect)
@@ -158,7 +157,8 @@ impl LoginService {
             }
             let url = format!("{GATEWAY_BASE}{POLL_TOKEN_PATH}?sid={sid}");
             let headers = vec![("Accept".to_string(), "application/json".to_string())];
-            let Ok(response) = send_raw("GET", &url, None, &headers, None, Some(POLL_TIMEOUT_MS)).await
+            let Ok(response) =
+                send_raw("GET", &url, None, &headers, None, Some(POLL_TIMEOUT_MS)).await
             else {
                 continue; // 单拍失败继续轮询（客户端同）
             };
@@ -173,7 +173,10 @@ impl LoginService {
             let Some(token) = token else {
                 continue; // data:null = 还没就绪
             };
-            logging::log("[Login]", "CatPaw 轮询已取到登录凭证（回调通道未命中，走兜底）");
+            logging::log(
+                "[Login]",
+                "CatPaw 轮询已取到登录凭证（回调通道未命中，走兜底）",
+            );
             let _ = self.finish_catpaw_login_with(&handle, &token).await;
             return;
         }
@@ -290,13 +293,22 @@ async fn login_session(token: &str) -> Result<Value, GatewayError> {
         ("X-Auth-Token".to_string(), token.to_string()),
     ];
     let mut auth = serde_json::Map::new();
-    auth.insert("loginType".to_string(), Value::String("passport".to_string()));
+    auth.insert(
+        "loginType".to_string(),
+        Value::String("passport".to_string()),
+    );
     auth.insert("accessToken".to_string(), Value::String(token.to_string()));
     auth.insert("tokenType".to_string(), Value::String("Bearer".to_string()));
     let mut account = serde_json::Map::new();
     let url = format!("{GATEWAY_BASE}{CURRENT_USER_PATH}");
-    if let Ok(response) = send_raw("GET", &url, None, &headers, None, Some(REQUEST_TIMEOUT_MS)).await {
-        if let Some(data) = response.payload.as_ref().and_then(|value| value.get("data")) {
+    if let Ok(response) =
+        send_raw("GET", &url, None, &headers, None, Some(REQUEST_TIMEOUT_MS)).await
+    {
+        if let Some(data) = response
+            .payload
+            .as_ref()
+            .and_then(|value| value.get("data"))
+        {
             // userId 可能是数字或字符串，两种都收（客户端也做 String() 转换）
             let uid = data
                 .get("userId")

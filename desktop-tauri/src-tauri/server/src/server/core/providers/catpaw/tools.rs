@@ -112,7 +112,10 @@ pub fn normalize_tools(tools: Option<&Value>) -> Result<Vec<Value>, CatPawError>
                 Some(false) => {}
             }
         }
-        let name = function.get("name").and_then(Value::as_str).unwrap_or_default();
+        let name = function
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
         if name.is_empty()
             || name.len() > 128
             || !name

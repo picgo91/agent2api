@@ -66,10 +66,16 @@ pub fn resolve_batch_targets(
         }
     };
     let is_available = |account: &Value| {
-        account.get("available").and_then(Value::as_bool).unwrap_or(true)
+        account
+            .get("available")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
     };
     let is_enabled = |account: &Value| {
-        account.get("enabled").and_then(Value::as_bool).unwrap_or(true)
+        account
+            .get("enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
     };
     if let Some(id) = id.filter(|value| !value.is_empty()) {
         let found: Vec<Value> = accounts
@@ -78,7 +84,10 @@ pub fn resolve_batch_targets(
             .cloned()
             .collect();
         if found.is_empty() {
-            return Err(TargetError { message: "账号不存在".to_string(), status_code: 404 });
+            return Err(TargetError {
+                message: "账号不存在".to_string(),
+                status_code: 404,
+            });
         }
         return Ok((found, 0));
     }
@@ -96,7 +105,11 @@ pub fn resolve_batch_targets(
 /// 单账号余额查询：任何失败都收敛为 `{error}` 而不是抛出（批量查询不被单账号
 /// 拖垮），刷新重试在 `query_usage_inner` 里。
 async fn query_usage_for(store: &AccountStore, account: &Value) -> Value {
-    let id = account.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+    let id = account
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     let name = account.get("name").cloned().unwrap_or(Value::Null);
     // 凭证与 provider 都从目标集合里的账号对象读，**不回读账号文件**：
     // 20 个账号并发时那次回读会变成 20 次整库读盘，而答案已在手上。
@@ -278,7 +291,10 @@ pub fn store_snapshot(report: Value) -> (usize, usize) {
         *slot = Some(snapshot.clone());
     }
     if let Err(error) = task_state::store_value(SNAPSHOT_KEY, snapshot) {
-        logging::verbose("[Usage]", &format!("余额快照保存失败（下次启动看不到本次结果）：{error}"));
+        logging::verbose(
+            "[Usage]",
+            &format!("余额快照保存失败（下次启动看不到本次结果）：{error}"),
+        );
     }
     (ok, failed)
 }

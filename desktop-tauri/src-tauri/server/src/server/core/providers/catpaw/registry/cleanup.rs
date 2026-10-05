@@ -120,7 +120,10 @@ impl SessionRegistry {
             .collect();
         let mut count = 0;
         for session_id in session_ids {
-            if inner.invalidate(session_id.as_str(), InvalidationReason::AccountSwitch).is_some() {
+            if inner
+                .invalidate(session_id.as_str(), InvalidationReason::AccountSwitch)
+                .is_some()
+            {
                 count += 1;
             }
         }
@@ -219,7 +222,10 @@ impl Inner {
     /// 后续请求命中一个已经不存在的待响应集合）。
     pub(super) fn register_anonymous(&mut self, record: SessionRecord) {
         let conversation_id = record.conversation_id.clone();
-        if let Some(previous) = self.anonymous_tool_sessions.insert(conversation_id.clone(), record) {
+        if let Some(previous) = self
+            .anonymous_tool_sessions
+            .insert(conversation_id.clone(), record)
+        {
             self.clear_call_index(&previous);
         }
         if let Some(current) = self.anonymous_tool_sessions.get(&conversation_id).cloned() {
@@ -232,7 +238,8 @@ impl Inner {
     pub(super) fn index_calls(&mut self, record: &SessionRecord) {
         for call_id in &record.pending_call_ids {
             if !call_id.is_empty() {
-                self.call_index.insert(call_id.clone(), record.conversation_id.clone());
+                self.call_index
+                    .insert(call_id.clone(), record.conversation_id.clone());
             }
         }
     }
@@ -240,7 +247,8 @@ impl Inner {
     /// 撤掉记录的 call 索引（只删仍指向它的那些）
     pub(super) fn clear_call_index(&mut self, record: &SessionRecord) {
         for call_id in &record.pending_call_ids {
-            if self.call_index.get(call_id).map(String::as_str) == Some(record.conversation_id.as_str())
+            if self.call_index.get(call_id).map(String::as_str)
+                == Some(record.conversation_id.as_str())
             {
                 self.call_index.remove(call_id);
             }
@@ -250,7 +258,8 @@ impl Inner {
     /// 打一次活动时间戳（LRU 的单调序号 +1）
     pub(super) fn touch(&mut self, conversation_id: &str) {
         self.sequence = self.sequence.wrapping_add(1);
-        self.last_sequence.insert(conversation_id.to_string(), self.sequence);
+        self.last_sequence
+            .insert(conversation_id.to_string(), self.sequence);
     }
 }
 

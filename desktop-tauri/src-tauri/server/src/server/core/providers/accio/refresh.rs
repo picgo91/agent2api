@@ -89,12 +89,20 @@ async fn refresh_and_save(
         "accessToken": credentials.access_token,
         "refreshToken": credentials.refresh_token,
     });
-    let response = auth::post_json(credentials.region, endpoints::REFRESH_TOKEN_PATH, &body, proxy.as_ref())
-        .await?;
+    let response = auth::post_json(
+        credentials.region,
+        endpoints::REFRESH_TOKEN_PATH,
+        &body,
+        proxy.as_ref(),
+    )
+    .await?;
     let data = auth::payload(response, "凭证续期").map(auth::unwrap_data)?;
     let token = credentials::secret(&data, &["accessToken", "access_token", "token"])?;
     if token.is_empty() {
-        return Err(GatewayError::with_status(502, "Accio 续期响应缺少 accessToken，旧凭证未被覆盖"));
+        return Err(GatewayError::with_status(
+            502,
+            "Accio 续期响应缺少 accessToken，旧凭证未被覆盖",
+        ));
     }
     let mut fresh = credentials.clone();
     fresh.access_token = token;
@@ -103,10 +111,8 @@ async fn refresh_and_save(
         fresh.refresh_token = refresh;
     }
     fresh.expires_at = Some(
-        credentials::timestamp(
-            data.get("expiresAt").or_else(|| data.get("expires_at")),
-        )
-        .unwrap_or_else(|| logging::now_ms() + DEFAULT_TTL_MS),
+        credentials::timestamp(data.get("expiresAt").or_else(|| data.get("expires_at")))
+            .unwrap_or_else(|| logging::now_ms() + DEFAULT_TTL_MS),
     );
     // 身份/地区不允许被续期结果改掉：那意味着串号（换到了另一个账号的凭证）
     if !credentials.user_id.is_empty() {

@@ -45,15 +45,27 @@ pub struct WorkBuddyAuthError {
 
 impl WorkBuddyAuthError {
     pub fn new(message: impl Into<String>) -> Self {
-        Self { message: message.into(), status_code: None, upstream_code: None }
+        Self {
+            message: message.into(),
+            status_code: None,
+            upstream_code: None,
+        }
     }
 
     pub fn with_status(status: i32, message: impl Into<String>) -> Self {
-        Self { message: message.into(), status_code: Some(status), upstream_code: None }
+        Self {
+            message: message.into(),
+            status_code: Some(status),
+            upstream_code: None,
+        }
     }
 
     pub fn with_code(message: impl Into<String>, status: Option<i32>, code: Option<i64>) -> Self {
-        Self { message: message.into(), status_code: status, upstream_code: code }
+        Self {
+            message: message.into(),
+            status_code: status,
+            upstream_code: code,
+        }
     }
 
     /// 归一后的 HTTP 状态码（无显式状态码 → 502，照抄 Node 版）
@@ -163,7 +175,11 @@ pub async fn send_raw(
     } else {
         serde_json::from_str::<Value>(&text).ok()
     };
-    Ok(ApiResponse { status, ok, payload })
+    Ok(ApiResponse {
+        status,
+        ok,
+        payload,
+    })
 }
 
 /// 把 reqwest 的传输错误翻译成可读中文（保留原因链，便于排障）
@@ -182,7 +198,10 @@ fn describe_transport_error(error: &reqwest::Error) -> String {
 ///   - HTTP 非 2xx → 抛错（取 error.message / message / msg 文案）
 ///   - `code` 为数字且 !== 0 → 抛错（带上游业务码）
 ///   - 成功 → 返回 `payload.data`
-pub fn unwrap_response(response: &ApiResponse, api_name: &str) -> Result<Value, WorkBuddyAuthError> {
+pub fn unwrap_response(
+    response: &ApiResponse,
+    api_name: &str,
+) -> Result<Value, WorkBuddyAuthError> {
     let payload = response.payload.as_ref();
     if payload.is_none() && !response.ok {
         return Err(WorkBuddyAuthError::with_status(
@@ -221,9 +240,7 @@ pub fn unwrap_response(response: &ApiResponse, api_name: &str) -> Result<Value, 
             if code != RESPONSE_CODE_OK {
                 let detail = payload
                     .and_then(|value| value.get("message").and_then(Value::as_str))
-                    .or_else(|| {
-                        payload.and_then(|value| value.get("msg").and_then(Value::as_str))
-                    })
+                    .or_else(|| payload.and_then(|value| value.get("msg").and_then(Value::as_str)))
                     .unwrap_or("")
                     .trim()
                     .to_string();

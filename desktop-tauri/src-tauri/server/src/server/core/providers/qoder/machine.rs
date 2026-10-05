@@ -24,7 +24,14 @@ pub(super) fn random_uuid() -> Result<String, GatewayError> {
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    Ok(format!("{}-{}-{}-{}-{}", &hex[..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..]))
+    Ok(format!(
+        "{}-{}-{}-{}-{}",
+        &hex[..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..]
+    ))
 }
 
 fn read_id(path: &std::path::Path) -> Option<String> {
@@ -34,7 +41,8 @@ fn read_id(path: &std::path::Path) -> Option<String> {
 }
 
 pub fn machine_id() -> Result<String, GatewayError> {
-    let mut cached = MACHINE_ID.lock()
+    let mut cached = MACHINE_ID
+        .lock()
         .map_err(|_| GatewayError::with_status(500, "Qoder 机器标识锁不可用"))?;
     if let Some(value) = cached.as_ref() {
         return Ok(value.clone());
@@ -51,7 +59,9 @@ pub fn machine_id() -> Result<String, GatewayError> {
             home.join(".qoder-proxy/machine_id"),
             home.join(".qoder/.auth/machine_id"),
             home.join(".qoder/machine_id"),
-        ].iter().find_map(|candidate| read_id(candidate))
+        ]
+        .iter()
+        .find_map(|candidate| read_id(candidate))
     });
     let value = match existing {
         Some(value) => value,
@@ -59,7 +69,9 @@ pub fn machine_id() -> Result<String, GatewayError> {
     };
     std::fs::create_dir_all(&directory)
         .and_then(|_| std::fs::write(&path, &value))
-        .map_err(|error| GatewayError::with_status(500, format!("保存 Qoder 机器标识失败: {error}")))?;
+        .map_err(|error| {
+            GatewayError::with_status(500, format!("保存 Qoder 机器标识失败: {error}"))
+        })?;
     *cached = Some(value.clone());
     Ok(value)
 }

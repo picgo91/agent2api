@@ -204,7 +204,11 @@ fn client() -> Result<reqwest::Client, String> {
         .map_err(|error| format!("创建 HTTP 客户端失败: {error}"))
 }
 
-fn request_builder(method: &str, path: &str, body: Option<&Value>) -> Result<reqwest::RequestBuilder, String> {
+fn request_builder(
+    method: &str,
+    path: &str,
+    body: Option<&Value>,
+) -> Result<reqwest::RequestBuilder, String> {
     let url = format!("http://127.0.0.1:{}{path}", proxy_port());
     let base = client()?;
     let mut builder = match method.to_uppercase().as_str() {

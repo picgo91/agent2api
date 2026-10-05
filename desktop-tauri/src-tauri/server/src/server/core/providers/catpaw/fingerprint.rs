@@ -179,7 +179,10 @@ pub fn locate_increment(messages: &[Value], synced: &[String]) -> ChainPosition 
         return ChainPosition::Incremental { start: 0 };
     };
     let fingerprints = fingerprints_for(messages);
-    match fingerprints.iter().rposition(|fingerprint| fingerprint == last_synced) {
+    match fingerprints
+        .iter()
+        .rposition(|fingerprint| fingerprint == last_synced)
+    {
         Some(index) => ChainPosition::Incremental { start: index + 1 },
         None => ChainPosition::Mismatch,
     }
@@ -194,7 +197,10 @@ fn is_blank_text_block(object: &Map<String, Value>) -> bool {
     if object.get("type").and_then(Value::as_str) != Some("text") {
         return false;
     }
-    let text_blank = object.get("text").map(|value| !js_truthy(value)).unwrap_or(true);
+    let text_blank = object
+        .get("text")
+        .map(|value| !js_truthy(value))
+        .unwrap_or(true);
     let reasoning_blank = object
         .get("reasoningContent")
         .map(|value| !js_truthy(value))

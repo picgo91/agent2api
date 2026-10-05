@@ -31,7 +31,10 @@ impl LoginService {
         crate::spawn_task(async move {
             service.run_qoder_login(task, flow).await;
         });
-        logging::log("[Login]", &format!("发起 Qoder {}网页登录（等待授权…）", region.label()));
+        logging::log(
+            "[Login]",
+            &format!("发起 Qoder {}网页登录（等待授权…）", region.label()),
+        );
         Ok(handle)
     }
 
@@ -83,8 +86,13 @@ impl LoginService {
                                 "edition": credentials.region.edition(),
                                 "provider": "qoder",
                             }));
-                            logging::log("[Login]", &format!(
-                                "✅ Qoder {}网页登录完成，账号已加入列表", credentials.region.label()));
+                            logging::log(
+                                "[Login]",
+                                &format!(
+                                    "✅ Qoder {}网页登录完成，账号已加入列表",
+                                    credentials.region.label()
+                                ),
+                            );
                         }
                         Err(error) => task.error = Some(error.message),
                     }

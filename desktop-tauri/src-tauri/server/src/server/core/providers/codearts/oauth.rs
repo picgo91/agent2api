@@ -25,9 +25,9 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::server::core::egress;
-use crate::server::logging;
 use crate::server::core::proxies::ResolvedProxy;
 use crate::server::errors::GatewayError;
+use crate::server::logging;
 
 use super::chat;
 use super::credentials::{Credential, OAuthContext, PkcePair};
@@ -98,18 +98,26 @@ pub async fn refresh_credential(
     existing: &Credential,
     proxy: Option<&ResolvedProxy>,
 ) -> Result<Credential, GatewayError> {
-    let context = existing
-        .oauth_context
-        .as_ref()
-        .ok_or_else(|| GatewayError::with_status(400, "CodeArts 凭据缺少 OAuth 上下文（PKCE/DPoP），请重新登录"))?;
+    let context = existing.oauth_context.as_ref().ok_or_else(|| {
+        GatewayError::with_status(
+            400,
+            "CodeArts 凭据缺少 OAuth 上下文（PKCE/DPoP），请重新登录",
+        )
+    })?;
     if existing.refresh_token.trim().is_empty() {
-        return Err(GatewayError::with_status(400, "CodeArts 凭据没有 refresh token，请重新登录"));
+        return Err(GatewayError::with_status(
+            400,
+            "CodeArts 凭据没有 refresh token，请重新登录",
+        ));
     }
     let form = vec![
         ("client_id".to_string(), CLIENT_ID.to_string()),
         ("code_verifier".to_string(), verifier(context)?),
         ("grant_type".to_string(), "refresh_token".to_string()),
-        ("refresh_token".to_string(), existing.refresh_token.trim().to_string()),
+        (
+            "refresh_token".to_string(),
+            existing.refresh_token.trim().to_string(),
+        ),
     ];
     let mut fresh = token_request(form, context, existing.refresh_token.trim(), proxy).await?;
     // 续期响应不带身份信息（只有短期材料），所以身份从旧凭据继承下来，
@@ -150,7 +158,10 @@ async fn token_request(
         .map_err(|error| {
             GatewayError::with_status(
                 502,
-                format!("CodeArts 令牌请求失败：{}", egress::describe_error_detail(&error)),
+                format!(
+                    "CodeArts 令牌请求失败：{}",
+                    egress::describe_error_detail(&error)
+                ),
             )
         })?;
     let status = response.status().as_u16();
@@ -178,20 +189,30 @@ async fn token_request(
         return Err(GatewayError::with_status(
             // 4xx 是上游对**这次请求/这份凭据**的明确答复，原样透出（刷新令牌被拒
             // 就是 400 `STS5.1806`，重试它没有意义）；5xx 与网络类的才归 502。
-            if (400..500).contains(&status) { i32::from(status) } else { 502 },
+            if (400..500).contains(&status) {
+                i32::from(status)
+            } else {
+                502
+            },
             format!("CodeArts 令牌请求被拒（HTTP {status}）：{detail}"),
         ));
     }
     let parsed = parse_token_response(&text)?;
     if !parsed.valid() || parsed.security_token.is_empty() {
-        return Err(GatewayError::with_status(502, "CodeArts 令牌响应缺少 access_key_id / secret_access_key / security_token"));
+        return Err(GatewayError::with_status(
+            502,
+            "CodeArts 令牌响应缺少 access_key_id / secret_access_key / security_token",
+        ));
     }
     // 没有 refresh token 的凭据**收下来就是死路一条**：一小时后到期，届时既刷不回
     // 也解释不了为什么。参考实现同样在这里拒（`cred.RefreshToken == ""` 直接失败）。
     // 唯一合法拿不到它的通道是 ticket 那条，而它走的是 `parse_ticket_credential`，
     // 不经过这里 —— 所以这条不会误伤。
     if parsed.refresh_token.is_empty() {
-        return Err(GatewayError::with_status(502, "CodeArts 令牌响应没有 refresh token，该凭据无法续期，拒绝收下（请重新登录）"));
+        return Err(GatewayError::with_status(
+            502,
+            "CodeArts 令牌响应没有 refresh token，该凭据无法续期，拒绝收下（请重新登录）",
+        ));
     }
     let mut credential = Credential {
         access_key_id: parsed.access_key_id,
@@ -224,8 +245,9 @@ async fn token_request(
 
 /// 上游把凭据放在 `credentials` 这一段里，字段名是 snake_case。
 fn parse_token_response(text: &str) -> Result<TokenResponse, GatewayError> {
-    let payload: Value = serde_json::from_str(text)
-        .map_err(|error| GatewayError::with_status(502, format!("CodeArts 令牌响应不是合法 JSON：{error}")))?;
+    let payload: Value = serde_json::from_str(text).map_err(|error| {
+        GatewayError::with_status(502, format!("CodeArts 令牌响应不是合法 JSON：{error}"))
+    })?;
     let credentials = payload.get("credentials").cloned().unwrap_or(Value::Null);
     let read = |name: &str| {
         credentials
@@ -260,9 +282,21 @@ fn identity_from_refresh_token(refresh_token: &str) -> Option<(String, String, S
     let profile = claims.get("user_profile").and_then(Value::as_str)?;
     let decoded = decode_base64url(profile)?;
     let identity: Value = serde_json::from_slice(&decoded).ok()?;
-    let account_id = identity.get("account_id").and_then(Value::as_str).unwrap_or("").trim();
-    let principal_id = identity.get("principal_id").and_then(Value::as_str).unwrap_or("").trim();
-    let urn = identity.get("principal_urn").and_then(Value::as_str).unwrap_or("").trim();
+    let account_id = identity
+        .get("account_id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let principal_id = identity
+        .get("principal_id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let urn = identity
+        .get("principal_urn")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
     if account_id.is_empty() || principal_id.is_empty() || urn.is_empty() {
         return None;
     }
@@ -280,8 +314,15 @@ async fn fetch_identity(
         ("Accept".to_string(), "application/json".to_string()),
         ("Content-Type".to_string(), "application/json".to_string()),
     ];
-    let signed = super::signer::sign("GET", IDENTITY_URL, &headers, b"", &signer_credential(credential), false)
-        .map_err(|reason| GatewayError::with_status(500, reason))?;
+    let signed = super::signer::sign(
+        "GET",
+        IDENTITY_URL,
+        &headers,
+        b"",
+        &signer_credential(credential),
+        false,
+    )
+    .map_err(|reason| GatewayError::with_status(500, reason))?;
     let mut request = egress::client_for(proxy)
         .get(IDENTITY_URL)
         .timeout(Duration::from_millis(REQUEST_TIMEOUT_MS));
@@ -291,28 +332,50 @@ async fn fetch_identity(
     let response = request.send().await.map_err(|error| {
         GatewayError::with_status(
             502,
-            format!("CodeArts 身份查询失败：{}", egress::describe_error_detail(&error)),
+            format!(
+                "CodeArts 身份查询失败：{}",
+                egress::describe_error_detail(&error)
+            ),
         )
     })?;
     let status = response.status().as_u16();
     let text = response.text().await.unwrap_or_default();
     if !(200..300).contains(&status) {
         // 身份拿不到不是致命：账号还能转发，只是面板上没名字
-        crate::server::logging::log("[CodeArts]", &format!("身份查询失败（HTTP {status}），账号仍可用，只是面板上没有名字"));
+        crate::server::logging::log(
+            "[CodeArts]",
+            &format!("身份查询失败（HTTP {status}），账号仍可用，只是面板上没有名字"),
+        );
         return Ok(None);
     }
     let identity: Value = match serde_json::from_str(&text) {
         Ok(value) => value,
         Err(_) => return Ok(None),
     };
-    let account_id = identity.get("account_id").and_then(Value::as_str).unwrap_or("").trim();
-    let principal_id = identity.get("principal_id").and_then(Value::as_str).unwrap_or("").trim();
-    let urn = identity.get("principal_urn").and_then(Value::as_str).unwrap_or("").trim();
+    let account_id = identity
+        .get("account_id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let principal_id = identity
+        .get("principal_id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let urn = identity
+        .get("principal_urn")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
     if account_id.is_empty() || principal_id.is_empty() {
         return Ok(None);
     }
     let name = urn.rsplit([':', '/']).next().unwrap_or(urn).to_string();
-    Ok(Some((account_id.to_string(), principal_id.to_string(), name)))
+    Ok(Some((
+        account_id.to_string(),
+        principal_id.to_string(),
+        name,
+    )))
 }
 
 /// 签名器只认它的三个字段，这里做个适配（避免签名模块反过来依赖凭据模块）。
@@ -328,7 +391,10 @@ pub(crate) fn signer_credential(credential: &Credential) -> super::signer::Crede
 fn verifier(context: &OAuthContext) -> Result<String, GatewayError> {
     let verifier = context.pkce_pair.code_verifier.trim();
     if verifier.is_empty() {
-        return Err(GatewayError::with_status(400, "CodeArts 凭据缺少 PKCE verifier，无法续期，请重新登录"));
+        return Err(GatewayError::with_status(
+            400,
+            "CodeArts 凭据缺少 PKCE verifier，无法续期，请重新登录",
+        ));
     }
     Ok(verifier.to_string())
 }
@@ -364,9 +430,7 @@ fn form_encode(value: &str) -> String {
 fn decode_base64url(value: &str) -> Option<Vec<u8>> {
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine;
-    URL_SAFE_NO_PAD
-        .decode(value.trim_end_matches('='))
-        .ok()
+    URL_SAFE_NO_PAD.decode(value.trim_end_matches('=')).ok()
 }
 
 fn truncate(text: &str, limit: usize) -> String {
@@ -445,19 +509,31 @@ pub fn set_loopback_port(port: u16) {
 
 /// 回调地址（端口还没定就返回 None —— 上层文案负责说清为什么）。
 pub fn loopback_base() -> Option<String> {
-    LOOPBACK_PORT.get().map(|port| format!("http://127.0.0.1:{port}"))
+    LOOPBACK_PORT
+        .get()
+        .map(|port| format!("http://127.0.0.1:{port}"))
 }
 
 /// 发起一轮登录：生成上下文与 ticket，登记待办，返回 `(授权地址, 待办条目)`。
 ///
 /// `ticket_id` 同时充当登录任务的 **state**：任务表与待办表用同一个键，回调无论
 /// 带不带配对信息，收尾那条路都能只认这一个值。
-pub fn begin_login(plugin_name: &str, plugin_version: &str, language: &str) -> Result<(String, PendingLogin), String> {
-    let port = LOOPBACK_PORT.get().copied().ok_or("网关还在启动中，回调端口尚未确定，请稍后重试")?;
+pub fn begin_login(
+    plugin_name: &str,
+    plugin_version: &str,
+    language: &str,
+) -> Result<(String, PendingLogin), String> {
+    let port = LOOPBACK_PORT
+        .get()
+        .copied()
+        .ok_or("网关还在启动中，回调端口尚未确定，请稍后重试")?;
     let context = new_login_context()?;
     let mut seed = [0u8; 16];
     getrandom::getrandom(&mut seed).map_err(|error| format!("随机数不可用：{error}"))?;
-    let ticket_id = seed.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    let ticket_id = seed
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
     let callback_url = format!("http://127.0.0.1:{port}{CALLBACK_PATH}");
     let pending = PendingLogin {
         started_at_ms: logging::now_ms(),
@@ -476,11 +552,16 @@ pub fn begin_login(plugin_name: &str, plugin_version: &str, language: &str) -> R
         plugin_version,
         language,
     );
-    let mut table = pending_table().lock().unwrap_or_else(|error| error.into_inner());
+    let mut table = pending_table()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     table.retain(|_, item| item.started_at_ms + LOGIN_TIMEOUT_MS as i64 > logging::now_ms());
     if table.len() >= MAX_PENDING_LOGINS {
         // 挤掉最旧的一轮（保住用户刚点的这一次），与参考实现的 `evictLoginSessionsLocked` 同策略
-        let oldest = table.iter().min_by_key(|(_, item)| item.started_at_ms).map(|(key, _)| key.clone());
+        let oldest = table
+            .iter()
+            .min_by_key(|(_, item)| item.started_at_ms)
+            .map(|(key, _)| key.clone());
         if let Some(key) = oldest {
             table.remove(&key);
         }
@@ -507,7 +588,11 @@ pub fn authorize_url(
     plugin_version: &str,
     language: &str,
 ) -> String {
-    let locale = if language.trim().to_ascii_lowercase().starts_with("zh") { "zh-cn" } else { "en" };
+    let locale = if language.trim().to_ascii_lowercase().starts_with("zh") {
+        "zh-cn"
+    } else {
+        "en"
+    };
     let pairs = [
         ("theme", "2".to_string()),
         ("locale", locale.to_string()),
@@ -523,7 +608,12 @@ pub fn authorize_url(
     ];
     let query = pairs
         .iter()
-        .map(|(key, value)| format!("{key}={}", super::signer::encode_component(value.as_bytes())))
+        .map(|(key, value)| {
+            format!(
+                "{key}={}",
+                super::signer::encode_component(value.as_bytes())
+            )
+        })
         .collect::<Vec<_>>()
         .join("&");
     // 尾部斜杠要吃掉：配置里写成 `https://x/` 就会拼出 `//portal/authorize`
@@ -533,15 +623,23 @@ pub fn authorize_url(
 
 /// 从回调地址里取端口（没有端口就回空串，与 Go `url.Port()` 一致）。
 fn url_port(callback_url: &str) -> String {
-    let without_scheme = callback_url.split_once("://").map(|(_, rest)| rest).unwrap_or(callback_url);
+    let without_scheme = callback_url
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(callback_url);
     let authority = without_scheme.split(['/', '?', '#']).next().unwrap_or("");
-    authority.rsplit_once(':').map(|(_, port)| port.to_string()).unwrap_or_default()
+    authority
+        .rsplit_once(':')
+        .map(|(_, port)| port.to_string())
+        .unwrap_or_default()
 }
 
 /// portal 首次回调下发 secret：换进对应那一轮（ticket 轮询通道要用**它给的**那个，
 /// 不是我们自己生成的 —— 用错了会一直 401，且没有任何提示）。
 pub fn attach_ticket_secret(ticket_id: &str, secret: &str) -> bool {
-    let mut table = pending_table().lock().unwrap_or_else(|error| error.into_inner());
+    let mut table = pending_table()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     match table.get_mut(ticket_id) {
         Some(item) if !secret.trim().is_empty() => {
             item.secret = secret.trim().to_string();
@@ -553,12 +651,17 @@ pub fn attach_ticket_secret(ticket_id: &str, secret: &str) -> bool {
 
 /// 取走一轮（授权码换码与 ticket 轮询都是**一次性**的，取走即从表里消失）。
 pub fn take_pending(ticket_id: &str) -> Option<PendingLogin> {
-    pending_table().lock().unwrap_or_else(|error| error.into_inner()).remove(ticket_id)
+    pending_table()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .remove(ticket_id)
 }
 
 /// 认领这一轮的后台轮询。返回 false 表示已经有人在轮了（或这一轮没了）。
 pub fn claim_ticket_poll(ticket_id: &str) -> bool {
-    let mut table = pending_table().lock().unwrap_or_else(|error| error.into_inner());
+    let mut table = pending_table()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     match table.get_mut(ticket_id) {
         Some(item) if item.poll_claimed => false,
         Some(item) => {
@@ -571,12 +674,19 @@ pub fn claim_ticket_poll(ticket_id: &str) -> bool {
 
 /// 只读一份（ticket 轮询要用：换成功才取走，失败时这一轮还得留在表里）。
 pub fn peek_pending(ticket_id: &str) -> Option<PendingLogin> {
-    pending_table().lock().unwrap_or_else(|error| error.into_inner()).get(ticket_id).cloned()
+    pending_table()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .get(ticket_id)
+        .cloned()
 }
 
 /// 放弃一轮（取消登录时调用，免得表里留占位）。
 pub fn drop_pending(ticket_id: &str) {
-    pending_table().lock().unwrap_or_else(|error| error.into_inner()).remove(ticket_id);
+    pending_table()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .remove(ticket_id);
 }
 
 /// 逐个候选（新→旧）。
@@ -586,7 +696,9 @@ pub fn drop_pending(ticket_id: &str) {
 /// `STS5.1805` 而**不消耗授权码**（同一处注释），因此逐个试是安全的；试到通过为止。
 pub fn candidates() -> Vec<PendingLogin> {
     let now = logging::now_ms();
-    let mut table = pending_table().lock().unwrap_or_else(|error| error.into_inner());
+    let mut table = pending_table()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     table.retain(|_, item| item.started_at_ms + LOGIN_TIMEOUT_MS as i64 > now);
     let mut items: Vec<PendingLogin> = table.values().cloned().collect();
     items.sort_by(|left, right| right.started_at_ms.cmp(&left.started_at_ms));
@@ -594,7 +706,11 @@ pub fn candidates() -> Vec<PendingLogin> {
 }
 
 /// 用授权码换凭据（`redirect_uri` 必须与交给 portal 的那份逐字相同）。
-pub async fn exchange_for(pending: &PendingLogin, code: &str, proxy: Option<&ResolvedProxy>) -> Result<Credential, GatewayError> {
+pub async fn exchange_for(
+    pending: &PendingLogin,
+    code: &str,
+    proxy: Option<&ResolvedProxy>,
+) -> Result<Credential, GatewayError> {
     exchange_authorization_code(code, &pending.callback_url, &pending.context, proxy).await
 }
 
@@ -603,9 +719,16 @@ pub async fn exchange_for(pending: &PendingLogin, code: &str, proxy: Option<&Res
 /// 这条通道**不签名**（ticket/secret 本身就是凭据），响应里也**没有 refresh token** ——
 /// 所以经它落账的账号约一小时后就刷不回来，只能重新登录。调用方要把这件事告诉用户，
 /// 别让人以为账号是长期的。
-pub async fn poll_ticket(base: &str, pending: &PendingLogin, proxy: Option<&ResolvedProxy>) -> Result<Credential, GatewayError> {
+pub async fn poll_ticket(
+    base: &str,
+    pending: &PendingLogin,
+    proxy: Option<&ResolvedProxy>,
+) -> Result<Credential, GatewayError> {
     if pending.secret.trim().is_empty() {
-        return Err(GatewayError::with_status(400, "这一轮登录还没有拿到 portal 下发的 secret，无法用 ticket 通道换取凭证"));
+        return Err(GatewayError::with_status(
+            400,
+            "这一轮登录还没有拿到 portal 下发的 secret，无法用 ticket 通道换取凭证",
+        ));
     }
     let endpoint = format!(
         "{}/snap-manager/v1/login/ticket?ticket_id={}&secret={}",
@@ -614,12 +737,23 @@ pub async fn poll_ticket(base: &str, pending: &PendingLogin, proxy: Option<&Reso
         form_encode(&pending.secret)
     );
     let headers = vec![
-        ("Content-Type".to_string(), "application/json;charset=UTF-8".to_string()),
+        (
+            "Content-Type".to_string(),
+            "application/json;charset=UTF-8".to_string(),
+        ),
         ("Accept".to_string(), "application/json".to_string()),
-        ("plugin-name".to_string(), chat::DEFAULT_PLUGIN_NAME.to_string()),
-        ("plugin-version".to_string(), chat::DEFAULT_PLUGIN_VERSION.to_string()),
+        (
+            "plugin-name".to_string(),
+            chat::DEFAULT_PLUGIN_NAME.to_string(),
+        ),
+        (
+            "plugin-version".to_string(),
+            chat::DEFAULT_PLUGIN_VERSION.to_string(),
+        ),
     ];
-    let mut request = egress::client_for(proxy).get(&endpoint).timeout(Duration::from_millis(REQUEST_TIMEOUT_MS));
+    let mut request = egress::client_for(proxy)
+        .get(&endpoint)
+        .timeout(Duration::from_millis(REQUEST_TIMEOUT_MS));
     for (name, value) in headers {
         request = request.header(name.as_str(), value.as_str());
     }
@@ -627,7 +761,10 @@ pub async fn poll_ticket(base: &str, pending: &PendingLogin, proxy: Option<&Reso
         GatewayError::with_status(
             502,
             // 传输错误的文本里带着**完整 URL**，而这条 URL 的查询串就是 ticket_id + secret
-            format!("CodeArts ticket 通道请求失败：{}", scrub_ticket(&egress::describe_error_detail(&error), pending)),
+            format!(
+                "CodeArts ticket 通道请求失败：{}",
+                scrub_ticket(&egress::describe_error_detail(&error), pending)
+            ),
         )
     })?;
     let status = response.status().as_u16();
@@ -635,8 +772,15 @@ pub async fn poll_ticket(base: &str, pending: &PendingLogin, proxy: Option<&Reso
     if !(200..300).contains(&status) {
         // ticket 还没就绪是常态（portal 那边用户还没点完），文案要能区分「再等等」与「坏了」
         return Err(GatewayError::with_status(
-            if status == 404 { 408 } else { i32::from(status) },
-            format!("CodeArts ticket 通道返回 {status}：{}", truncate(&text, 200)),
+            if status == 404 {
+                408
+            } else {
+                i32::from(status)
+            },
+            format!(
+                "CodeArts ticket 通道返回 {status}：{}",
+                truncate(&text, 200)
+            ),
         ));
     }
     parse_ticket_credential(&text)
@@ -655,9 +799,17 @@ fn scrub_ticket(text: &str, pending: &PendingLogin) -> String {
 /// ticket 通道的响应形状（与令牌端点**不同**：字段名是 `access`/`secret`/`securitytoken`，
 /// 身份信息在外层，且没有 refresh token）。
 pub(crate) fn parse_ticket_credential(text: &str) -> Result<Credential, GatewayError> {
-    let value: Value = serde_json::from_str(text)
-        .map_err(|error| GatewayError::with_status(502, format!("CodeArts ticket 响应不是合法 JSON：{error}")))?;
-    let read = |object: &Value, key: &str| object.get(key).and_then(Value::as_str).unwrap_or("").trim().to_string();
+    let value: Value = serde_json::from_str(text).map_err(|error| {
+        GatewayError::with_status(502, format!("CodeArts ticket 响应不是合法 JSON：{error}"))
+    })?;
+    let read = |object: &Value, key: &str| {
+        object
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    };
     let inner = value.get("credential").cloned().unwrap_or(Value::Null);
     let credential = Credential {
         access_key_id: read(&inner, "access"),
@@ -673,7 +825,10 @@ pub(crate) fn parse_ticket_credential(text: &str) -> Result<Credential, GatewayE
         oauth_context: None,
     };
     if !credential.valid() || credential.security_token.trim().is_empty() {
-        return Err(GatewayError::with_status(502, "CodeArts ticket 响应里的临时凭据不完整"));
+        return Err(GatewayError::with_status(
+            502,
+            "CodeArts ticket 响应里的临时凭据不完整",
+        ));
     }
     Ok(credential)
 }
@@ -681,7 +836,9 @@ pub(crate) fn parse_ticket_credential(text: &str) -> Result<Credential, GatewayE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::core::providers::codearts::credentials::{DpopKeyPair as Pair, Jwk as KeyJwk, PkcePair as Pkce};
+    use crate::server::core::providers::codearts::credentials::{
+        DpopKeyPair as Pair, Jwk as KeyJwk, PkcePair as Pkce,
+    };
     use serde_json::json;
 
     /// 授权地址与参考实现**逐字节**对账（向量由 `login_url_vectors_gen_test.go`
@@ -689,8 +846,8 @@ mod tests {
     /// 回调地址带查询串时端口怎么取、自定义授权站点尾部斜杠）。
     #[test]
     fn authorize_url_matches_reference_vectors() {
-        let parsed: Value =
-            serde_json::from_str(include_str!("login_url_vectors.json")).expect("向量文件要是合法 JSON");
+        let parsed: Value = serde_json::from_str(include_str!("login_url_vectors.json"))
+            .expect("向量文件要是合法 JSON");
         let vectors = parsed.as_array().expect("向量是一份数组");
         assert!(!vectors.is_empty());
         for vector in vectors {
@@ -716,17 +873,36 @@ mod tests {
     #[test]
     fn port_comes_out_of_the_callback_url() {
         assert_eq!("40605", url_port("http://127.0.0.1:40605/oauth/callback"));
-        assert_eq!("3065", url_port("http://127.0.0.1:3065/oauth/callback?a=b&c=d"));
-        assert_eq!("", url_port("http://127.0.0.1/oauth/callback"), "没写端口就是空串（Go 的 URL.Port()）");
+        assert_eq!(
+            "3065",
+            url_port("http://127.0.0.1:3065/oauth/callback?a=b&c=d")
+        );
+        assert_eq!(
+            "",
+            url_port("http://127.0.0.1/oauth/callback"),
+            "没写端口就是空串（Go 的 URL.Port()）"
+        );
     }
 
     #[test]
     fn form_encoding_matches_go_url_values() {
-        assert_eq!("a+b", form_encode("a b"), "空格编成 +（表单口径，不是 %20）");
+        assert_eq!(
+            "a+b",
+            form_encode("a b"),
+            "空格编成 +（表单口径，不是 %20）"
+        );
         assert_eq!("a%2Bb", form_encode("a+b"), "+ 自身要编码");
         assert_eq!("a%2Fb", form_encode("a/b"));
-        assert_eq!("GT-gitcode337577", form_encode("GT-gitcode337577"), "未保留字符不动");
-        assert_eq!("%E4%B8%AD", form_encode("中"), "非 ASCII 按字节大写十六进制");
+        assert_eq!(
+            "GT-gitcode337577",
+            form_encode("GT-gitcode337577"),
+            "未保留字符不动"
+        );
+        assert_eq!(
+            "%E4%B8%AD",
+            form_encode("中"),
+            "非 ASCII 按字节大写十六进制"
+        );
     }
 
     #[test]
@@ -760,7 +936,8 @@ mod tests {
             "principal_urn": "iam::domain:user/GT-gitcode337577"
         })
         .to_string();
-        let claims = json!({ "user_profile": URL_SAFE_NO_PAD.encode(profile.as_bytes()) }).to_string();
+        let claims =
+            json!({ "user_profile": URL_SAFE_NO_PAD.encode(profile.as_bytes()) }).to_string();
         let token = format!(
             "{}.{}.{}",
             URL_SAFE_NO_PAD.encode(b"{\"alg\":\"none\"}"),
@@ -841,13 +1018,17 @@ mod tests {
             ..Credential::default()
         };
         // 这份密钥要用两次：一次经 refresh_credential，一次直接进三点阶梯
-        let key = DpopKey::from_key_pair(&credential.oauth_context.as_ref().unwrap().dpop_key_pair).unwrap();
+        let key = DpopKey::from_key_pair(&credential.oauth_context.as_ref().unwrap().dpop_key_pair)
+            .unwrap();
         let result = refresh_credential(&credential, None).await;
         match result {
             Ok(_) => panic!("编造的刷新令牌居然换到了凭据？"),
             Err(error) => {
                 println!("HTTP {} {}", error.status_code, error.message);
-                assert_eq!(400, error.status_code, "编造的刷新令牌应当是 400（不是 401/502）");
+                assert_eq!(
+                    400, error.status_code,
+                    "编造的刷新令牌应当是 400（不是 401/502）"
+                );
                 assert!(
                     error.message.contains("STS5.1806"),
                     "期望上游给出 STS5.1806（刷新令牌被拒），拿到：{}",
@@ -856,7 +1037,11 @@ mod tests {
                 // 关键：理由必须是「令牌有问题」，不能是「DPoP 头不合法」或
                 // 「请求体缺字段」—— 后者才说明我们的请求形状没搭对
                 let message = error.message.to_lowercase();
-                assert!(message.contains("refresh token"), "上游该抱怨的是令牌本身：{}", error.message);
+                assert!(
+                    message.contains("refresh token"),
+                    "上游该抱怨的是令牌本身：{}",
+                    error.message
+                );
                 assert!(
                     !message.contains("invalid_dpop") && !message.contains("invalid dpop proof"),
                     "上游在抱怨 DPoP 头的构造，说明 proof 有问题：{}",
@@ -895,11 +1080,23 @@ mod tests {
         let (_, garbage) = ladder("② 垃圾 DPoP 头", Some("not.a.jwt".to_string())).await;
         let (_, ours) = ladder(
             "③ 我们的 proof",
-            Some(key.proof("POST", TOKEN_URL, crate::server::logging::now_ms()).unwrap()),
+            Some(
+                key.proof("POST", TOKEN_URL, crate::server::logging::now_ms())
+                    .unwrap(),
+            ),
         )
         .await;
-        assert!(without.contains("APIGW.0106"), "① 应当是因为缺 DPoP 头而被拒：{without}");
-        assert!(garbage.contains("STS5.1804"), "② 垃圾头应当是「DPoP proof 解不开」：{garbage}");
-        assert!(ours.contains("STS5.1806"), "③ 我们的 proof 应当被收下、只卡在令牌上：{ours}");
+        assert!(
+            without.contains("APIGW.0106"),
+            "① 应当是因为缺 DPoP 头而被拒：{without}"
+        );
+        assert!(
+            garbage.contains("STS5.1804"),
+            "② 垃圾头应当是「DPoP proof 解不开」：{garbage}"
+        );
+        assert!(
+            ours.contains("STS5.1806"),
+            "③ 我们的 proof 应当被收下、只卡在令牌上：{ours}"
+        );
     }
 }

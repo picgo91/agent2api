@@ -77,7 +77,10 @@ pub fn list_item(model: &Value, provider_id: &str) -> Value {
             _ => Value::String(String::new()),
         },
     );
-    if let Some(value) = model.get("maxOutputTokens").filter(|value| !value.is_null()) {
+    if let Some(value) = model
+        .get("maxOutputTokens")
+        .filter(|value| !value.is_null())
+    {
         item.insert("max_output_tokens".to_string(), value.clone());
     }
     if let Some(value) = model.get("maxInputTokens").filter(|value| !value.is_null()) {
@@ -89,13 +92,23 @@ pub fn list_item(model: &Value, provider_id: &str) -> Value {
     let video = model.get("supportsVideo").map(js_truthy).unwrap_or(false);
     item.insert(
         "supports_tool_call".to_string(),
-        Value::Bool(model.get("supportsToolCall").map(js_truthy).unwrap_or(false)),
+        Value::Bool(
+            model
+                .get("supportsToolCall")
+                .map(js_truthy)
+                .unwrap_or(false),
+        ),
     );
     item.insert("supports_images".to_string(), Value::Bool(images));
     item.insert("supports_video".to_string(), Value::Bool(video));
     item.insert(
         "supports_reasoning".to_string(),
-        Value::Bool(model.get("supportsReasoning").map(js_truthy).unwrap_or(false)),
+        Value::Bool(
+            model
+                .get("supportsReasoning")
+                .map(js_truthy)
+                .unwrap_or(false),
+        ),
     );
     // `input_modalities`：OpenAI 兼容生态里模型条目上的**通用**输入模态声明
     // （ZenMux / OpenRouter / AIHubMix 这类网关都在 `/v1/models` 的条目里给

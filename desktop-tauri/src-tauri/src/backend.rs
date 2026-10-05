@@ -41,8 +41,8 @@ use windows_sys::Win32::Foundation::{
 };
 #[cfg(windows)]
 use windows_sys::Win32::NetworkManagement::IpHelper::{
-    GetExtendedTcpTable, MIB_TCP6TABLE_OWNER_PID, MIB_TCP6ROW_OWNER_PID, MIB_TCP_STATE_LISTEN,
-    MIB_TCPROW_OWNER_PID, MIB_TCPTABLE_OWNER_PID, TCP_TABLE_CLASS, TCP_TABLE_OWNER_PID_LISTENER,
+    GetExtendedTcpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCP6TABLE_OWNER_PID, MIB_TCPROW_OWNER_PID,
+    MIB_TCPTABLE_OWNER_PID, MIB_TCP_STATE_LISTEN, TCP_TABLE_CLASS, TCP_TABLE_OWNER_PID_LISTENER,
 };
 #[cfg(windows)]
 use windows_sys::Win32::Networking::WinSock::{AF_INET, AF_INET6};
@@ -470,7 +470,8 @@ fn tcp_listener_table(family: u32) -> Option<Vec<u32>> {
     let class: TCP_TABLE_CLASS = TCP_TABLE_OWNER_PID_LISTENER;
     let mut size: u32 = 0;
     // 探大小：null 指针必然失败，只看它回填的 size
-    let probe = unsafe { GetExtendedTcpTable(std::ptr::null_mut(), &mut size, 0, family, class, 0) };
+    let probe =
+        unsafe { GetExtendedTcpTable(std::ptr::null_mut(), &mut size, 0, family, class, 0) };
     if probe != ERROR_INSUFFICIENT_BUFFER || size == 0 {
         return None;
     }
@@ -479,8 +480,16 @@ fn tcp_listener_table(family: u32) -> Option<Vec<u32>> {
     // 第二趟按缓冲区真实字节数报 size（比探测值多出补齐的零头），避免 API
     // 认为缓冲区比实际更大
     let mut capacity = std::mem::size_of_val(buffer.as_slice()) as u32;
-    let filled =
-        unsafe { GetExtendedTcpTable(buffer.as_mut_ptr().cast(), &mut capacity, 0, family, class, 0) };
+    let filled = unsafe {
+        GetExtendedTcpTable(
+            buffer.as_mut_ptr().cast(),
+            &mut capacity,
+            0,
+            family,
+            class,
+            0,
+        )
+    };
     if filled != ERROR_SUCCESS {
         return None;
     }
@@ -520,7 +529,10 @@ async fn health_reports_workbuddy(port: u16) -> bool {
     let Ok(client) = reqwest::Client::builder().timeout(HEALTH_TIMEOUT).build() else {
         return false;
     };
-    let Ok(response) = client.get(format!("http://127.0.0.1:{port}/health")).send().await
+    let Ok(response) = client
+        .get(format!("http://127.0.0.1:{port}/health"))
+        .send()
+        .await
     else {
         return false;
     };
@@ -593,15 +605,14 @@ fn cleanup_legacy_resources() {
             continue;
         }
         match std::fs::remove_file(&target) {
-            Ok(()) => {
-                server::logging::log("[Server]", &format!("已清理旧版残留的资源文件（升级迁移）: {name}"))
-            }
-            Err(error) => {
-                server::logging::log(
-                    "[Server]",
-                    &format!("清理旧版残留 {name} 失败（下次启动再试）: {error}"),
-                )
-            }
+            Ok(()) => server::logging::log(
+                "[Server]",
+                &format!("已清理旧版残留的资源文件（升级迁移）: {name}"),
+            ),
+            Err(error) => server::logging::log(
+                "[Server]",
+                &format!("清理旧版残留 {name} 失败（下次启动再试）: {error}"),
+            ),
         }
     }
 }

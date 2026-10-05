@@ -219,7 +219,13 @@ fn entry_from_value(value: &Value) -> Option<ModelEntry> {
         .get("reasoning")
         .and_then(Value::as_bool)
         .unwrap_or_else(|| reasoning_for(&id));
-    Some(ModelEntry { id, name, pool, context_window, reasoning })
+    Some(ModelEntry {
+        id,
+        name,
+        pool,
+        context_window,
+        reasoning,
+    })
 }
 
 /// 进程级清单缓存（远程刷新落地在这里；没刷新过时为空，`list()` 回落静态表）。
@@ -273,20 +279,80 @@ const FALLBACK_MODELS: &[(&str, &str, Pool, i64, bool)] = &[
     //
     // **池在这里显式写死**（不调 `pool_of` 猜）：表里那两条免费池的裸 id 正是
     // 按前缀猜会判错的那一类（见模块头第 2 条）。
-    ( "cline-pass/glm-5.3",             "GLM-5.3 (ClinePass)",           Pool::Pass, 200_000, true),
-    ( "cline-pass/kimi-k3",             "Kimi K3 (ClinePass)",           Pool::Pass, 256_000, true),
-    ( "cline-pass/deepseek-v4.1-flash", "DeepSeek V4.1 Flash (ClinePass)", Pool::Pass, 1_000_000, true),
-    ( "cline-pass/deepseek-v4-pro",     "DeepSeek V4 Pro (ClinePass)",   Pool::Pass, 128_000, true),
-    ( "cline-pass/qwen3.8-max",         "Qwen3.8 Max (ClinePass)",       Pool::Pass, 256_000, true),
-    ( "cline-free/deepseek-v4.1-flash", "DeepSeek V4.1 Flash (免费)",    Pool::Free, 1_000_000, true),
-    ( "cline-free/muse-spark-1.3-contributor", "Muse Spark 1.3 (免费)", Pool::Free, 200_000, true),
-    ( "cline-free/solar-pro4",          "Solar Pro 4 (免费)",            Pool::Free, 128_000, false),
+    (
+        "cline-pass/glm-5.3",
+        "GLM-5.3 (ClinePass)",
+        Pool::Pass,
+        200_000,
+        true,
+    ),
+    (
+        "cline-pass/kimi-k3",
+        "Kimi K3 (ClinePass)",
+        Pool::Pass,
+        256_000,
+        true,
+    ),
+    (
+        "cline-pass/deepseek-v4.1-flash",
+        "DeepSeek V4.1 Flash (ClinePass)",
+        Pool::Pass,
+        1_000_000,
+        true,
+    ),
+    (
+        "cline-pass/deepseek-v4-pro",
+        "DeepSeek V4 Pro (ClinePass)",
+        Pool::Pass,
+        128_000,
+        true,
+    ),
+    (
+        "cline-pass/qwen3.8-max",
+        "Qwen3.8 Max (ClinePass)",
+        Pool::Pass,
+        256_000,
+        true,
+    ),
+    (
+        "cline-free/deepseek-v4.1-flash",
+        "DeepSeek V4.1 Flash (免费)",
+        Pool::Free,
+        1_000_000,
+        true,
+    ),
+    (
+        "cline-free/muse-spark-1.3-contributor",
+        "Muse Spark 1.3 (免费)",
+        Pool::Free,
+        200_000,
+        true,
+    ),
+    (
+        "cline-free/solar-pro4",
+        "Solar Pro 4 (免费)",
+        Pool::Free,
+        128_000,
+        false,
+    ),
     // 免费池的裸 id 两条（**不带 `cline-free/` 前缀**，见模块头第 2 条）。
     // 兜底表也收它们：上游目录接口拉不到时，它们同样是「装上就能用」的免费模型，
     // 少了这两条会让免费池在离线/未刷新时又退回「只有 3 个」的旧观感。
     // 上下文窗口取自 Cline 官方目录（`@cline/llms` 的 `cline` 块实测值）。
-    ( "z-ai/glm-5.3-flash",             "GLM-5.3-Flash (免费)",          Pool::Free, 1_310_720, true),
-    ( "poolside/laguna-s-2.1:free",     "Laguna S 2.1 (免费)",           Pool::Free, 262_144, true),
+    (
+        "z-ai/glm-5.3-flash",
+        "GLM-5.3-Flash (免费)",
+        Pool::Free,
+        1_310_720,
+        true,
+    ),
+    (
+        "poolside/laguna-s-2.1:free",
+        "Laguna S 2.1 (免费)",
+        Pool::Free,
+        262_144,
+        true,
+    ),
 ];
 
 /// 上游 id 的**通道前缀** → 池（按 id 前缀猜的兜底判据）。
@@ -413,11 +479,7 @@ fn reasoning_for(model_id: &str) -> bool {
 /// 两个池，缓存也共用一份（两个 provider 只是各自过滤它），因此这里不需要
 /// 「谁来拉」的信息。
 pub fn entries() -> Vec<ModelEntry> {
-    if let Some(remote) = remote_slot()
-        .lock()
-        .ok()
-        .and_then(|guard| guard.clone())
-    {
+    if let Some(remote) = remote_slot().lock().ok().and_then(|guard| guard.clone()) {
         if !remote.is_empty() {
             return remote;
         }
@@ -483,10 +545,7 @@ pub fn ids_of(pool: Pool) -> Vec<String> {
 
 /// 上一次成功远程刷新的时间（毫秒）；0 = 从未刷新过
 pub fn last_refreshed_at() -> i64 {
-    refreshed_at_slot()
-        .lock()
-        .map(|guard| *guard)
-        .unwrap_or(0)
+    refreshed_at_slot().lock().map(|guard| *guard).unwrap_or(0)
 }
 
 /// 是否远程刷新过（聚合目录的 `meta.source` 用）
@@ -509,10 +568,7 @@ pub fn remote_refreshed() -> bool {
 /// 并把原因回给调用方（`Err`），由适配器决定怎么汇报给用户。
 pub async fn refresh() -> Result<usize, String> {
     let client = crate::server::core::egress::client_for(None);
-    let url = format!(
-        "{}/ai/cline/recommended-models",
-        credentials::API_BASE_URL
-    );
+    let url = format!("{}/ai/cline/recommended-models", credentials::API_BASE_URL);
     let response = client
         .get(&url)
         .header("Accept", "application/json")
@@ -531,7 +587,8 @@ pub async fn refresh() -> Result<usize, String> {
     if !(200..300).contains(&status) {
         return Err(format!("上游返回 {status}"));
     }
-    let payload: Value = serde_json::from_str(&text).map_err(|error| format!("响应不是 JSON: {error}"))?;
+    let payload: Value =
+        serde_json::from_str(&text).map_err(|error| format!("响应不是 JSON: {error}"))?;
     let parsed = parse_recommended(&payload);
     if parsed.is_empty() {
         return Err("上游清单为空（响应里没有任何可用模型）".to_string());

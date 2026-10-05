@@ -82,10 +82,7 @@ fn load_target(state: &ServerState, account_id: &str) -> Result<ClaimTarget, (i3
         .store()
         .zcode_account_record(account_id)
         .ok_or_else(|| (404, "找不到该 ZCode 账号".to_string()))?;
-    let provider_id = record
-        .get("provider")
-        .and_then(Value::as_str)
-        .unwrap_or("");
+    let provider_id = record.get("provider").and_then(Value::as_str).unwrap_or("");
     let region = Region::from_provider_id(provider_id)
         .ok_or_else(|| (400, "该账号不是 ZCode 账号".to_string()))?;
     let text = |key: &str| {
@@ -124,7 +121,10 @@ fn load_target(state: &ServerState, account_id: &str) -> Result<ClaimTarget, (i3
 }
 
 /// 取该账号配置的出口代理（理由见模块头：领取**要**挂代理）
-fn account_proxy(state: &ServerState, account_id: &str) -> Option<crate::server::core::proxies::ResolvedProxy> {
+fn account_proxy(
+    state: &ServerState,
+    account_id: &str,
+) -> Option<crate::server::core::proxies::ResolvedProxy> {
     let session = state.store().get_session_by_id(account_id)?.session;
     crate::server::core::proxies::session_proxy(&session)
 }
@@ -294,7 +294,11 @@ pub async fn claim_plan(
 
     match outcome {
         Err(error) => management_error(error.status_code, error.message),
-        Ok(ClaimOutcome::Claimed { plan_id, starts_at, ends_at }) => {
+        Ok(ClaimOutcome::Claimed {
+            plan_id,
+            starts_at,
+            ends_at,
+        }) => {
             crate::server::logging::log(
                 "[Claim]",
                 &format!(
@@ -312,7 +316,13 @@ pub async fn claim_plan(
                 "claimedAt": claimed_at,
             }))
         }
-        Ok(ClaimOutcome::Failed { plan_id, failure, code, message, failure_ends_at }) => {
+        Ok(ClaimOutcome::Failed {
+            plan_id,
+            failure,
+            code,
+            message,
+            failure_ends_at,
+        }) => {
             // 失败也如实记一行：这个功能的排障全在「为什么没领到」上，
             // 而 `failure` 的分类正是给人看的那一句话
             crate::server::logging::log(

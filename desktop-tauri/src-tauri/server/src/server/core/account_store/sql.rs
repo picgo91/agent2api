@@ -103,8 +103,7 @@ pub(crate) fn load_by_provider(
     conn: &Connection,
     provider: &str,
 ) -> rusqlite::Result<Vec<StoredAccount>> {
-    let mut stmt =
-        conn.prepare("SELECT data FROM accounts WHERE provider = ?1 ORDER BY rowid")?;
+    let mut stmt = conn.prepare("SELECT data FROM accounts WHERE provider = ?1 ORDER BY rowid")?;
     let mut rows = stmt.query(params![provider])?;
     let mut records = Vec::new();
     while let Some(row) = rows.next()? {
@@ -280,7 +279,11 @@ fn insert_row(conn: &Connection, record: &StoredAccount) -> rusqlite::Result<()>
 /// 的原样值 —— 于是 `enabled: "false"` 这种手工脏值在列里是 1（启用），
 /// 与访问器给上层看到的答案一致。
 fn enabled_flag(record: &StoredAccount) -> i64 {
-    if record.enabled() { 1 } else { 0 }
+    if record.enabled() {
+        1
+    } else {
+        0
+    }
 }
 
 /// 把一整份 `AccountState` **按差异**写入（同一个事务内）。

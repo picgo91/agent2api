@@ -14,11 +14,11 @@
 
 use axum::body::Bytes;
 use axum::response::Response;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::server::core::providers::codearts::welfare;
-use crate::server::http::{ok_json, parse_body};
 use crate::server::errors::management_error;
+use crate::server::http::{ok_json, parse_body};
 use crate::server::ServerState;
 
 /// `POST /api/accounts/{id}/codearts-welfare/preview` —— **动作是只读的**，
@@ -29,7 +29,14 @@ pub async fn preview(state: &ServerState, account_id: &str) -> Response {
     if state.store().codearts_account_record(account_id).is_none() {
         return management_error(404, "未找到 CodeArts 账号");
     }
-    match welfare::preview(state.store(), account_id, welfare_base(), crate::server::logging::now_ms()).await {
+    match welfare::preview(
+        state.store(),
+        account_id,
+        welfare_base(),
+        crate::server::logging::now_ms(),
+    )
+    .await
+    {
         Ok(document) => ok_json(document),
         Err(error) => management_error(error.status_code, error.message),
     }

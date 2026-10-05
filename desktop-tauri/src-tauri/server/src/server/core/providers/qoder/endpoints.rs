@@ -15,7 +15,10 @@ impl Region {
         match value.trim() {
             "" | "global" | "intl" => Ok(Self::Global),
             "cn" => Ok(Self::Cn),
-            _ => Err(GatewayError::with_status(400, "Qoder 地区必须为 global（国际版）或 cn（中国版）")),
+            _ => Err(GatewayError::with_status(
+                400,
+                "Qoder 地区必须为 global（国际版）或 cn（中国版）",
+            )),
         }
     }
 

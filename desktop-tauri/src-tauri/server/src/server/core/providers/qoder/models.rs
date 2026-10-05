@@ -77,55 +77,237 @@ const DEFAULT_CONTEXT_WINDOW: i64 = 200_000;
 /// 空串 = 上游也没有这个值（会显示成 `—`）。
 fn fallback(region: Region) -> Vec<Value> {
     let global: &[(&str, &str, bool, bool, &[&str], bool, bool, &str)] = &[
-        ("Qwen3.8-Flash", "qfmodel", true, true, &["low", "medium", "xhigh"], true, true, "0.1"),
-        ("Qwen3.8-Max", "qmodel_38max", true, true, &["low", "medium", "xhigh"], true, true, "0.5"),
+        (
+            "Qwen3.8-Flash",
+            "qfmodel",
+            true,
+            true,
+            &["low", "medium", "xhigh"],
+            true,
+            true,
+            "0.1",
+        ),
+        (
+            "Qwen3.8-Max",
+            "qmodel_38max",
+            true,
+            true,
+            &["low", "medium", "xhigh"],
+            true,
+            true,
+            "0.5",
+        ),
         ("Auto", "auto", true, false, &[], true, false, "1"),
         ("Ultimate", "ultimate", true, true, &[], true, false, "1.6"),
-        ("Performance", "performance", true, true, &[], true, false, "1.1"),
-        ("Efficient", "efficient", false, false, &[], true, false, "0.3"),
+        (
+            "Performance",
+            "performance",
+            true,
+            true,
+            &[],
+            true,
+            false,
+            "1.1",
+        ),
+        (
+            "Efficient",
+            "efficient",
+            false,
+            false,
+            &[],
+            true,
+            false,
+            "0.3",
+        ),
         ("Sonus", "smodel", true, true, &[], true, false, "3.2"),
         ("Cantus", "cmodel", true, true, &[], true, false, "3.2"),
-        ("Qwen3.7-Max", "qmodel_latest", true, true, &[], true, false, "0.5"),
+        (
+            "Qwen3.7-Max",
+            "qmodel_latest",
+            true,
+            true,
+            &[],
+            true,
+            false,
+            "0.5",
+        ),
         // `Qwen3.7-Plus` 带连字符：上游 `display_name` 就是这个形态，而远程
         // 刷新走的是 `display_name` 去空白（见 `parse_catalog`）。少了连字符
         // 会让同一个模型产出两种 id（离线用兜底、在线用远程），客户端缓存里
         // 留下两条记录
-        ("Qwen3.7-Plus", "qmodel", false, false, &[], true, false, "0.1"),
-        ("Kimi-K3", "kmodel_latest", false, false, &[], true, false, "0.8"),
-        ("Kimi-K2.8-Preview", "kmodel", false, false, &[], true, false, "0.3"),
+        (
+            "Qwen3.7-Plus",
+            "qmodel",
+            false,
+            false,
+            &[],
+            true,
+            false,
+            "0.1",
+        ),
+        (
+            "Kimi-K3",
+            "kmodel_latest",
+            false,
+            false,
+            &[],
+            true,
+            false,
+            "0.8",
+        ),
+        (
+            "Kimi-K2.8-Preview",
+            "kmodel",
+            false,
+            false,
+            &[],
+            true,
+            false,
+            "0.3",
+        ),
         ("GLM-5.3", "gmodel", true, true, &[], true, false, "0.6"),
-        ("GLM-5.3-Flash", "gfmodel", true, true, &[], true, false, "0.1"),
-        ("DeepSeek-V4-Pro", "dmodel", true, true, &[], true, false, "0.8"),
-        ("DeepSeek-Flash", "dfmodel", true, true, &[], true, false, "0.2"),
-        ("MiniMax-M3", "mmodel", false, false, &[], true, false, "0.2"),
+        (
+            "GLM-5.3-Flash",
+            "gfmodel",
+            true,
+            true,
+            &[],
+            true,
+            false,
+            "0.1",
+        ),
+        (
+            "DeepSeek-V4-Pro",
+            "dmodel",
+            true,
+            true,
+            &[],
+            true,
+            false,
+            "0.8",
+        ),
+        (
+            "DeepSeek-Flash",
+            "dfmodel",
+            true,
+            true,
+            &[],
+            true,
+            false,
+            "0.2",
+        ),
+        (
+            "MiniMax-M3",
+            "mmodel",
+            false,
+            false,
+            &[],
+            true,
+            false,
+            "0.2",
+        ),
     ];
     let cn: &[(&str, &str, bool, bool, &[&str], bool, bool, &str)] = &[
-        ("Qwen3.8-Flash", "qfmodel", true, true, &["low", "medium", "xhigh"], true, true, "0.1"),
-        ("Qwen3.8-Max", "qmodel_38max", true, true, &["low", "medium", "xhigh"], true, true, "0.5"),
+        (
+            "Qwen3.8-Flash",
+            "qfmodel",
+            true,
+            true,
+            &["low", "medium", "xhigh"],
+            true,
+            true,
+            "0.1",
+        ),
+        (
+            "Qwen3.8-Max",
+            "qmodel_38max",
+            true,
+            true,
+            &["low", "medium", "xhigh"],
+            true,
+            true,
+            "0.5",
+        ),
         ("Auto", "auto", true, false, &[], true, false, "1"),
-        ("Qwen3.7-Max", "qmodel_latest", true, false, &[], true, false, "0.5"),
-        ("Qwen3.7-Plus", "qmodel", true, false, &[], false, false, "0.1"),
-        ("DeepSeek-V4-Pro", "dmodel", true, false, &[], false, false, "0.8"),
-        ("DeepSeek-Flash", "dfmodel", false, false, &[], false, false, "0.2"),
+        (
+            "Qwen3.7-Max",
+            "qmodel_latest",
+            true,
+            false,
+            &[],
+            true,
+            false,
+            "0.5",
+        ),
+        (
+            "Qwen3.7-Plus",
+            "qmodel",
+            true,
+            false,
+            &[],
+            false,
+            false,
+            "0.1",
+        ),
+        (
+            "DeepSeek-V4-Pro",
+            "dmodel",
+            true,
+            false,
+            &[],
+            false,
+            false,
+            "0.8",
+        ),
+        (
+            "DeepSeek-Flash",
+            "dfmodel",
+            false,
+            false,
+            &[],
+            false,
+            false,
+            "0.2",
+        ),
         ("GLM-5.3", "gmodel", true, false, &[], true, false, "0.6"),
-        ("Kimi-K2.8-Preview", "kmodel", true, false, &[], true, false, "0.3"),
-        ("MiniMax-M3", "mmodel", false, false, &[], false, false, "0.2"),
+        (
+            "Kimi-K2.8-Preview",
+            "kmodel",
+            true,
+            false,
+            &[],
+            true,
+            false,
+            "0.3",
+        ),
+        (
+            "MiniMax-M3",
+            "mmodel",
+            false,
+            false,
+            &[],
+            false,
+            false,
+            "0.2",
+        ),
     ];
     let rows = if region == Region::Cn { cn } else { global };
     rows.iter()
-        .map(|(id, key, reasoning, supports_effort, efforts, vision, enabled, factor)| {
-            entry(
-                id,
-                key,
-                *reasoning,
-                if *supports_effort { efforts } else { &[] },
-                *vision,
-                *enabled,
-                DEFAULT_CONTEXT_WINDOW,
-                "system",
-                &credits_of_text(factor),
-            )
-        })
+        .map(
+            |(id, key, reasoning, supports_effort, efforts, vision, enabled, factor)| {
+                entry(
+                    id,
+                    key,
+                    *reasoning,
+                    if *supports_effort { efforts } else { &[] },
+                    *vision,
+                    *enabled,
+                    DEFAULT_CONTEXT_WINDOW,
+                    "system",
+                    &credits_of_text(factor),
+                )
+            },
+        )
         .collect()
 }
 
@@ -334,7 +516,11 @@ pub fn resolve(model_id: &str, region: Region) -> Option<Value> {
     }
     let state = read_state();
     // ① 账号所属地区优先，② 另一地区兜底，③ 两边都没有 → None
-    let other = if region == Region::Cn { Region::Global } else { Region::Cn };
+    let other = if region == Region::Cn {
+        Region::Global
+    } else {
+        Region::Cn
+    };
     for candidate_region in [region, other] {
         let models = catalog_for(&state, candidate_region);
         if let Some(found) = find_in(&models, &wanted) {
@@ -502,7 +688,9 @@ pub fn seed_default_rules() {
 
 /// 上游目录响应里的业务错误（HTTP 200 也可能带错误）
 fn envelope_error(payload: &Value) -> Option<String> {
-    let code = payload.get("statusCodeValue").and_then(Value::as_i64)
+    let code = payload
+        .get("statusCodeValue")
+        .and_then(Value::as_i64)
         .or_else(|| payload.get("code").and_then(Value::as_i64));
     match code {
         Some(200) | None => None,
@@ -533,7 +721,11 @@ fn parse_catalog(payload: &Value) -> Vec<Value> {
     let mut seen: Vec<String> = Vec::new();
     for item in chat {
         let key = item.get("key").and_then(Value::as_str).unwrap_or("").trim();
-        let display = item.get("display_name").and_then(Value::as_str).unwrap_or("").trim();
+        let display = item
+            .get("display_name")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
         if key.is_empty() || display.is_empty() {
             continue;
         }
@@ -557,7 +749,10 @@ fn parse_catalog(payload: &Value) -> Vec<Value> {
             .map(|map| map.keys().map(|key| Value::String(key.clone())).collect())
             .unwrap_or_default();
         let context_window = context_window_of(item);
-        let source = item.get("source").and_then(Value::as_str).unwrap_or("system");
+        let source = item
+            .get("source")
+            .and_then(Value::as_str)
+            .unwrap_or("system");
         // 倍率（官方中文名「Credit 消耗倍率」，界面标签「消耗」）：
         // 上游在模型条目**顶层**给 `price_factor`，取值 0～3.2。
         // 折扣时段 `price_factor` 本身就是折后价（另有 `original_price_factor`
@@ -576,10 +771,7 @@ fn parse_catalog(payload: &Value) -> Vec<Value> {
             &credits,
         );
         if let Some(object) = model.as_object_mut() {
-            object.insert(
-                "name".to_string(),
-                Value::String(display.to_string()),
-            );
+            object.insert("name".to_string(), Value::String(display.to_string()));
             object.insert("efforts".to_string(), Value::Array(efforts));
             if let Some(format) = item.get("format") {
                 if !format.is_null() {

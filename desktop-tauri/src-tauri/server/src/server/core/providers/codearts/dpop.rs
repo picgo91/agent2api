@@ -59,7 +59,10 @@ impl DpopKey {
             .map_err(|_| "CodeArts DPoP 私钥不是合法的 base64url".to_string())?;
         let signing = SigningKey::from_slice(&scalar)
             .map_err(|_| "CodeArts DPoP 私钥不是合法的 P-256 标量".to_string())?;
-        Ok(Self { public_jwk: public_jwk_of(&signing), signing })
+        Ok(Self {
+            public_jwk: public_jwk_of(&signing),
+            signing,
+        })
     }
 
     /// 现签一份 proof。
@@ -68,7 +71,11 @@ impl DpopKey {
     ///   对不上就是 401）；`htu` 用完整地址，不带 fragment。
     /// * `now_ms` 只在测试里注入，线上走 `logging::now_ms()`。
     pub fn proof(&self, method: &str, endpoint: &str, now_ms: i64) -> Result<String, String> {
-        let header = Header { alg: DOPP_ALG, typ: DOPP_TYP, jwk: &self.public_jwk };
+        let header = Header {
+            alg: DOPP_ALG,
+            typ: DOPP_TYP,
+            jwk: &self.public_jwk,
+        };
         let header_json =
             serde_json::to_vec(&header).map_err(|error| format!("DPoP 头部序列化失败：{error}"))?;
         // jti 用 32 字节随机数的十六进制（与参考实现的 randomHex(32) 同形状）
@@ -78,10 +85,13 @@ impl DpopKey {
             htm: method.to_ascii_uppercase(),
             htu: endpoint,
             iat: now_ms / 1000,
-            jti: jti.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+            jti: jti
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>(),
         };
-        let payload_json =
-            serde_json::to_vec(&payload).map_err(|error| format!("DPoP 载荷序列化失败：{error}"))?;
+        let payload_json = serde_json::to_vec(&payload)
+            .map_err(|error| format!("DPoP 载荷序列化失败：{error}"))?;
         let signing_input = format!(
             "{}.{}",
             URL_SAFE_NO_PAD.encode(&header_json),
@@ -100,7 +110,10 @@ impl DpopKey {
             .signing
             .sign_prehash(&digest)
             .map_err(|error| format!("DPoP 签名失败：{error}"))?;
-        Ok(format!("{signing_input}.{}", URL_SAFE_NO_PAD.encode(signature.to_bytes())))
+        Ok(format!(
+            "{signing_input}.{}",
+            URL_SAFE_NO_PAD.encode(signature.to_bytes())
+        ))
     }
 
     /// 头部里那把公钥（测试与排障用）。
@@ -121,13 +134,18 @@ impl DpopKey {
         for _ in 0..8 {
             let mut seed = [0u8; 32];
             getrandom::getrandom(&mut seed).map_err(|error| format!("随机数不可用：{error}"))?;
-            let Ok(signing) = SigningKey::from_slice(&seed) else { continue };
+            let Ok(signing) = SigningKey::from_slice(&seed) else {
+                continue;
+            };
             let public = public_jwk_of(&signing);
             // 私钥那份 = 公钥三件套 + `d`（先克隆公钥再补 d，`..public` 会把
             // String 字段移走、下面就没法再把公钥交给结构体了）
             let mut private = public.clone();
             private.d = URL_SAFE_NO_PAD.encode(seed);
-            return Ok(DpopKeyPair { private_key_jwk: private, public_key_jwk: public });
+            return Ok(DpopKeyPair {
+                private_key_jwk: private,
+                public_key_jwk: public,
+            });
         }
         Err("无法生成本机 P-256 密钥，请重试".to_string())
     }
@@ -204,7 +222,11 @@ mod tests {
     fn proof_verifies_against_the_embedded_public_key() {
         let key = DpopKey::from_private_jwk(&fixed_key()).expect("固定私钥应当可用");
         let proof = key
-            .proof("POST", "https://sts.cn-north-4.myhuaweicloud.com/v1/oauth2/tokens", 1790439420327)
+            .proof(
+                "POST",
+                "https://sts.cn-north-4.myhuaweicloud.com/v1/oauth2/tokens",
+                1790439420327,
+            )
             .expect("签名应当成功");
         let parts: Vec<&str> = proof.split('.').collect();
         assert_eq!(3, parts.len(), "JWS 是三段式");
@@ -216,25 +238,50 @@ mod tests {
         assert_eq!("dpop+jwt", header["typ"]);
         assert_eq!("EC", header["jwk"]["kty"]);
         assert_eq!("P-256", header["jwk"]["crv"]);
-        assert!(header["jwk"]["d"].as_str().unwrap_or("").is_empty(), "proof 里绝不能带私钥");
+        assert!(
+            header["jwk"]["d"].as_str().unwrap_or("").is_empty(),
+            "proof 里绝不能带私钥"
+        );
 
         // 载荷：四个字段齐备，htm 会被大写，iat 由毫秒降成秒
         let payload: serde_json::Value =
             serde_json::from_slice(&URL_SAFE_NO_PAD.decode(parts[1]).unwrap()).unwrap();
         assert_eq!("POST", payload["htm"]);
-        assert_eq!("https://sts.cn-north-4.myhuaweicloud.com/v1/oauth2/tokens", payload["htu"]);
+        assert_eq!(
+            "https://sts.cn-north-4.myhuaweicloud.com/v1/oauth2/tokens",
+            payload["htu"]
+        );
         // 小写方法也要被规范化成大写（上游按大写比对 htm）
-        let lowercase = key.proof("post", "https://sts.cn-north-4.myhuaweicloud.com/v1/oauth2/tokens", 1790439420327).unwrap();
-        let lowercase_payload: serde_json::Value =
-            serde_json::from_slice(&URL_SAFE_NO_PAD.decode(lowercase.split('.').nth(1).unwrap()).unwrap()).unwrap();
+        let lowercase = key
+            .proof(
+                "post",
+                "https://sts.cn-north-4.myhuaweicloud.com/v1/oauth2/tokens",
+                1790439420327,
+            )
+            .unwrap();
+        let lowercase_payload: serde_json::Value = serde_json::from_slice(
+            &URL_SAFE_NO_PAD
+                .decode(lowercase.split('.').nth(1).unwrap())
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!("POST", lowercase_payload["htm"]);
         assert_eq!(1790439420, payload["iat"].as_i64().unwrap());
-        assert_eq!(64, payload["jti"].as_str().unwrap().len(), "jti 是 32 字节的十六进制");
+        assert_eq!(
+            64,
+            payload["jti"].as_str().unwrap().len(),
+            "jti 是 32 字节的十六进制"
+        );
 
         // 用头部里那把公钥验签 —— 这是本模块真正的验收
         let jwk: Jwk = serde_json::from_value(header["jwk"].clone()).unwrap();
         let verifying = VerifyingKey::from_sec1_bytes(
-            &[&[0x04u8][..], &URL_SAFE_NO_PAD.decode(&jwk.x).unwrap(), &URL_SAFE_NO_PAD.decode(&jwk.y).unwrap()].concat(),
+            &[
+                &[0x04u8][..],
+                &URL_SAFE_NO_PAD.decode(&jwk.x).unwrap(),
+                &URL_SAFE_NO_PAD.decode(&jwk.y).unwrap(),
+            ]
+            .concat(),
         )
         .expect("头部里的公钥应当能还原成点");
         let signature = Signature::from_slice(&URL_SAFE_NO_PAD.decode(parts[2]).unwrap()).unwrap();
@@ -253,10 +300,17 @@ mod tests {
         let input = "eyJhbGciOiJFUzI1NiJ9.eyJodG0iOiJHRVQifQ";
         let first = key.sign_input(input).unwrap();
         let second = key.sign_input(input).unwrap();
-        assert_eq!(first, second, "同一段签名输入必须得到同一个签名（确定性 k）");
+        assert_eq!(
+            first, second,
+            "同一段签名输入必须得到同一个签名（确定性 k）"
+        );
         assert!(first.starts_with(input), "签名串是 `输入.签名` 的形状");
         // 输入变了签名就得变，否则上面的相等毫无意义
-        assert_ne!(first, key.sign_input("eyJhbGciOiJFUzI1NiJ9.eyJodG0iOiJQT1NUIn0").unwrap());
+        assert_ne!(
+            first,
+            key.sign_input("eyJhbGciOiJFUzI1NiJ9.eyJodG0iOiJQT1NUIn0")
+                .unwrap()
+        );
     }
 
     #[test]

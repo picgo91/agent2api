@@ -66,8 +66,8 @@ use crate::server::core::providers::kind_id;
 use crate::server::core::providers::ProviderKind;
 
 use identity::{
-    allocate_priority, allocate_unique_id, identity_of_item, identity_of_record,
-    is_desktop_item, is_reserved_desktop_id, resolve_provider,
+    allocate_priority, allocate_unique_id, identity_of_item, identity_of_record, is_desktop_item,
+    is_reserved_desktop_id, resolve_provider,
 };
 use normalize::normalize_imported;
 
@@ -138,7 +138,11 @@ fn to_export_record(record: &StoredAccount) -> Value {
 pub fn export_accounts(store: &AccountStore) -> Value {
     let accounts = store.with_lock(|guard| {
         let state = store.load_locked(guard);
-        state.accounts.iter().map(to_export_record).collect::<Vec<_>>()
+        state
+            .accounts
+            .iter()
+            .map(to_export_record)
+            .collect::<Vec<_>>()
     });
     json!({
         "version": EXPORT_VERSION,
@@ -161,7 +165,10 @@ pub fn import_accounts(store: &AccountStore, payload: &Value) -> Result<Value, A
         return Err(AccountStoreError::new("缺少 accounts 数组", 400));
     };
     if items.is_empty() {
-        return Err(AccountStoreError::new("accounts 为空，没有可导入的账号", 400));
+        return Err(AccountStoreError::new(
+            "accounts 为空，没有可导入的账号",
+            400,
+        ));
     }
 
     // 定义段的逐条警告（坏条目跳过不毁整批），最后并进 errors 给前端展示
@@ -172,10 +179,9 @@ pub fn import_accounts(store: &AccountStore, payload: &Value) -> Result<Value, A
     // 数组按整体 400（显式性：坏形状不该被静默吞掉）。
     let (providers_added, providers_updated) = match root.get("customProviders") {
         Some(Value::Array(definitions)) => {
-            let report = crate::server::core::custom_providers::transfer::merge_imported(
-                definitions,
-            )
-            .map_err(|message| AccountStoreError::new(message, 500))?;
+            let report =
+                crate::server::core::custom_providers::transfer::merge_imported(definitions)
+                    .map_err(|message| AccountStoreError::new(message, 500))?;
             definition_warnings.extend(report.warnings.into_iter().map(|warning| {
                 json!({
                     "id": warning.id,
@@ -228,12 +234,8 @@ pub fn import_accounts(store: &AccountStore, payload: &Value) -> Result<Value, A
         let mut catpaw_invalidations: Vec<String> = Vec::new();
 
         for item in items {
-            let outcome = import_one_item(
-                &mut state,
-                item,
-                &mut taken_ids,
-                &mut catpaw_invalidations,
-            );
+            let outcome =
+                import_one_item(&mut state, item, &mut taken_ids, &mut catpaw_invalidations);
             match outcome {
                 Ok(ImportOutcome::Updated) => stats.updated += 1,
                 Ok(ImportOutcome::Added) => stats.added += 1,
@@ -370,8 +372,7 @@ fn import_one_item(
     // ── 凭证：至少要有一个 token（只有引用字段的记录不构成可迁移账号）──
     // 自定义账号的凭证是 apiKey（可空 —— 与添加路径同口径，部分上游不需要
     // key），不适用 token 检查；apiKey 的长度与归一在 normalize 的专属分支里做。
-    let is_custom_provider =
-        provider.starts_with(crate::server::core::custom_providers::ID_PREFIX);
+    let is_custom_provider = provider.starts_with(crate::server::core::custom_providers::ID_PREFIX);
     let access_token = object
         .get("accessToken")
         .and_then(Value::as_str)

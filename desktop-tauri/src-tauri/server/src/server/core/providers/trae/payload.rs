@@ -18,7 +18,7 @@
 //! 与全被剔空的 assistant 占位消息 —— 上游对这两种都可能是空流而不是报错，
 //! 空流在网关这边会被判成"成功但没话"，那比报错难查得多。
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 /// 缺省模型（实测可用）。模型名解析不出来时兜底，而不是发一个空 `config_name`。
 pub const DEFAULT_CONFIG_NAME: &str = "glm-5.2";
@@ -126,7 +126,10 @@ pub fn prepare_body(source: &Value, variant: &str, resolved_model: &str) -> Valu
         .or_insert_with(|| json!(DEFAULT_MAX_TOKENS));
     if let Some(effort) = obj.get("reasoning_effort").and_then(Value::as_str) {
         // auto/none/off 不显式下发，与真实客户端一致；其余原样透传。
-        if !matches!(effort.trim().to_lowercase().as_str(), "" | "auto" | "none" | "off") {
+        if !matches!(
+            effort.trim().to_lowercase().as_str(),
+            "" | "auto" | "none" | "off"
+        ) {
             out.insert("reasoning_effort".to_string(), json!(effort));
         }
     }
@@ -141,7 +144,10 @@ pub fn prepare_body(source: &Value, variant: &str, resolved_model: &str) -> Valu
 
 /// ① 角色归一 + ② assistant tool_calls 改名 + ③ 字符串 content 归一成 text 块。
 fn normalize_messages(obj: &mut Value) {
-    let Some(messages) = obj.get_mut("messages").and_then(|value| value.as_array_mut()) else {
+    let Some(messages) = obj
+        .get_mut("messages")
+        .and_then(|value| value.as_array_mut())
+    else {
         return;
     };
     for slot in messages.iter_mut() {
@@ -153,7 +159,11 @@ fn normalize_messages(obj: &mut Value) {
             };
             let content_present = entry.contains_key("content");
             let content_value = entry.get("content").cloned();
-            let mut role = entry.get("role").and_then(Value::as_str).unwrap_or_default().to_string();
+            let mut role = entry
+                .get("role")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
             if role == "developer" {
                 entry.insert("role".to_string(), json!("system"));
                 role = "system".to_string();
@@ -202,7 +212,10 @@ fn normalize_messages(obj: &mut Value) {
             // 什么都不做的那一支。参考实现注明"未实测，保守透传"，我们同样不猜：
             // 不改写就不会把客户端的图注弄坏。
             if let Some(Value::String(text)) = content_value {
-                entry.insert("content".to_string(), json!([{"type": "text", "text": text}]));
+                entry.insert(
+                    "content".to_string(),
+                    json!([{"type": "text", "text": text}]),
+                );
             }
         }
         if mark_null {
@@ -241,7 +254,10 @@ fn drop_orphan_tool_results(obj: &mut Value) {
             if message.get("role").and_then(Value::as_str) != Some("tool") {
                 return true;
             }
-            let id = message.get("tool_call_id").and_then(Value::as_str).unwrap_or_default();
+            let id = message
+                .get("tool_call_id")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             known.iter().any(|known_id| known_id == id)
         })
         .collect();
@@ -269,7 +285,12 @@ fn normalize_tool_choice(obj: &mut Value) {
             }
         }
         Value::Object(ref wrapper) => {
-            let kind = wrapper.get("type").and_then(Value::as_str).unwrap_or_default().trim().to_lowercase();
+            let kind = wrapper
+                .get("type")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .trim()
+                .to_lowercase();
             match kind.as_str() {
                 "none" => {
                     if let Value::Object(map) = obj {
@@ -289,7 +310,11 @@ fn normalize_tool_choice(obj: &mut Value) {
                         .unwrap_or_default()
                         .trim()
                         .to_string();
-                    obj["tool_choice"] = json!(if name.is_empty() { "auto".to_string() } else { name });
+                    obj["tool_choice"] = json!(if name.is_empty() {
+                        "auto".to_string()
+                    } else {
+                        name
+                    });
                 }
                 _ => {
                     if let Value::Object(map) = obj {
@@ -358,7 +383,8 @@ mod tests {
     /// 比对解析后的 JSON —— Go 的 map 序列化按 key 排序，serde 按插入顺序，
     /// **键顺序不是契约**，比字节会把人引到歧路上去。
     fn assert_same_json(wanted: &str, got: &Value, label: &str) {
-        let parsed: Value = serde_json::from_str(wanted).unwrap_or_else(|_| panic!("{label}: 向量 output 不是 JSON"));
+        let parsed: Value = serde_json::from_str(wanted)
+            .unwrap_or_else(|_| panic!("{label}: 向量 output 不是 JSON"));
         assert_eq!(parsed, *got, "用例：{label}");
     }
 
@@ -366,7 +392,11 @@ mod tests {
     fn prepared_bodies_match_the_reference_implementation() {
         let document = document();
         let cases = document["payload"].as_array().expect("payload 段是数组");
-        assert!(cases.len() > 20, "向量应当覆盖每个分支，实际 {}", cases.len());
+        assert!(
+            cases.len() > 20,
+            "向量应当覆盖每个分支，实际 {}",
+            cases.len()
+        );
         for case in cases {
             let name = case["name"].as_str().unwrap_or("?");
             let input: Value = match serde_json::from_str(case["input"].as_str().unwrap()) {
@@ -387,7 +417,11 @@ mod tests {
                     continue;
                 }
             };
-            let got = prepare_body(&input, case["variant"].as_str().unwrap(), case["resolvedModel"].as_str().unwrap_or(""));
+            let got = prepare_body(
+                &input,
+                case["variant"].as_str().unwrap(),
+                case["resolvedModel"].as_str().unwrap_or(""),
+            );
             assert_same_json(case["output"].as_str().unwrap(), &got, name);
         }
     }
@@ -408,14 +442,21 @@ mod tests {
     #[test]
     fn a_slash_inside_a_config_name_survives() {
         // 参考实现特意写了"绝不按 / 切"：`deepseek-ai/deepseek-v4-pro` 是合法裸名。
-        assert_eq!("deepseek-ai/deepseek-v4-pro", sanitize_model_name("deepseek-ai/deepseek-v4-pro", "solo"));
+        assert_eq!(
+            "deepseek-ai/deepseek-v4-pro",
+            sanitize_model_name("deepseek-ai/deepseek-v4-pro", "solo")
+        );
         assert_eq!("tr/kimi", sanitize_model_name("tr/kimi", "solo"));
     }
 
     #[test]
     fn only_one_namespacing_suffix_is_stripped() {
         assert_eq!("x-solo", sanitize_model_name("x-solo-solo", "solo"));
-        assert_eq!("", sanitize_model_name("-solo", "solo"), "整串就是后缀时得到空串，由 prepare_body 兜默认模型");
+        assert_eq!(
+            "",
+            sanitize_model_name("-solo", "solo"),
+            "整串就是后缀时得到空串，由 prepare_body 兜默认模型"
+        );
     }
 
     #[test]
@@ -423,19 +464,26 @@ mod tests {
         let body = json!({"model":"kimi-k2.6","messages":[{"role":"user","content":"q"}]});
         let prepared = prepare_body(&body, "solo", "   ");
         assert_eq!("kimi-k2.6", prepared["config_name"]);
-        assert_eq!("kimi-k2.6", prepared["model"], "config_name 与 model 必须同值");
+        assert_eq!(
+            "kimi-k2.6", prepared["model"],
+            "config_name 与 model 必须同值"
+        );
     }
 
     #[test]
     fn a_blank_model_falls_back_to_the_default_config() {
         let body = json!({"model":"","messages":[{"role":"user","content":"q"}]});
-        assert_eq!(DEFAULT_CONFIG_NAME, prepare_body(&body, "solo", "")["config_name"]);
+        assert_eq!(
+            DEFAULT_CONFIG_NAME,
+            prepare_body(&body, "solo", "")["config_name"]
+        );
     }
 
     #[test]
     fn non_numeric_sampling_fields_are_dropped_not_forwarded() {
         // 上游对类型零容忍：`"temperature":"0.3"` 直发会炸整轮，而不是忽略这一个字段。
-        let body = json!({"model":"m","messages":[],"temperature":"0.3","top_p":true,"seed":null,"n":2});
+        let body =
+            json!({"model":"m","messages":[],"temperature":"0.3","top_p":true,"seed":null,"n":2});
         let prepared = prepare_body(&body, "solo", "");
         assert!(prepared.get("temperature").is_none());
         assert!(prepared.get("top_p").is_none());
@@ -453,7 +501,11 @@ mod tests {
         ]});
         let prepared = prepare_body(&body, "solo", "");
         let messages = prepared["messages"].as_array().unwrap();
-        assert_eq!(1, messages.len(), "占位与随之变孤儿的 tool 结果都不该留：{messages:?}");
+        assert_eq!(
+            1,
+            messages.len(),
+            "占位与随之变孤儿的 tool 结果都不该留：{messages:?}"
+        );
         assert_eq!("user", messages[0]["role"]);
     }
 }

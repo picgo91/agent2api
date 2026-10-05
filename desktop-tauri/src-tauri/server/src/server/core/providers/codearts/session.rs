@@ -54,7 +54,12 @@ pub struct SessionOptions<'a> {
 
 impl<'a> SessionOptions<'a> {
     pub fn new(base_url: &'a str, credential: &'a Credential, language: &'a str) -> Self {
-        Self { base_url, credential, language, interval: HEARTBEAT_INTERVAL }
+        Self {
+            base_url,
+            credential,
+            language,
+            interval: HEARTBEAT_INTERVAL,
+        }
     }
 }
 
@@ -102,7 +107,10 @@ impl ChatSession {
             Err(error) => {
                 // 传输失败也可能发生在上游占槽之后：注销自己刚造的 id（规则 2）
                 if let Err(release_error) = heartbeat.send("idle").await {
-                    crate::server::logging::log("[CodeArts]", &format!("busy 失败后的 idle 也未被确认：{}", release_error.message));
+                    crate::server::logging::log(
+                        "[CodeArts]",
+                        &format!("busy 失败后的 idle 也未被确认：{}", release_error.message),
+                    );
                 }
                 return Err(error);
             }
@@ -130,11 +138,18 @@ impl ChatSession {
             }
             if let Err(error) = renewal.send("idle").await {
                 // 客户端可能已经断开：idle 发不出去只能记一条，没有别的补救
-                crate::server::logging::log("[CodeArts]", &format!("chat-session idle 未被确认：{}", error.message));
+                crate::server::logging::log(
+                    "[CodeArts]",
+                    &format!("chat-session idle 未被确认：{}", error.message),
+                );
             }
             let _ = done_tx.send(()).await;
         });
-        Ok(ChatSession { id, stop, done: done_rx })
+        Ok(ChatSession {
+            id,
+            stop,
+            done: done_rx,
+        })
     }
 
     /// 会话 id（对话请求要带同一个 `User-Session-Id` 头）。
@@ -160,7 +175,10 @@ impl Drop for ChatSession {
 
 impl std::fmt::Debug for ChatSession {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.debug_struct("ChatSession").field("id", &self.id).finish()
+        formatter
+            .debug_struct("ChatSession")
+            .field("id", &self.id)
+            .finish()
     }
 }
 
@@ -209,7 +227,10 @@ impl Heartbeat {
         let response = request.send().await.map_err(|error| {
             GatewayError::with_status(
                 502,
-                format!("CodeArts 会话心跳传输失败：{}", egress::describe_error_detail(&error)),
+                format!(
+                    "CodeArts 会话心跳传输失败：{}",
+                    egress::describe_error_detail(&error)
+                ),
             )
         })?;
         let status_code = response.status().as_u16();
@@ -217,13 +238,20 @@ impl Heartbeat {
         if status_code != 200 {
             return Err(GatewayError::with_status(
                 i32::from(status_code),
-                format!("CodeArts 会话心跳被拒（HTTP {status_code}）：{}", scrub(&body, &self.credential)),
+                format!(
+                    "CodeArts 会话心跳被拒（HTTP {status_code}）：{}",
+                    scrub(&body, &self.credential)
+                ),
             ));
         }
         if !accepted(&body) {
             return Err(GatewayError::with_status(
                 502,
-                format!("CodeArts 会话心跳未确认 {} 状态：{}", status, scrub(&body, &self.credential)),
+                format!(
+                    "CodeArts 会话心跳未确认 {} 状态：{}",
+                    status,
+                    scrub(&body, &self.credential)
+                ),
             ));
         }
         Ok(())
@@ -234,7 +262,12 @@ impl Heartbeat {
 fn accepted(body: &str) -> bool {
     serde_json::from_str::<Value>(body)
         .ok()
-        .and_then(|payload| payload.get("status").and_then(Value::as_str).map(str::to_string))
+        .and_then(|payload| {
+            payload
+                .get("status")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
         .is_some_and(|status| status == "ok")
 }
 
@@ -248,7 +281,10 @@ pub struct SessionGate {
 
 impl SessionGate {
     pub fn new(default_limit: u32) -> Self {
-        Self { active: Mutex::new(std::collections::HashMap::new()), default_limit: default_limit.clamp(1, MAX_SESSION_LIMIT) }
+        Self {
+            active: Mutex::new(std::collections::HashMap::new()),
+            default_limit: default_limit.clamp(1, MAX_SESSION_LIMIT),
+        }
     }
 
     /// 准入 key：`sha256(trim_end(base_url,"/") + "\n" + 上游身份)`。
@@ -279,7 +315,9 @@ impl SessionGate {
     /// （所有家共用一条 `apply_patch`），不该由它决定本家往上游打多少并发。
     pub fn limit_for(&self, account_override: Option<u64>) -> u32 {
         match account_override {
-            Some(number) if number > 0 => u32::try_from(number).unwrap_or(u32::MAX).min(MAX_SESSION_LIMIT),
+            Some(number) if number > 0 => u32::try_from(number)
+                .unwrap_or(u32::MAX)
+                .min(MAX_SESSION_LIMIT),
             _ => self.default_limit,
         }
     }
@@ -299,7 +337,10 @@ impl SessionGate {
     ) -> Result<SessionPermit<'_>, GatewayError> {
         let limit = self.limit_for(account_override);
         let key = Self::key(base_url, identity);
-        let mut active = self.active.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut active = self
+            .active
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let used = active.entry(key.clone()).or_insert(0);
         if *used >= limit as usize {
             return Err(GatewayError::with_status(
@@ -324,7 +365,10 @@ impl SessionGate {
     }
 
     fn release(&self, key: &str) {
-        let mut active = self.active.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut active = self
+            .active
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(used) = active.get_mut(key) {
             if *used <= 1 {
                 active.remove(key);
@@ -349,7 +393,9 @@ impl Drop for SessionPermit<'_> {
 
 impl std::fmt::Debug for SessionPermit<'_> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.debug_struct("SessionPermit").finish_non_exhaustive()
+        formatter
+            .debug_struct("SessionPermit")
+            .finish_non_exhaustive()
     }
 }
 
@@ -382,18 +428,17 @@ fn form_query_escape(value: &str) -> String {
     out
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::server::core::providers::codearts::credentials::{OAuthContext, PkcePair};
-    use serde_json::json;
-    use std::sync::Arc;
     use axum::extract::Query;
     use axum::http::HeaderMap;
     use axum::routing::put;
+    use serde_json::json;
     use std::collections::VecDeque;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     fn credential() -> Credential {
         Credential {
@@ -403,7 +448,10 @@ mod tests {
             domain_id: "dom".to_string(),
             user_id: "uid".to_string(),
             oauth_context: Some(OAuthContext {
-                pkce_pair: PkcePair { code_verifier: "v".to_string(), ..PkcePair::default() },
+                pkce_pair: PkcePair {
+                    code_verifier: "v".to_string(),
+                    ..PkcePair::default()
+                },
                 ..OAuthContext::default()
             }),
             ..Credential::default()
@@ -431,30 +479,33 @@ mod tests {
             let script_route = Arc::clone(&script);
             let app = axum::Router::new().route(
                 "/snap-manager/v1/chat-session/heartbeat",
-                put(move |Query(params): Query<std::collections::HashMap<String, String>>, headers: HeaderMap| {
-                    let log = Arc::clone(&log_route);
-                    let script = Arc::clone(&script_route);
-                    let idle_seen = Arc::clone(&idle_route);
-                    let after = Arc::clone(&after_in_route);
-                    async move {
-                        let status = params.get("status").cloned().unwrap_or_default();
-                        let signed = headers.contains_key("authorization");
-                        let idle_already = idle_seen.load(Ordering::SeqCst) > 0;
-                        if status == "idle" {
-                            idle_seen.fetch_add(1, Ordering::SeqCst);
-                        } else if idle_already {
-                            after.fetch_add(1, Ordering::SeqCst);
+                put(
+                    move |Query(params): Query<std::collections::HashMap<String, String>>,
+                          headers: HeaderMap| {
+                        let log = Arc::clone(&log_route);
+                        let script = Arc::clone(&script_route);
+                        let idle_seen = Arc::clone(&idle_route);
+                        let after = Arc::clone(&after_in_route);
+                        async move {
+                            let status = params.get("status").cloned().unwrap_or_default();
+                            let signed = headers.contains_key("authorization");
+                            let idle_already = idle_seen.load(Ordering::SeqCst) > 0;
+                            if status == "idle" {
+                                idle_seen.fetch_add(1, Ordering::SeqCst);
+                            } else if idle_already {
+                                after.fetch_add(1, Ordering::SeqCst);
+                            }
+                            log.lock().unwrap().push((status.clone(), signed));
+                            let code = script.lock().unwrap().pop_front().unwrap_or(200);
+                            let body = if code == 200 {
+                                axum::Json(json!({ "status": "ok" }))
+                            } else {
+                                axum::Json(json!({ "error_code": "E" }))
+                            };
+                            (axum::http::StatusCode::from_u16(code).unwrap(), body)
                         }
-                        log.lock().unwrap().push((status.clone(), signed));
-                        let code = script.lock().unwrap().pop_front().unwrap_or(200);
-                        let body = if code == 200 {
-                            axum::Json(json!({ "status": "ok" }))
-                        } else {
-                            axum::Json(json!({ "error_code": "E" }))
-                        };
-                        (axum::http::StatusCode::from_u16(code).unwrap(), body)
-                    }
-                }),
+                    },
+                ),
             );
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             let addr = listener.local_addr().unwrap();
@@ -500,7 +551,10 @@ mod tests {
         session.stop().await;
         let calls = mock.calls();
         let busy_count = calls.iter().filter(|(status, _)| status == "busy").count();
-        assert!(busy_count >= 3, "40ms 间隔 150ms 内至少应续期 2-3 次，实际 {busy_count}");
+        assert!(
+            busy_count >= 3,
+            "40ms 间隔 150ms 内至少应续期 2-3 次，实际 {busy_count}"
+        );
         assert_eq!("idle", calls.last().unwrap().0, "最后一个是 idle");
         // idle 之后绝不能再有 busy（迟到的 busy 会把会话重新激活）
         assert_eq!(0, mock.seen_busy_after_idle.load(Ordering::SeqCst));
@@ -518,8 +572,15 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(140)).await;
         session.stop().await;
         let calls = mock.calls();
-        assert!(calls.iter().any(|(status, _)| status == "busy"), "失败的续期后仍应继续 busy");
-        assert_eq!(1, calls.iter().filter(|(status, _)| status == "idle").count(), "idle 恰好一次");
+        assert!(
+            calls.iter().any(|(status, _)| status == "busy"),
+            "失败的续期后仍应继续 busy"
+        );
+        assert_eq!(
+            1,
+            calls.iter().filter(|(status, _)| status == "idle").count(),
+            "idle 恰好一次"
+        );
     }
 
     /// 规则 2：首次 busy 失败（传输层/5xx）也要注销刚造的 id。
@@ -528,7 +589,9 @@ mod tests {
         let mock = Mock::spawn(vec![500, 200]).await; // busy 500，idle 200
         let credential = credential();
         let options = SessionOptions::new(&mock.base, &credential, "en-us");
-        let error = ChatSession::begin(options).await.expect_err("busy 500 应当报错");
+        let error = ChatSession::begin(options)
+            .await
+            .expect_err("busy 500 应当报错");
         assert_eq!(500, error.status_code, "上游状态码要原样带出去");
         let calls = mock.calls();
         assert_eq!(2, calls.len(), "busy 失败后应当补一发 idle：{calls:?}");
@@ -565,7 +628,10 @@ mod tests {
     #[test]
     fn acceptance_requires_ok_body() {
         assert!(accepted(r#"{"status":"ok"}"#));
-        assert!(!accepted(r#"{"status":"OK"}"#), "大小写敏感（参考实现逐字比对）");
+        assert!(
+            !accepted(r#"{"status":"OK"}"#),
+            "大小写敏感（参考实现逐字比对）"
+        );
         assert!(!accepted(r#"{"status":"error"}"#));
         assert!(!accepted(""));
         assert!(!accepted("not json"));
@@ -578,17 +644,28 @@ mod tests {
         let credential = credential();
         let mut permits = Vec::new();
         for _ in 0..DEFAULT_SESSION_LIMIT {
-            permits.push(gate.acquire("https://x", &credential.identity(), None).expect("前 3 个应当拿得到"));
+            permits.push(
+                gate.acquire("https://x", &credential.identity(), None)
+                    .expect("前 3 个应当拿得到"),
+            );
         }
         let error = gate
             .acquire("https://x", &credential.identity(), None)
             .expect_err("第 4 个应当被拒");
-        assert_eq!(409, error.status_code, "满员是 409 —— 429 会被编排层冷却健康账号");
+        assert_eq!(
+            409, error.status_code,
+            "满员是 409 —— 429 会被编排层冷却健康账号"
+        );
         assert_eq!(3, gate.active("https://x", &credential.identity()));
         drop(permits.pop());
-        assert_eq!(2, gate.active("https://x", &credential.identity()), "Drop 自动释放");
+        assert_eq!(
+            2,
+            gate.active("https://x", &credential.identity()),
+            "Drop 自动释放"
+        );
         assert!(
-            gate.acquire("https://x", &credential.identity(), None).is_ok(),
+            gate.acquire("https://x", &credential.identity(), None)
+                .is_ok(),
             "释放后应当拿得到"
         );
     }
@@ -602,7 +679,9 @@ mod tests {
         same_identity.security_token = "rotated-sts".to_string(); // 令牌轮换
         let mut other = first.clone();
         other.user_id = "uid2".to_string();
-        let held = gate.acquire("https://x", &first.identity(), None).expect("第一个应当拿得到");
+        let held = gate
+            .acquire("https://x", &first.identity(), None)
+            .expect("第一个应当拿得到");
         let error = gate
             .acquire("https://x", &same_identity.identity(), None)
             .expect_err("同一身份（换了令牌）共享容量");
@@ -624,20 +703,30 @@ mod tests {
         // 若来自默认值，用户会以为改没生效）
         let mut tight = Vec::new();
         for _ in 0..2 {
-            tight.push(gate.acquire("https://x", &identity, Some(2)).expect("上限 2 时前两个放行"));
+            tight.push(
+                gate.acquire("https://x", &identity, Some(2))
+                    .expect("上限 2 时前两个放行"),
+            );
         }
         let error = gate
             .acquire("https://x", &identity, Some(2))
             .expect_err("第 3 个应当被 2 挡住");
         assert_eq!(409, error.status_code);
-        assert!(error.message.contains("（2）"), "报错要说实际生效的上限：{}", error.message);
+        assert!(
+            error.message.contains("（2）"),
+            "报错要说实际生效的上限：{}",
+            error.message
+        );
         // 已经拿到的许可**不回收**（参考实现同一条：改小不影响在跑的会话）
         assert_eq!(2, gate.active("https://x", &identity));
         drop(tight);
         // 抬高：默认 3 之上给 5 就放 5 个
         let mut wide = Vec::new();
         for _ in 0..5 {
-            wide.push(gate.acquire("https://x", &identity, Some(5)).expect("上限 5 时前五个放行"));
+            wide.push(
+                gate.acquire("https://x", &identity, Some(5))
+                    .expect("上限 5 时前五个放行"),
+            );
         }
         assert!(gate.acquire("https://x", &identity, Some(5)).is_err());
         drop(wide);
@@ -648,7 +737,6 @@ mod tests {
         // 存储层那条 0–999 的写入闸是所有家共用的，本家自己截到 64
         assert_eq!(MAX_SESSION_LIMIT, gate.limit_for(Some(999)));
     }
-
 }
 
 /// 上游错误体先脱敏再截断。
@@ -701,7 +789,8 @@ mod identity_key_tests {
         assert_eq!(409, error.status_code);
         drop(held);
         assert!(
-            gate.acquire("https://x", "account:codearts-abc", None).is_ok(),
+            gate.acquire("https://x", "account:codearts-abc", None)
+                .is_ok(),
             "释放后应当放行"
         );
     }

@@ -14,7 +14,7 @@
 //! 两条一样的账号。缺身份（老数据/手工粘贴没给全）时退化成「按 access key 尾号
 //! 各占一条」，绝不猜着合并 —— 把两个账号合成一条会烧掉其中一份一次性刷新令牌。
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use crate::server::core::providers::codearts::credentials::Credential;
@@ -35,7 +35,13 @@ pub const CODEARTS_PROVIDER_ID: &str = kind_id(ProviderKind::CodeArts);
 const PROVIDER: &str = CODEARTS_PROVIDER_ID;
 
 /// 刷新前用来比对「还是不是同一份凭证」的键（变了说明期间被重新添加/导入过）。
-const IDENTITY_KEYS: &[&str] = &["accessToken", "refreshToken", "userId", "access_key_id", "refresh_token"];
+const IDENTITY_KEYS: &[&str] = &[
+    "accessToken",
+    "refreshToken",
+    "userId",
+    "access_key_id",
+    "refresh_token",
+];
 
 impl AccountStore {
     /// 取一条 codearts 账号记录；`account_id` 为空时取「启用且能用」的第一条。
@@ -60,7 +66,9 @@ impl AccountStore {
         source: &str,
     ) -> Result<Value, AccountStoreError> {
         if !credential.valid() {
-            return Err(AccountStoreError::bad_request("CodeArts 凭据缺少 access_key_id 或 secret_access_key"));
+            return Err(AccountStoreError::bad_request(
+                "CodeArts 凭据缺少 access_key_id 或 secret_access_key",
+            ));
         }
         let guard = self.guard();
         // 身份命中既有记录就地更新（重复登录不该在列表里堆两条）
@@ -70,28 +78,50 @@ impl AccountStore {
             .find(|record| same_identity(record, credential));
         if credential.user_id.trim().is_empty() && credential.domain_id.trim().is_empty() {
             // 没身份就无法去重；给一个稳定但唯一的 id（含时间戳），并明确告知原因
-            logging::log("[Accounts]", "CodeArts 凭据缺 domain_id/userId，重复添加会各占一条账号");
+            logging::log(
+                "[Accounts]",
+                "CodeArts 凭据缺 domain_id/userId，重复添加会各占一条账号",
+            );
         }
-        let id = existing.as_ref().map(|record| record.id().to_string()).unwrap_or_else(|| {
-            let seed = if credential.user_id.is_empty() {
-                credential.access_key_id.clone()
-            } else {
-                credential.user_id.clone()
-            };
-            format!("codearts-{:x}", Sha256::digest(seed.as_bytes()))
-        });
+        let id = existing
+            .as_ref()
+            .map(|record| record.id().to_string())
+            .unwrap_or_else(|| {
+                let seed = if credential.user_id.is_empty() {
+                    credential.access_key_id.clone()
+                } else {
+                    credential.user_id.clone()
+                };
+                format!("codearts-{:x}", Sha256::digest(seed.as_bytes()))
+            });
         if existing.is_none() && self.record_by_id(&guard, &id).is_some() {
-            return Err(AccountStoreError::new("CodeArts 账号 ID 已被其它账号占用，请先核对账号记录", 409));
+            return Err(AccountStoreError::new(
+                "CodeArts 账号 ID 已被其它账号占用，请先核对账号记录",
+                409,
+            ));
         }
-        let record_name = name.map(str::trim).filter(|value| !value.is_empty()).map(str::to_string)
-            .or_else(|| existing.as_ref().map(StoredAccount::name).filter(|value| !value.is_empty()))
+        let record_name = name
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .or_else(|| {
+                existing
+                    .as_ref()
+                    .map(StoredAccount::name)
+                    .filter(|value| !value.is_empty())
+            })
             .or_else(|| {
                 let label = credential.user_name.trim();
                 (!label.is_empty()).then(|| label.to_string())
             })
-            .unwrap_or_else(|| format!("CodeArts {}", truncate_chars(&credential.access_key_id, 8)));
+            .unwrap_or_else(|| {
+                format!("CodeArts {}", truncate_chars(&credential.access_key_id, 8))
+            });
 
-        let mut fields = existing.as_ref().map(|record| record.fields().clone()).unwrap_or_default();
+        let mut fields = existing
+            .as_ref()
+            .map(|record| record.fields().clone())
+            .unwrap_or_default();
         if let Value::Object(values) = credential.to_record_value() {
             for (key, value) in values {
                 // 空值不覆盖既有内容：只粘了 AK/SK 的重新添加不该把能续期的
@@ -105,24 +135,51 @@ impl AccountStore {
         let priority = match existing.as_ref() {
             Some(record) => record.priority(),
             None => {
-                let used = self.with_conn(&guard, |conn| sql::priorities_all(conn)).unwrap_or_default();
+                let used = self
+                    .with_conn(&guard, |conn| sql::priorities_all(conn))
+                    .unwrap_or_default();
                 next_free_priority(&used)
             }
         };
         fields.insert("id".to_string(), Value::String(id.clone()));
         fields.insert("provider".to_string(), Value::String(PROVIDER.to_string()));
-        fields.insert("name".to_string(), Value::String(truncate_chars(&record_name, 100)));
-        fields.insert("tokenTail".to_string(), Value::String(token_tail_of(&credential.access_key_id)));
+        fields.insert(
+            "name".to_string(),
+            Value::String(truncate_chars(&record_name, 100)),
+        );
+        fields.insert(
+            "tokenTail".to_string(),
+            Value::String(token_tail_of(&credential.access_key_id)),
+        );
         fields.insert("priority".to_string(), Value::from(priority));
-        fields.insert("enabled".to_string(), Value::Bool(existing.as_ref().map(StoredAccount::enabled).unwrap_or(true)));
+        fields.insert(
+            "enabled".to_string(),
+            Value::Bool(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::enabled)
+                    .unwrap_or(true),
+            ),
+        );
         fields.insert("desktop".to_string(), Value::Bool(false));
         fields.insert("source".to_string(), Value::String(source.to_string()));
-        fields.insert("addedAt".to_string(), Value::from(existing.as_ref().map(StoredAccount::added_at).unwrap_or_else(logging::now_ms)));
+        fields.insert(
+            "addedAt".to_string(),
+            Value::from(
+                existing
+                    .as_ref()
+                    .map(StoredAccount::added_at)
+                    .unwrap_or_else(logging::now_ms),
+            ),
+        );
         fields.insert("updatedAt".to_string(), Value::from(logging::now_ms()));
         fields.insert("rateLimits".to_string(), json!({}));
         let record = StoredAccount::from_map(fields);
         self.with_conn(&guard, |conn| sql::put(conn, &record))?;
-        logging::log("[Accounts]", &format!("✅ CodeArts 账号已保存（优先级 {priority}）"));
+        logging::log(
+            "[Accounts]",
+            &format!("✅ CodeArts 账号已保存（优先级 {priority}）"),
+        );
         Ok(self.public_account(&record))
     }
 
@@ -148,8 +205,13 @@ impl AccountStore {
                 return Ok(CredentialWrite::Stale);
             }
         }
-        if !credential.user_id.is_empty() && !record.user_id().is_empty() && record.user_id() != credential.user_id {
-            return Err(AccountStoreError::bad_request("CodeArts 刷新结果与原账号身份不一致"));
+        if !credential.user_id.is_empty()
+            && !record.user_id().is_empty()
+            && record.user_id() != credential.user_id
+        {
+            return Err(AccountStoreError::bad_request(
+                "CodeArts 刷新结果与原账号身份不一致",
+            ));
         }
         if let Value::Object(values) = credential.to_record_value() {
             for (key, value) in values {
@@ -159,7 +221,10 @@ impl AccountStore {
                 record.fields_mut().insert(key, value);
             }
         }
-        record.set("tokenTail", Value::String(token_tail_of(&credential.access_key_id)));
+        record.set(
+            "tokenTail",
+            Value::String(token_tail_of(&credential.access_key_id)),
+        );
         record.set_updated_at(logging::now_ms());
         self.with_conn(&guard, |conn| sql::update_in_place(conn, &record))?;
         Ok(CredentialWrite::Written)
@@ -183,15 +248,24 @@ impl AccountStore {
     /// （临期会真换发并写回），拿的却是取之前的记录快照 —— 于是**每次在临期凭据上领取**，
     /// 每一条台账写回都被判成 Stale，而调用方把它当成功。结果幂等键从没落过盘
     /// （崩溃后重试会当成另一笔领取），当天的次数限制也一起失效。
-    pub fn put_codearts_welfare_ledger(&self, account_id: &str, ledger: &Value) -> Result<(), AccountStoreError> {
+    pub fn put_codearts_welfare_ledger(
+        &self,
+        account_id: &str,
+        ledger: &Value,
+    ) -> Result<(), AccountStoreError> {
         let guard = self.guard();
         let Some(mut record) = self
             .record_by_id(&guard, account_id)
             .filter(|record| record.provider() == PROVIDER)
         else {
-            return Err(AccountStoreError::new("CodeArts 账号已不存在，领取台账无处落盘", 404));
+            return Err(AccountStoreError::new(
+                "CodeArts 账号已不存在，领取台账无处落盘",
+                404,
+            ));
         };
-        record.fields_mut().insert("codeartsWelfare".to_string(), ledger.clone());
+        record
+            .fields_mut()
+            .insert("codeartsWelfare".to_string(), ledger.clone());
         record.set_updated_at(logging::now_ms());
         self.with_conn(&guard, |conn| sql::update_in_place(conn, &record))?;
         Ok(())
@@ -209,11 +283,23 @@ impl AccountStore {
     pub fn to_codearts_public_account(&self, record: &StoredAccount) -> Value {
         let stored = record.to_value();
         let credential = Credential::from_payload(&stored).ok();
-        let available = record.has_token() && credential.as_ref().is_some_and(|value| value.valid());
+        let available =
+            record.has_token() && credential.as_ref().is_some_and(|value| value.valid());
         let can_refresh = credential.as_ref().is_some_and(Credential::can_refresh);
         let mut public = serde_json::Map::new();
-        for key in ["id", "provider", "name", "userId", "source", "tokenTail", "expiresAt"] {
-            public.insert(key.to_string(), record.get(key).cloned().unwrap_or(Value::Null));
+        for key in [
+            "id",
+            "provider",
+            "name",
+            "userId",
+            "source",
+            "tokenTail",
+            "expiresAt",
+        ] {
+            public.insert(
+                key.to_string(),
+                record.get(key).cloned().unwrap_or(Value::Null),
+            );
         }
         public.insert("edition".to_string(), Value::Null);
         public.insert("editionLabel".to_string(), Value::Null);
@@ -222,8 +308,17 @@ impl AccountStore {
         public.insert("enabled".to_string(), Value::Bool(record.enabled()));
         public.insert("addedAt".to_string(), Value::from(record.added_at()));
         public.insert("updatedAt".to_string(), Value::from(record.updated_at()));
-        public.insert("proxy".to_string(), crate::server::core::proxies::describe_account_proxy(Some(&record.proxy())));
-        public.insert("rateLimits".to_string(), record.get("rateLimits").cloned().unwrap_or_else(|| json!({})));
+        public.insert(
+            "proxy".to_string(),
+            crate::server::core::proxies::describe_account_proxy(Some(&record.proxy())),
+        );
+        public.insert(
+            "rateLimits".to_string(),
+            record
+                .get("rateLimits")
+                .cloned()
+                .unwrap_or_else(|| json!({})),
+        );
         public.insert("desktop".to_string(), Value::Bool(false));
         public.insert("available".to_string(), Value::Bool(available));
         // 并发上限：本家**没有「不限」这个选项**，所以缺省给上游硬顶而不是 0。
@@ -247,12 +342,27 @@ impl AccountStore {
         // 而这三项之外没有别的可推。里面**只有活动 id、幂等键与布尔状态**，
         // 没有任何凭据材料（幂等键是我们自己拼的 `claim_<活动id>_<毫秒>`），
         // 所以不需要像凭据那样过滤。
-        public.insert("welfare".to_string(), record.get("codeartsWelfare").cloned().unwrap_or(Value::Null));
+        public.insert(
+            "welfare".to_string(),
+            record
+                .get("codeartsWelfare")
+                .cloned()
+                .unwrap_or(Value::Null),
+        );
         // 账号能路由到哪些模型（转发与广告都按这个判），以及它是不是福利通道
         if let Some(credential) = credential.as_ref() {
-            public.insert("domainId".to_string(), Value::String(credential.domain_id.clone()));
-            public.insert("userName".to_string(), Value::String(credential.user_name.clone()));
-            public.insert("loginType".to_string(), Value::String(credential.login_type.clone()));
+            public.insert(
+                "domainId".to_string(),
+                Value::String(credential.domain_id.clone()),
+            );
+            public.insert(
+                "userName".to_string(),
+                Value::String(credential.user_name.clone()),
+            );
+            public.insert(
+                "loginType".to_string(),
+                Value::String(credential.login_type.clone()),
+            );
         }
         Value::Object(public)
     }
@@ -261,7 +371,14 @@ impl AccountStore {
 /// 记录与本家凭据是否同一身份（`domain_id + user_id`，都空时退到 access key）。
 fn same_identity(record: &StoredAccount, credential: &Credential) -> bool {
     let stored = record.to_value();
-    let read = |key: &str| stored.get(key).and_then(Value::as_str).unwrap_or("").trim().to_string();
+    let read = |key: &str| {
+        stored
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    };
     let (domain, user) = (read("domain_id"), read("user_id"));
     if !credential.domain_id.is_empty() || !credential.user_id.is_empty() {
         return domain == credential.domain_id.trim() && user == credential.user_id.trim();
@@ -277,8 +394,10 @@ mod tests {
     //! （界面上账号还在，下一次续期才发现串已经作废）。所以下面四条都围着它。
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use crate::server::core::providers::codearts::credentials::{OAuthContext, PkcePair, Credential};
     use crate::server::core::account_store::CredentialWrite;
+    use crate::server::core::providers::codearts::credentials::{
+        Credential, OAuthContext, PkcePair,
+    };
     use crate::server::db::Db;
 
     use super::*;
@@ -319,22 +438,46 @@ mod tests {
     #[test]
     fn write_back_lands_and_keeps_both_key_spellings() {
         let store = store();
-        store.add_codearts_account(&credential("AK_OLD", "u1"), None, "manual").expect("添加应当成功");
-        let record = store.codearts_account_record("").expect("刚添加的账号要能读回来");
+        store
+            .add_codearts_account(&credential("AK_OLD", "u1"), None, "manual")
+            .expect("添加应当成功");
+        let record = store
+            .codearts_account_record("")
+            .expect("刚添加的账号要能读回来");
         // 通用键与专有键都得是旧值（选路判 has_token 读的是 accessToken）
         assert_eq!(record["accessToken"], Value::String("AK_OLD".into()));
 
         let write = store
             .update_codearts_credentials_if_current(&record, &credential("AK_NEW", "u1"))
             .expect("写回本身不该报错");
-        assert_eq!(CredentialWrite::Written, write, "记录没被动过，应当判定为可写");
+        assert_eq!(
+            CredentialWrite::Written,
+            write,
+            "记录没被动过，应当判定为可写"
+        );
 
         let after = store.codearts_account_record("").unwrap();
         assert_eq!(after["access_key_id"], Value::String("AK_NEW".into()));
-        assert_eq!(after["accessToken"], Value::String("AK_NEW".into()), "通用键漏更新的话账号会被当成没有 token");
-        assert_eq!(after["refreshToken"], Value::String("rt-of-AK_NEW".into()), "一次性令牌必须跟着换");
-        assert_eq!(after["refreshToken"], Value::String("rt-of-AK_NEW".into()), "一次性令牌必须跟着换");
-        assert_eq!(after["expiresAt"], Value::from(1_790_525_820_327_i64), "毫秒到期也要一起刷新（2026-09-27T16:17:00.327Z）");
+        assert_eq!(
+            after["accessToken"],
+            Value::String("AK_NEW".into()),
+            "通用键漏更新的话账号会被当成没有 token"
+        );
+        assert_eq!(
+            after["refreshToken"],
+            Value::String("rt-of-AK_NEW".into()),
+            "一次性令牌必须跟着换"
+        );
+        assert_eq!(
+            after["refreshToken"],
+            Value::String("rt-of-AK_NEW".into()),
+            "一次性令牌必须跟着换"
+        );
+        assert_eq!(
+            after["expiresAt"],
+            Value::from(1_790_525_820_327_i64),
+            "毫秒到期也要一起刷新（2026-09-27T16:17:00.327Z）"
+        );
         // 只有一套键名是不够的：转发读 access_key_id，投影读 accessToken
         assert_ne!(after["accessToken"], after["refreshToken"]);
     }
@@ -342,33 +485,63 @@ mod tests {
     #[test]
     fn write_back_refuses_when_the_record_changed_underneath() {
         let store = store();
-        store.add_codearts_account(&credential("AK_OLD", "u1"), None, "manual").unwrap();
+        store
+            .add_codearts_account(&credential("AK_OLD", "u1"), None, "manual")
+            .unwrap();
         let snapshot = store.codearts_account_record("").expect("读一份快照");
         // 期间用户重新粘贴了凭据（同一身份、不同令牌）—— 单飞里那次换证已经作废，
         // 不能再把内存里的结果盖到盘上
-        store.add_codearts_account(&credential("AK_REIMPORTED", "u1"), None, "manual").unwrap();
+        store
+            .add_codearts_account(&credential("AK_REIMPORTED", "u1"), None, "manual")
+            .unwrap();
 
-        let write = store.update_codearts_credentials_if_current(&snapshot, &credential("AK_FROM_FLIGHT", "u1")).unwrap();
+        let write = store
+            .update_codearts_credentials_if_current(&snapshot, &credential("AK_FROM_FLIGHT", "u1"))
+            .unwrap();
         assert_eq!(CredentialWrite::Stale, write, "身份键变了必须判 Stale");
         let stored = store.codearts_account_record("").unwrap();
-        assert_eq!(stored["access_key_id"], Value::String("AK_REIMPORTED".into()), "Stale 分支绝不能落盘");
+        assert_eq!(
+            stored["access_key_id"],
+            Value::String("AK_REIMPORTED".into()),
+            "Stale 分支绝不能落盘"
+        );
     }
 
     #[test]
     fn relogin_updates_in_place_instead_of_stacking_accounts() {
         let store = store();
-        store.add_codearts_account(&credential("AK_OLD", "u1"), None, "manual").unwrap();
-        store.add_codearts_account(&credential("AK_NEW", "u1"), Some("改名了"), "manual").unwrap();
-        let all = store.list_accounts()["accounts"].as_array().cloned().unwrap_or_default();
-        let mine: Vec<_> = all.iter().filter(|a| a["provider"] == Value::String(PROVIDER.into())).collect();
-        assert_eq!(1, mine.len(), "同一 domain+user 重复登录应当就地更新，而不是堆成两条");
-        assert_eq!("改名了", mine[0]["name"].as_str().unwrap(), "名字要能改，但账号还是那条");
+        store
+            .add_codearts_account(&credential("AK_OLD", "u1"), None, "manual")
+            .unwrap();
+        store
+            .add_codearts_account(&credential("AK_NEW", "u1"), Some("改名了"), "manual")
+            .unwrap();
+        let all = store.list_accounts()["accounts"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let mine: Vec<_> = all
+            .iter()
+            .filter(|a| a["provider"] == Value::String(PROVIDER.into()))
+            .collect();
+        assert_eq!(
+            1,
+            mine.len(),
+            "同一 domain+user 重复登录应当就地更新，而不是堆成两条"
+        );
+        assert_eq!(
+            "改名了",
+            mine[0]["name"].as_str().unwrap(),
+            "名字要能改，但账号还是那条"
+        );
     }
 
     #[test]
     fn partial_paste_does_not_wipe_the_refresh_chain() {
         let store = store();
-        store.add_codearts_account(&credential("AK_OLD", "u1"), None, "manual").unwrap();
+        store
+            .add_codearts_account(&credential("AK_OLD", "u1"), None, "manual")
+            .unwrap();
         // 用户只粘了短期三件套（没有 refresh token / oauth_context），身份还是那条
         let thin = Credential {
             access_key_id: "AK_THIN".to_string(),
@@ -378,25 +551,49 @@ mod tests {
             user_id: "u1".to_string(),
             ..Default::default()
         };
-        store.add_codearts_account(&thin, None, "manual").expect("同身份就地更新");
+        store
+            .add_codearts_account(&thin, None, "manual")
+            .expect("同身份就地更新");
         let after = store.codearts_account_record("").unwrap();
         assert_eq!("AK_THIN", after["access_key_id"].as_str().unwrap());
         assert_eq!(
             1,
-            store.list_accounts()["accounts"].as_array().cloned().unwrap_or_default().iter().filter(|a| a["provider"] == Value::String(PROVIDER.into())).count(),
+            store.list_accounts()["accounts"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .filter(|a| a["provider"] == Value::String(PROVIDER.into()))
+                .count(),
             "带着身份重新粘贴不该另起一条"
         );
         // 长期那一半得留着：洗成空等于判了这个账号死刑（再也续不回来）
-        assert!(after["refresh_token"].as_str().unwrap_or("").starts_with("rt-of-AK_OLD"), "空的 refreshToken 不该覆盖既有值");
-        assert!(after.get("oauth_context").is_some_and(|value| !value.is_null()), "PKCE/DPoP 上下文同样不能被洗掉");
+        assert!(
+            after["refresh_token"]
+                .as_str()
+                .unwrap_or("")
+                .starts_with("rt-of-AK_OLD"),
+            "空的 refreshToken 不该覆盖既有值"
+        );
+        assert!(
+            after
+                .get("oauth_context")
+                .is_some_and(|value| !value.is_null()),
+            "PKCE/DPoP 上下文同样不能被洗掉"
+        );
     }
 
     #[test]
     fn public_shape_carries_no_credential_material() {
         let store = store();
-        store.add_codearts_account(&credential("AK_SECRETISH", "u1"), None, "manual").unwrap();
+        store
+            .add_codearts_account(&credential("AK_SECRETISH", "u1"), None, "manual")
+            .unwrap();
         // 走真实出口：`list_accounts` 的分派就是 `to_codearts_public_account`
-        let accounts = store.list_accounts()["accounts"].as_array().cloned().unwrap_or_default();
+        let accounts = store.list_accounts()["accounts"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
         let public = accounts
             .iter()
             .find(|account| account["provider"] == Value::String(PROVIDER.into()))
@@ -416,7 +613,10 @@ mod tests {
         assert_eq!(Some(true), public["hasRefreshToken"].as_bool());
         // 展示用的一截尾号不能把整串 AK 带出来（上面那条禁令的具体化）
         let tail = public["tokenTail"].as_str().unwrap_or_default();
-        assert!(tail.len() < "AK_SECRETISH".len() && tail.len() <= 8, "尾号该是一小截，实际 {tail:?}");
+        assert!(
+            tail.len() < "AK_SECRETISH".len() && tail.len() <= 8,
+            "尾号该是一小截，实际 {tail:?}"
+        );
     }
 
     /// 本家的并发上限**没有「不限」这一档**：没配过也要报上游硬顶 3。
@@ -429,8 +629,13 @@ mod tests {
     #[test]
     fn an_unconfigured_concurrency_limit_publishes_the_upstream_cap() {
         let store = store();
-        store.add_codearts_account(&credential("AK_LIMIT", "u1"), None, "manual").unwrap();
-        let id = store.codearts_account_record("").unwrap()["id"].as_str().unwrap().to_string();
+        store
+            .add_codearts_account(&credential("AK_LIMIT", "u1"), None, "manual")
+            .unwrap();
+        let id = store.codearts_account_record("").unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
         let published = |store: &AccountStore| {
             store.list_accounts()["accounts"]
                 .as_array()
@@ -440,11 +645,23 @@ mod tests {
                 .find(|account| account["id"] == Value::String(id.clone()))
                 .and_then(|account| account["maxConcurrent"].as_u64())
         };
-        assert_eq!(Some(3), published(&store), "没配过上限也要报 3，选路据此在满员时跳过本账号");
-        store.update_account(&id, &json!({ "maxConcurrent": 5 })).unwrap();
+        assert_eq!(
+            Some(3),
+            published(&store),
+            "没配过上限也要报 3，选路据此在满员时跳过本账号"
+        );
+        store
+            .update_account(&id, &json!({ "maxConcurrent": 5 }))
+            .unwrap();
         assert_eq!(Some(5), published(&store), "配了就按配的数");
-        store.update_account(&id, &json!({ "maxConcurrent": 0 })).unwrap();
-        assert_eq!(Some(3), published(&store), "0 在本家不是「不限」，回到默认值");
+        store
+            .update_account(&id, &json!({ "maxConcurrent": 0 }))
+            .unwrap();
+        assert_eq!(
+            Some(3),
+            published(&store),
+            "0 在本家不是「不限」，回到默认值"
+        );
     }
 }
 
@@ -464,7 +681,9 @@ mod ledger_tests {
         let id = SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!("codearts-ledger-{}-{id}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        AccountStore::with_db(Some(Db::open(&dir.join("agent2api.db")).expect("临时库应当能建起来")))
+        AccountStore::with_db(Some(
+            Db::open(&dir.join("agent2api.db")).expect("临时库应当能建起来"),
+        ))
     }
 
     fn credential(ak: &str) -> Credential {
@@ -486,31 +705,55 @@ mod ledger_tests {
     #[test]
     fn the_ledger_lands_even_when_the_credential_just_rotated() {
         let store = store();
-        store.add_codearts_account(&credential("AK_OLD"), None, "manual").unwrap();
-        let id = store.codearts_account_record("").unwrap()["id"].as_str().unwrap().to_string();
+        store
+            .add_codearts_account(&credential("AK_OLD"), None, "manual")
+            .unwrap();
+        let id = store.codearts_account_record("").unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
 
         // 模拟「领取前先续了期」：凭据换发并写回，之后再写台账
         let snapshot = store.codearts_account_record("").unwrap();
         store
             .update_codearts_credentials_if_current(&snapshot, &credential("AK_NEW"))
             .unwrap();
-        store.put_codearts_welfare_ledger(&id, &ledger("2026-09-27", 1)).expect("换了凭据也该写得进去");
+        store
+            .put_codearts_welfare_ledger(&id, &ledger("2026-09-27", 1))
+            .expect("换了凭据也该写得进去");
 
         let after = store.codearts_account_record("").unwrap();
-        assert_eq!(1, after["codeartsWelfare"]["attempts"].as_i64().unwrap(), "台账必须真的落盘");
-        assert_eq!("AK_NEW", after["access_key_id"].as_str().unwrap(), "写台账不许顺手洗掉凭据");
+        assert_eq!(
+            1,
+            after["codeartsWelfare"]["attempts"].as_i64().unwrap(),
+            "台账必须真的落盘"
+        );
+        assert_eq!(
+            "AK_NEW",
+            after["access_key_id"].as_str().unwrap(),
+            "写台账不许顺手洗掉凭据"
+        );
     }
 
     #[test]
     fn a_ledger_write_for_a_missing_account_is_an_error_not_a_silent_success() {
         let store = store();
-        store.add_codearts_account(&credential("AK_A"), None, "manual").unwrap();
-        let id = store.codearts_account_record("").unwrap()["id"].as_str().unwrap().to_string();
+        store
+            .add_codearts_account(&credential("AK_A"), None, "manual")
+            .unwrap();
+        let id = store.codearts_account_record("").unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
         // 领取中途账号被删掉：写回必须报错，调用方据此**不发**写请求
         store.remove_account(&id).unwrap();
         let error = store
             .put_codearts_welfare_ledger(&id, &ledger("2026-09-27", 1))
             .expect_err("账号没了就该失败，而不是假装写成功");
-        assert_eq!(404, error.status_code, "文案要能被上层判成「别领了」：{}", error.message);
+        assert_eq!(
+            404, error.status_code,
+            "文案要能被上层判成「别领了」：{}",
+            error.message
+        );
     }
 }

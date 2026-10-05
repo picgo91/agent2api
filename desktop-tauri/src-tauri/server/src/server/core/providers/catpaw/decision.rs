@@ -91,7 +91,10 @@ pub(super) fn decide(
     let mut hits: Vec<SessionRecord> = Vec::new();
     for call_id in pending_call_ids(raw_messages) {
         if let Some(record) = registry.lookup_by_call_id(&call_id) {
-            if !hits.iter().any(|hit| hit.conversation_id == record.conversation_id) {
+            if !hits
+                .iter()
+                .any(|hit| hit.conversation_id == record.conversation_id)
+            {
                 hits.push(record);
             }
         }
@@ -99,7 +102,9 @@ pub(super) fn decide(
     if hits.len() > 1 {
         // 同一批 tool_call_id 命中了两条不同的 conversation：客户端把两轮工具
         // 调用的结果混在一起了，续接到哪一条都是错的
-        return Err(CatPawError::bad_request("tool_call_id 命中多个待处理工具会话"));
+        return Err(CatPawError::bad_request(
+            "tool_call_id 命中多个待处理工具会话",
+        ));
     }
     if let Some(session) = hits.into_iter().next() {
         let continuation = continuation_message(raw_messages, &session)?;
@@ -213,7 +218,11 @@ fn pending_tool_call_start(messages: &[Value]) -> Option<usize> {
         if !valid {
             continue;
         }
-        return if remaining.is_empty() { Some(index) } else { None };
+        return if remaining.is_empty() {
+            Some(index)
+        } else {
+            None
+        };
     }
     None
 }
@@ -262,7 +271,10 @@ pub(super) fn continuation_message(
                 .iter()
                 .map(|call| {
                     (
-                        call.get("id").and_then(Value::as_str).unwrap_or_default().to_string(),
+                        call.get("id")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
                         call.pointer("/function/name")
                             .and_then(Value::as_str)
                             .unwrap_or_default()

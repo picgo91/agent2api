@@ -120,7 +120,10 @@ fn qoder_region(fields: &Map<String, Value>) -> Result<Option<String>, ()> {
 }
 
 /// 导入记录的业务身份；无法确定身份时 Err（该条失败，不做猜测性匹配）。
-pub(super) fn identity_of_item(provider: &str, item: &Map<String, Value>) -> Result<String, String> {
+pub(super) fn identity_of_item(
+    provider: &str,
+    item: &Map<String, Value>,
+) -> Result<String, String> {
     let text = |key: &str| {
         item.get(key)
             .and_then(Value::as_str)
@@ -193,7 +196,10 @@ pub(super) fn identity_of_item(provider: &str, item: &Map<String, Value>) -> Res
             return Err("缺少 uid（无法标识 Trae 账号）".to_string());
         }
         let variant = text("variant");
-        return Ok(format!("{}:{uid}", if variant.is_empty() { "solo" } else { &variant }));
+        return Ok(format!(
+            "{}:{uid}",
+            if variant.is_empty() { "solo" } else { &variant }
+        ));
     }
     // 自定义提供商：凭证就是身份 —— apiKey 非空时与添加路径「同 key 合并」
     // 完全同口径（添加路径的账号 id 就是 key 的 SHA-256 前缀）；空 key 没有
@@ -247,7 +253,10 @@ pub(super) fn identity_of_record(provider: &str, record: &StoredAccount) -> Opti
             .unwrap_or("")
             .trim()
             .to_string();
-        return Some(format!("{}:{uid}", if variant.is_empty() { "solo" } else { &variant }));
+        return Some(format!(
+            "{}:{uid}",
+            if variant.is_empty() { "solo" } else { &variant }
+        ));
     }
     // Cline：身份在 `account` 键上（与 `identity_of_item` 同一口径，两池共用）
     if crate::server::core::account_store::is_cline_family(provider) {
@@ -374,7 +383,11 @@ mod tests {
         );
         assert_eq!(
             "cn:51029416092912",
-            identity_of_item("trae", &item(json!({"uid": "51029416092912", "variant": "cn"}))).expect("应识别出身份"),
+            identity_of_item(
+                "trae",
+                &item(json!({"uid": "51029416092912", "variant": "cn"}))
+            )
+            .expect("应识别出身份"),
             "两个谱系是同一个人也是两条记录（与 add_trae_account 的判重口径一致）"
         );
         // variant 缺失时**必须**与 `identity_of_record` 的缺省同一个值，
@@ -383,6 +396,13 @@ mod tests {
             "solo:777",
             identity_of_item("trae", &item(json!({"uid": "777"}))).expect("缺 variant 按 solo"),
         );
-        assert!(identity_of_item("trae", &item(json!({"uid": "  ", "userId": "51029416092912"}))).is_err(), "空 uid 不能拿 userId 凑");
+        assert!(
+            identity_of_item(
+                "trae",
+                &item(json!({"uid": "  ", "userId": "51029416092912"}))
+            )
+            .is_err(),
+            "空 uid 不能拿 userId 凑"
+        );
     }
 }

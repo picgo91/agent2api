@@ -52,7 +52,9 @@ pub struct ZcodeAdapter {
 pub static ZCODE_ADAPTER: ZcodeAdapter = ZcodeAdapter { region: Region::Cn };
 
 /// 国际版实例
-pub static ZCODE_INTL_ADAPTER: ZcodeAdapter = ZcodeAdapter { region: Region::Intl };
+pub static ZCODE_INTL_ADAPTER: ZcodeAdapter = ZcodeAdapter {
+    region: Region::Intl,
+};
 
 impl ZcodeAdapter {
     /// 本实例的地区（供 `adapter_for` 之外的调用点自查，例如领取任务的选路）
@@ -252,9 +254,7 @@ impl ProviderAdapter for ZcodeAdapter {
         _store: &'a AccountStore,
         _account_id: &'a str,
         _force: bool,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = ModelRefreshOutcome> + Send + 'a>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ModelRefreshOutcome> + Send + 'a>> {
         Box::pin(async move { ModelRefreshOutcome::unchanged() })
     }
 
@@ -279,9 +279,8 @@ impl ProviderAdapter for ZcodeAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>>
+    {
         Box::pin(async move { super::balance::query_usage(store, account_id).await })
     }
 }
@@ -304,7 +303,9 @@ fn session_access_token(
             .current_entry_for_provider(region.provider_id())
             .map(|entry| entry.session)
     } else {
-        store.get_session_by_id(account_id).map(|entry| entry.session)
+        store
+            .get_session_by_id(account_id)
+            .map(|entry| entry.session)
     };
     let session = session.ok_or_else(|| {
         GatewayError::with_status(401, "没有可用的 ZCode 账号，请先在「账号」页添加")
@@ -336,15 +337,15 @@ fn session_access_token(
 /// 做成参数而不是两份头表，是为了让其余九个头的取值只有一处定义。
 pub(super) fn identity_headers(user_agent_suffix: Option<&str>) -> Vec<(String, String)> {
     let version = super::claim::app_version();
-    let user_agent = match user_agent_suffix.map(str::trim).filter(|text| !text.is_empty()) {
+    let user_agent = match user_agent_suffix
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+    {
         Some(suffix) => format!("ZCode/{version} {suffix}"),
         None => format!("ZCode/{version}"),
     };
     vec![
-        (
-            "HTTP-Referer".to_string(),
-            "https://zcode.z.ai".to_string(),
-        ),
+        ("HTTP-Referer".to_string(), "https://zcode.z.ai".to_string()),
         ("User-Agent".to_string(), user_agent),
         ("X-ZCode-App-Version".to_string(), version),
         ("X-Title".to_string(), "Z Code@cli".to_string()),

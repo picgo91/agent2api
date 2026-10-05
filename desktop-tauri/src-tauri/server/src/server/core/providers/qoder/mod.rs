@@ -53,8 +53,8 @@ mod balance;
 pub mod chat;
 pub mod checkin;
 pub mod context;
-pub mod credentials;
 pub mod cosy;
+pub mod credentials;
 pub mod endpoints;
 pub mod errors;
 mod machine;
@@ -69,10 +69,10 @@ use axum::http::HeaderMap;
 use serde_json::Value;
 
 use crate::server::core::account_store::AccountStore;
-use crate::server::core::providers::content_block;
 use crate::server::core::providers::adapter::{
     ChatRequestPlan, ModelRefreshOutcome, ProviderAdapter, ReasoningPatch, UpstreamErrorClass,
 };
+use crate::server::core::providers::content_block;
 use crate::server::core::providers::ProviderKind;
 use crate::server::errors::GatewayError;
 use crate::server::logging;
@@ -118,7 +118,10 @@ fn record_limited(
     kind: errors::UpstreamKind,
     message: &str,
 ) {
-    if !matches!(kind, errors::UpstreamKind::Quota | errors::UpstreamKind::Rate) {
+    if !matches!(
+        kind,
+        errors::UpstreamKind::Quota | errors::UpstreamKind::Rate
+    ) {
         return;
     }
     if account_id.is_empty() {
@@ -207,7 +210,9 @@ impl ProviderAdapter for QoderAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>,
+    > {
         Box::pin(async move {
             refresh::ensure_fresh(store, account_id, false)
                 .await
@@ -224,7 +229,9 @@ impl ProviderAdapter for QoderAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>,
+    > {
         Box::pin(async move {
             refresh::ensure_fresh(store, account_id, true)
                 .await
@@ -251,7 +258,8 @@ impl ProviderAdapter for QoderAdapter {
         &'a self,
         store: &'a AccountStore,
         account_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, GatewayError>> + Send + 'a>>
+    {
         Box::pin(balance::query(store, account_id))
     }
 
@@ -457,7 +465,11 @@ impl ProviderAdapter for QoderAdapter {
                     &format!(
                         "POST {} model={} upstream={} stream={} region={} account={}",
                         plan.url,
-                        if model_name.is_empty() { "(默认)" } else { &model_name },
+                        if model_name.is_empty() {
+                            "(默认)"
+                        } else {
+                            &model_name
+                        },
                         plan.upstream_key,
                         stream,
                         context.credentials.region.id(),
@@ -487,9 +499,14 @@ impl ProviderAdapter for QoderAdapter {
                         // 鉴权类：强制续期凭证后重发（一次）。续不出来/续了还被拒
                         // 就把原错误交回 —— 那说明问题不在凭证的新旧上
                         chat::AttemptError::Auth(error) => {
-                            context =
-                                refresh_after_auth(store, &account_id, &mut auth_retries, error, telemetry)
-                                    .await?;
+                            context = refresh_after_auth(
+                                store,
+                                &account_id,
+                                &mut auth_retries,
+                                error,
+                                telemetry,
+                            )
+                            .await?;
                             continue;
                         }
                         chat::AttemptError::Fatal(error) => {
@@ -521,7 +538,8 @@ impl ProviderAdapter for QoderAdapter {
                     }
                 }
 
-                let translator = Translator::new(response_id(), plan.model_name.clone(), plan.thinking);
+                let translator =
+                    Translator::new(response_id(), plan.model_name.clone(), plan.thinking);
                 // 限额记账的素材：流式分支的收尾发生在 handler 返回之后，那时
                 // 这里的局部变量都还在（被 move 进后台任务），所以先把要用的
                 // 那份句柄与标识克隆好（store 是 Arc 句柄，clone 很便宜）
@@ -540,19 +558,24 @@ impl ProviderAdapter for QoderAdapter {
                     // 无损）；拿到内容帧才返回 Ok(Stream)，预读帧随后补发。
                     match piping::prefetch_stream_head(response, &limit_ctx, &telemetry).await {
                         Ok((prefetched, source)) => {
-                            let (sender, receiver) =
-                                tokio::sync::mpsc::channel::<Result<bytes::Bytes, std::io::Error>>(64);
+                            let (sender, receiver) = tokio::sync::mpsc::channel::<
+                                Result<bytes::Bytes, std::io::Error>,
+                            >(64);
                             let telemetry = telemetry.clone();
                             // 上游流必须被**拉到底**（源实现同样读完整条流再 cancel）：
                             // 客户端断开时 tokio 的 channel 发送端会失败，循环随即退出，
                             // drop 掉 source 就等价于断开上游连接。
                             crate::spawn_task(async move {
-                                piping::drive_stream(source, translator, telemetry, limit_ctx, sender, prefetched)
-                                    .await;
+                                piping::drive_stream(
+                                    source, translator, telemetry, limit_ctx, sender, prefetched,
+                                )
+                                .await;
                             });
                             return Ok(crate::server::core::upstream::ForwardOutcome::Stream {
                                 status: 200,
-                                stream: Box::new(tokio_stream::wrappers::ReceiverStream::new(receiver)),
+                                stream: Box::new(tokio_stream::wrappers::ReceiverStream::new(
+                                    receiver,
+                                )),
                             });
                         }
                         // 首帧就是排队信封（HTTP 200 + statusCodeValue 403）：还没
@@ -569,9 +592,14 @@ impl ProviderAdapter for QoderAdapter {
                             continue;
                         }
                         Err(chat::AttemptError::Auth(error)) => {
-                            context =
-                                refresh_after_auth(store, &account_id, &mut auth_retries, error, telemetry)
-                                    .await?;
+                            context = refresh_after_auth(
+                                store,
+                                &account_id,
+                                &mut auth_retries,
+                                error,
+                                telemetry,
+                            )
+                            .await?;
                             continue;
                         }
                         Err(chat::AttemptError::Fatal(error)) => return Err(error),
@@ -583,7 +611,9 @@ impl ProviderAdapter for QoderAdapter {
                 // 这里不再重复记一次）
                 match drive_aggregate(response, translator, telemetry.clone(), &limit_ctx).await {
                     Ok(body) => {
-                        return Ok(crate::server::core::upstream::ForwardOutcome::Completion { body })
+                        return Ok(crate::server::core::upstream::ForwardOutcome::Completion {
+                            body,
+                        })
                     }
                     // 非流式这一路也还没下发任何字节：排队同样可以退避重发
                     Err(chat::AttemptError::Queued(queued)) => {
@@ -598,8 +628,14 @@ impl ProviderAdapter for QoderAdapter {
                         continue;
                     }
                     Err(chat::AttemptError::Auth(error)) => {
-                        context = refresh_after_auth(store, &account_id, &mut auth_retries, error, telemetry)
-                            .await?;
+                        context = refresh_after_auth(
+                            store,
+                            &account_id,
+                            &mut auth_retries,
+                            error,
+                            telemetry,
+                        )
+                        .await?;
                         continue;
                     }
                     Err(chat::AttemptError::Fatal(error)) => return Err(error),
@@ -676,7 +712,11 @@ async fn queue_backoff(
         "[Qoder]",
         &format!(
             "⏳ 上游模型排队中{}，{seconds} 秒后重试（第 {}/{} 次）",
-            if queued.detail.is_empty() { String::new() } else { format!("（{}）", queued.detail) },
+            if queued.detail.is_empty() {
+                String::new()
+            } else {
+                format!("（{}）", queued.detail)
+            },
             *waits,
             max_waits,
         ),
@@ -758,7 +798,14 @@ async fn drive_aggregate(
             match stream::parse_sse_line(&data) {
                 SseEvent::Skip => {}
                 SseEvent::Done => break 'outer,
-                SseEvent::Error { status, kind, raw, message, pricing_url, queue } => {
+                SseEvent::Error {
+                    status,
+                    kind,
+                    raw,
+                    message,
+                    pricing_url,
+                    queue,
+                } => {
                     record_limited(
                         &limit.store,
                         &limit.account_id,

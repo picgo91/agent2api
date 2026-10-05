@@ -140,12 +140,15 @@ fn database() -> Result<&'static Db, String> {
 
 fn read_states(conn: &rusqlite::Connection) -> Result<HashMap<String, TaskState>, String> {
     let text: Option<String> = conn
-        .query_row("SELECT value FROM kv WHERE key = ?1", [KV_KEY], |row| row.get(0))
+        .query_row("SELECT value FROM kv WHERE key = ?1", [KV_KEY], |row| {
+            row.get(0)
+        })
         .optional()
         .map_err(|error| format!("读取任务状态失败: {error}"))?;
     match text {
-        Some(text) => serde_json::from_str(&text)
-            .map_err(|error| format!("任务状态格式错误: {error}")),
+        Some(text) => {
+            serde_json::from_str(&text).map_err(|error| format!("任务状态格式错误: {error}"))
+        }
         None => Ok(HashMap::new()),
     }
 }
@@ -155,13 +158,12 @@ pub fn read(key: &str) -> Result<TaskState, String> {
 }
 
 pub fn read_all() -> Result<HashMap<String, TaskState>, String> {
-    database()?.with(read_states).ok_or_else(|| "任务状态数据库不可用".to_string())?
+    database()?
+        .with(read_states)
+        .ok_or_else(|| "任务状态数据库不可用".to_string())?
 }
 
-fn change(
-    key: &str,
-    mutate: impl FnOnce(&mut TaskState),
-) -> Result<TaskState, String> {
+fn change(key: &str, mutate: impl FnOnce(&mut TaskState)) -> Result<TaskState, String> {
     database()?
         .with_mut(|conn| {
             // 开发版和正式版可共用数据库，先取得写事务再判定到期，避免双份执行。
@@ -180,7 +182,8 @@ fn change(
                 params![KV_KEY, text],
             )
             .map_err(|error| format!("保存任务状态失败: {error}"))?;
-            tx.commit().map_err(|error| format!("提交任务状态失败: {error}"))?;
+            tx.commit()
+                .map_err(|error| format!("提交任务状态失败: {error}"))?;
             Ok(result)
         })
         .ok_or_else(|| "任务状态数据库不可用".to_string())?
@@ -248,7 +251,11 @@ pub fn reschedule(key: &str, interval_ms: i64) -> Result<(), String> {
         state.adjust_clock(now);
         state.interval_ms = interval_ms;
         let anchor = state.last_run_at.max(state.last_attempt_at);
-        state.next_run_at = if anchor > 0 { anchor.saturating_add(interval_ms) } else { now };
+        state.next_run_at = if anchor > 0 {
+            anchor.saturating_add(interval_ms)
+        } else {
+            now
+        };
         state.next_run_at = state.next_run_at.max(state.retry_at);
     })
     .map(|_| ())
@@ -371,7 +378,10 @@ impl RunGuard {
                 state.last_error = Some(summary);
                 state.failures = state.failures.saturating_add(1);
                 let multiplier = 1_i64 << state.failures.saturating_sub(1).min(10);
-                let delay = interval_ms.max(60_000).saturating_mul(multiplier).min(MAX_BACKOFF_MS);
+                let delay = interval_ms
+                    .max(60_000)
+                    .saturating_mul(multiplier)
+                    .min(MAX_BACKOFF_MS);
                 state.retry_at = retry_at.max(now.saturating_add(delay));
             }
             if let Some(value) = value {

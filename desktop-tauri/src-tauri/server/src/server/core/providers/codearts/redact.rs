@@ -141,7 +141,9 @@ pub fn redact_values(message: &str, secrets: &[String], truncated: bool) -> Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::core::providers::codearts::credentials::{DpopKeyPair, Jwk, OAuthContext, PkcePair};
+    use crate::server::core::providers::codearts::credentials::{
+        DpopKeyPair, Jwk, OAuthContext, PkcePair,
+    };
 
     fn credential() -> Credential {
         Credential {
@@ -151,7 +153,9 @@ mod tests {
             refresh_token: "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.payload.signature".to_string(),
             oauth_context: Some(OAuthContext {
                 pkce_pair: PkcePair {
-                    code_verifier: "7743bb196b8892a1cd0f5e6d7c8b9a0f1e2d3c4b5a69788796a5b4c3d2e1f00".to_string(),
+                    code_verifier:
+                        "7743bb196b8892a1cd0f5e6d7c8b9a0f1e2d3c4b5a69788796a5b4c3d2e1f00"
+                            .to_string(),
                     code_challenge: "ZoSPwv6ZLUIIEVzxQY5kRk9dC8dP0qY1uS2nT3mW4vX".to_string(),
                     ..PkcePair::default()
                 },
@@ -201,10 +205,16 @@ mod tests {
         let mut credential = credential();
         credential.security_token = "sts+with/special=chars&more".to_string();
         let escaped = url_form_escape(&credential.security_token);
-        assert_ne!(escaped, credential.security_token, "这条用例要求转义确实改变了文本");
+        assert_ne!(
+            escaped, credential.security_token,
+            "这条用例要求转义确实改变了文本"
+        );
         let message = format!("body: refresh_token={escaped}&x=1");
         let redacted = redact(&message, &credential, false);
-        assert!(!redacted.contains(&escaped), "URL 转义形态没盖住：{redacted}");
+        assert!(
+            !redacted.contains(&escaped),
+            "URL 转义形态没盖住：{redacted}"
+        );
         // 原文形态也在同一份文本里被盖掉（上游两种都可能回显）
         let both = format!("raw={} escaped={escaped}", credential.security_token);
         let redacted = redact(&both, &credential, false);
@@ -216,16 +226,31 @@ mod tests {
     #[test]
     fn empty_credential_fields_never_act_as_secrets() {
         // 先把这条语言行为钉住 —— 没了它，「过滤空串」看着就像多余的防御
-        assert_eq!("XaXbXcX", "abc".replace("", "X"), "空模式会在每个字符边界命中");
+        assert_eq!(
+            "XaXbXcX",
+            "abc".replace("", "X"),
+            "空模式会在每个字符边界命中"
+        );
         let mut credential = credential();
         // 公开 JWK 缺省（默认为空串）—— 这正是线上常见的形状
-        credential.oauth_context.as_mut().unwrap().dpop_key_pair.public_key_jwk = Jwk::default();
+        credential
+            .oauth_context
+            .as_mut()
+            .unwrap()
+            .dpop_key_pair
+            .public_key_jwk = Jwk::default();
         assert!(
-            !secrets_of(&credential).iter().any(|secret| secret.is_empty()),
+            !secrets_of(&credential)
+                .iter()
+                .any(|secret| secret.is_empty()),
             "空字段不该进秘密清单"
         );
         let message = "upstream returned HTTP 500: plain text with no secrets";
-        assert_eq!(message, redact(message, &credential, true), "没有秘密时文本必须原样");
+        assert_eq!(
+            message,
+            redact(message, &credential, true),
+            "没有秘密时文本必须原样"
+        );
     }
 
     /// 截断把秘密切成前半个时，残段也要盖掉（要点 3）。
@@ -261,7 +286,10 @@ mod tests {
         context.dpop_key_pair.private_key_jwk.x = "ABCDEFGH".to_string();
         let message = "jwk d=ABCDEFGHIJKLMNOP";
         let redacted = redact(message, &credential, false);
-        assert!(!redacted.contains("ABCDEFGHIJKLMNOP"), "长串应当被完整盖掉：{redacted}");
+        assert!(
+            !redacted.contains("ABCDEFGHIJKLMNOP"),
+            "长串应当被完整盖掉：{redacted}"
+        );
         assert!(!redacted.contains("ABCDEFGH"), "短串也不该残留：{redacted}");
     }
 }

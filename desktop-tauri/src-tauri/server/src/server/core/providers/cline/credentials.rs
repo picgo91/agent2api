@@ -406,13 +406,13 @@ pub(crate) fn unknown_exp_refresh_due(account_id: &str, now_ms: i64) -> bool {
 /// 口径一致），读取侧同时兼容上游 providers.json 的原名（`accessToken` 同名，
 /// refresh 的 snake_case 变体 `refresh_token` 也认）。
 ///
-    /// ── 展示名的来源顺序（email 优先）──────────────────────────
-    /// 记录里没有 token 的 JWT 时（桌面端账号的凭证在客户端文件里）也要能拿到
-    /// 展示名，所以顺序是：记录里的 `displayName`（登录/续期时按「email 优先」
-    /// 抽出来落下的）→ JWT 的展示名（email → 姓名）→ 记录里的 `account`
-    /// （`usr-…` 或 email）。
-    /// 桌面端那条链另外在 [`credentials_from_desktop_settings`] 里读
-    /// `metadata.userInfo`，见那里。
+/// ── 展示名的来源顺序（email 优先）──────────────────────────
+/// 记录里没有 token 的 JWT 时（桌面端账号的凭证在客户端文件里）也要能拿到
+/// 展示名，所以顺序是：记录里的 `displayName`（登录/续期时按「email 优先」
+/// 抽出来落下的）→ JWT 的展示名（email → 姓名）→ 记录里的 `account`
+/// （`usr-…` 或 email）。
+/// 桌面端那条链另外在 [`credentials_from_desktop_settings`] 里读
+/// `metadata.userInfo`，见那里。
 pub fn credentials_from_record(record: &Value) -> Result<ClineCredentials, GatewayError> {
     let access = pick_string(record, &["accessToken", "access_token", "token"]);
     if access.is_empty() {
@@ -650,16 +650,10 @@ pub fn read_desktop_credentials() -> Result<Option<ClineCredentials>, GatewayErr
         }
     }
     let text = std::fs::read_to_string(&path).map_err(|error| {
-        GatewayError::with_status(
-            500,
-            format!("读取本机 Cline 登录态失败: {error}"),
-        )
+        GatewayError::with_status(500, format!("读取本机 Cline 登录态失败: {error}"))
     })?;
     let root: Value = serde_json::from_str(&text).map_err(|error| {
-        GatewayError::with_status(
-            400,
-            format!("本机 Cline 登录态文件格式无效: {error}"),
-        )
+        GatewayError::with_status(400, format!("本机 Cline 登录态文件格式无效: {error}"))
     })?;
     let mut credentials = credentials_from_desktop_settings(&root)?;
     // id 的填充留给调用方（账号层按 provider 拼 `cline-free-desktop` 这类 id，

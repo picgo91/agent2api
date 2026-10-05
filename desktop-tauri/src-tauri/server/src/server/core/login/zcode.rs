@@ -27,10 +27,10 @@ use std::time::Duration;
 
 use serde_json::json;
 
+use crate::server::core::providers::kind_id;
 use crate::server::core::providers::zcode::coding_key;
 use crate::server::core::providers::zcode::oauth::CliLogin;
 use crate::server::core::providers::zcode::region::Region;
-use crate::server::core::providers::kind_id;
 use crate::server::logging;
 
 use super::{finish_task_error, LoginService, LoginTaskHandle, LOGIN_TIMEOUT_MS};
@@ -125,13 +125,16 @@ impl LoginService {
                     // 状态查询一起挡住，而它可能耗时数秒（见 `coding_key` 的
                     // 模块头）。换取失败即登录失败：不落半条「能领套餐但发不出
                     // 请求」的账号（理由同参考实现，见那边模块头）。
-                    match coding_key::resolve(credentials.region, &credentials.access_token).await
-                    {
+                    match coding_key::resolve(credentials.region, &credentials.access_token).await {
                         Ok(key) => credentials.access_token = key,
                         Err(error) => {
                             logging::log(
                                 "[Login]",
-                                &format!("❌ ZCode {}登录换取推理凭证失败: {}", credentials.region.label(), error.message),
+                                &format!(
+                                    "❌ ZCode {}登录换取推理凭证失败: {}",
+                                    credentials.region.label(),
+                                    error.message
+                                ),
                             );
                             finish_task_error(&handle, &error.message);
                             return;

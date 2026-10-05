@@ -9,8 +9,8 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::server::core::egress;
-use crate::server::errors::GatewayError;
 use crate::server::core::proxies::ResolvedProxy;
+use crate::server::errors::GatewayError;
 
 /// 一次 POST 的结果。
 pub struct Reply {
@@ -48,11 +48,15 @@ pub async fn post_json(
     for (name, value) in headers {
         request = request.header(*name, value.clone());
     }
-    let response = request
-        .json(body)
-        .send()
-        .await
-        .map_err(|error| GatewayError::with_status(502, format!("Trae 请求发不出去：{}", egress::describe_error_detail(&error))))?;
+    let response = request.json(body).send().await.map_err(|error| {
+        GatewayError::with_status(
+            502,
+            format!(
+                "Trae 请求发不出去：{}",
+                egress::describe_error_detail(&error)
+            ),
+        )
+    })?;
     let status = response.status().as_u16();
     let text = read_limited(response).await;
     Ok(Reply { status, body: text })
@@ -87,9 +91,14 @@ mod tests {
     #[test]
     fn the_failure_summary_stays_readable() {
         let urls: Vec<String> = (0..6).map(|index| format!("https://h{index}/x")).collect();
-        let errors: Vec<String> = (0..6).map(|index| format!("h{index} => HTTP 404")).collect();
+        let errors: Vec<String> = (0..6)
+            .map(|index| format!("h{index} => HTTP 404"))
+            .collect();
         let text = describe_candidates(&urls, &errors);
         assert!(text.contains("试过 6 个地址"), "{text}");
-        assert!(text.contains("h0") && text.contains("h2") && !text.contains("h5"), "只留前 3 条：{text}");
+        assert!(
+            text.contains("h0") && text.contains("h2") && !text.contains("h5"),
+            "只留前 3 条：{text}"
+        );
     }
 }

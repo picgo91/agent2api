@@ -181,7 +181,10 @@ async fn refresh_request(credentials: &ClineCredentials) -> Result<ClineCredenti
         .map_err(|error| {
             GatewayError::with_status(
                 502,
-                format!("Cline 续期请求失败: {}", egress::describe_error_detail(&error)),
+                format!(
+                    "Cline 续期请求失败: {}",
+                    egress::describe_error_detail(&error)
+                ),
             )
         })?;
     let status = response.status().as_u16();
@@ -196,8 +199,9 @@ async fn refresh_request(credentials: &ClineCredentials) -> Result<ClineCredenti
     if !(200..300).contains(&status) {
         // 上游错误体是 `{"error":"...","success":false}` 或
         // `{"error":{"code":..,"message":..}}` 两种形态
-        let detail = upstream_error_message(&payload)
-            .unwrap_or_else(|| crate::server::core::account_store::store_util::truncate_text(&text, 200));
+        let detail = upstream_error_message(&payload).unwrap_or_else(|| {
+            crate::server::core::account_store::store_util::truncate_text(&text, 200)
+        });
         return Err(GatewayError::with_status(
             502,
             format!("Cline 续期失败（{status}）: {detail}"),
@@ -288,16 +292,19 @@ fn parse_iso8601_ms(text: &str) -> Option<f64> {
     if bytes.len() < 19 {
         return None;
     }
-    let number = |start: usize, end: usize| -> Option<i64> {
-        text.get(start..end)?.parse::<i64>().ok()
-    };
+    let number =
+        |start: usize, end: usize| -> Option<i64> { text.get(start..end)?.parse::<i64>().ok() };
     let year = number(0, 4)?;
     let month = number(5, 7)?;
     let day = number(8, 10)?;
     let hour = number(11, 13)?;
     let minute = number(14, 16)?;
     let second = number(17, 19)?;
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 23 || minute > 59 || second > 60
+    if !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+        || hour > 23
+        || minute > 59
+        || second > 60
     {
         return None;
     }
@@ -383,7 +390,11 @@ fn upstream_error_message(payload: &Value) -> Option<String> {
 ///      旧结果不得覆盖新凭证）。缓存那条走 `store_cached_if_current`，同一语义。
 ///
 /// 失败只记日志：刷新本身已经成功，回写失败不该让本次请求失败。
-fn persist_refresh(store: &AccountStore, previous: &ClineCredentials, refreshed: &ClineCredentials) {
+fn persist_refresh(
+    store: &AccountStore,
+    previous: &ClineCredentials,
+    refreshed: &ClineCredentials,
+) {
     // 前提 1：没有任何新信息 → 不做任何写入（缓存与账号库都不必动）
     if refreshed.access_token == previous.access_token
         && refreshed.refresh_token == previous.refresh_token

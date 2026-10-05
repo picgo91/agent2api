@@ -255,10 +255,7 @@ pub(crate) fn clamp_message(text: &str) -> String {
 /// 分配 id、撞上历史行的主键（那条新日志会静默丢失，见迁移项的说明）。
 /// 运行期自己不需要它 —— `allocate_next_id` 每次都会同时考虑计数器与
 /// `MAX(id)`，本来就自愈。
-pub(crate) fn sql_raise_next_id(
-    conn: &rusqlite::Connection,
-    value: u64,
-) -> rusqlite::Result<()> {
+pub(crate) fn sql_raise_next_id(conn: &rusqlite::Connection, value: u64) -> rusqlite::Result<()> {
     sql::raise_next_id(conn, value)
 }
 
@@ -490,7 +487,14 @@ impl LogStore {
             // id 由 kv 里的高水位分配（不能靠 rowid 自增：它会复用被删掉的号，
             // 见 `sql.rs` 模块头的实测结论）
             let id = sql::allocate_next_id(&tx)?;
-            let record = LogEntry { id, ts, level, category, message: text, data };
+            let record = LogEntry {
+                id,
+                ts,
+                level,
+                category,
+                message: text,
+                data,
+            };
             sql::insert(&tx, &record)?;
             sql::delete_expired(&tx, cutoff, Some(id))?;
             if sql::count_all(&tx)? > MAX_ENTRIES {
@@ -528,7 +532,11 @@ impl LogStore {
             Ok((total, entries))
         });
         let Some((total, filtered)) = loaded else {
-            return QueryResult { entries: Vec::new(), total: 0, matched: 0 };
+            return QueryResult {
+                entries: Vec::new(),
+                total: 0,
+                matched: 0,
+            };
         };
 
         let matched = filtered.len();
@@ -536,7 +544,11 @@ impl LogStore {
         let size = query.limit.unwrap_or(200).clamp(1, MAX_ENTRIES);
         let mut entries = filtered;
         entries.truncate(size);
-        QueryResult { entries, total, matched }
+        QueryResult {
+            entries,
+            total,
+            matched,
+        }
     }
 
     /// 按筛选条件删除：返回（删除条数，删除后的统计）。
@@ -625,10 +637,19 @@ impl LogStore {
             *slot = Value::from(count.max(0) as u64);
         }
         for (category, count) in categories {
-            let slot = by_category.entry(category).or_insert_with(|| Value::from(0));
+            let slot = by_category
+                .entry(category)
+                .or_insert_with(|| Value::from(0));
             *slot = Value::from(count.max(0) as u64);
         }
-        Stats { total, max: MAX_ENTRIES, by_level, by_category, last_id, file }
+        Stats {
+            total,
+            max: MAX_ENTRIES,
+            by_level,
+            by_category,
+            last_id,
+            file,
+        }
     }
 
     /// 清空：删掉全部日志并**把 id 重置为 1**，返回清空后的统计

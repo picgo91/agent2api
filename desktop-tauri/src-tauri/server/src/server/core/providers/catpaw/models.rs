@@ -45,18 +45,37 @@ pub struct CatPawError {
 impl CatPawError {
     /// 入站参数错误（400，文案照抄原实现）
     pub fn bad_request(message: impl Into<String>) -> Self {
-        Self { status: 400, message: message.into(), code: None, unify_code: None }
+        Self {
+            status: 400,
+            message: message.into(),
+            code: None,
+            unify_code: None,
+        }
     }
 
     /// 上游/传输错误（502）
     pub fn upstream(message: impl Into<String>) -> Self {
-        Self { status: 502, message: message.into(), code: None, unify_code: None }
+        Self {
+            status: 502,
+            message: message.into(),
+            code: None,
+            unify_code: None,
+        }
     }
 
     /// 上游 HTTP 错误：状态码按原实现的归一规则映射
     pub fn http(status: u16, message: impl Into<String>) -> Self {
-        let mapped = if (400..500).contains(&status) { i32::from(status) } else { 502 };
-        Self { status: mapped, message: message.into(), code: None, unify_code: None }
+        let mapped = if (400..500).contains(&status) {
+            i32::from(status)
+        } else {
+            502
+        };
+        Self {
+            status: mapped,
+            message: message.into(),
+            code: None,
+            unify_code: None,
+        }
     }
 
     /// 挂上游业务码（`failCode` / `unifyCode`；`unwrap_api_data` 之外的上游错误
@@ -77,8 +96,7 @@ impl CatPawError {
 
     /// 转成网关错误（转发编排只认这个类型）
     pub fn to_gateway(&self) -> GatewayError {
-        GatewayError::with_status(self.status, self.message.clone())
-            .with_optional_code(self.code)
+        GatewayError::with_status(self.status, self.message.clone()).with_optional_code(self.code)
     }
 }
 
@@ -281,7 +299,11 @@ pub fn resolve_model_request(model: &Value) -> Result<ModelResolution, CatPawErr
     let names = super::catalog::known_ids().join("、");
     Err(CatPawError::bad_request(format!(
         "CatPaw 上游不支持模型 {}（可用: {names}）",
-        if requested.is_empty() { "(未指定)" } else { &requested },
+        if requested.is_empty() {
+            "(未指定)"
+        } else {
+            &requested
+        },
     )))
 }
 
@@ -305,7 +327,9 @@ pub fn resolve_effort(body: &Value) -> Result<Option<String>, CatPawError> {
     // 「映射绑定怎么归并到这几个值」必须同源，否则加一档时只改一处，
     // 另一处会把新档位当成非法值 400 掉
     if !EFFORTS.iter().any(|known| *known == value) {
-        return Err(CatPawError::bad_request("reasoning_effort 仅支持 low / high / max"));
+        return Err(CatPawError::bad_request(
+            "reasoning_effort 仅支持 low / high / max",
+        ));
     }
     Ok(Some(value))
 }
@@ -376,7 +400,10 @@ pub fn resolve_context_window(
         .find(|value| !value.is_null() && !value_text(value).trim().is_empty());
     let raw = match requested {
         Some(value) => value_text(value),
-        None => match resolution.entry.and_then(|entry| entry.default_context_window) {
+        None => match resolution
+            .entry
+            .and_then(|entry| entry.default_context_window)
+        {
             Some(default) => default.to_string(),
             None => return Ok(None),
         },
@@ -385,11 +412,18 @@ pub fn resolve_context_window(
     if text.is_empty() {
         return Ok(None);
     }
-    let Some((_, normalized)) = CONTEXT_WINDOW_ALIASES.iter().find(|(alias, _)| *alias == text)
+    let Some((_, normalized)) = CONTEXT_WINDOW_ALIASES
+        .iter()
+        .find(|(alias, _)| *alias == text)
     else {
-        return Err(CatPawError::bad_request("context_window 仅支持 200K / 500K / 1M"));
+        return Err(CatPawError::bad_request(
+            "context_window 仅支持 200K / 500K / 1M",
+        ));
     };
-    let supported = resolution.entry.map(|entry| entry.context_windows).unwrap_or(&[]);
+    let supported = resolution
+        .entry
+        .map(|entry| entry.context_windows)
+        .unwrap_or(&[]);
     if supported.is_empty() {
         return Err(CatPawError::bad_request(format!(
             "模型 {} 不支持 context_window 参数",

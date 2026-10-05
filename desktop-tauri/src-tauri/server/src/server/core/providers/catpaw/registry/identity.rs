@@ -45,7 +45,10 @@ pub struct AccountIdentity {
 impl AccountIdentity {
     /// 从账号 id 与凭证里的用户标识构造
     pub fn new(account_id: impl Into<String>, user_id: impl Into<String>) -> Self {
-        Self { account_id: account_id.into(), user_id: user_id.into() }
+        Self {
+            account_id: account_id.into(),
+            user_id: user_id.into(),
+        }
     }
 
     /// 两个身份是否一致（相等判定；空串参与比较，不是通配）
@@ -57,8 +60,16 @@ impl AccountIdentity {
     fn describe(&self) -> String {
         format!(
             "account={} uid={}",
-            if self.account_id.is_empty() { "-" } else { short_id(&self.account_id) },
-            if self.user_id.is_empty() { "-" } else { short_id(&self.user_id) },
+            if self.account_id.is_empty() {
+                "-"
+            } else {
+                short_id(&self.account_id)
+            },
+            if self.user_id.is_empty() {
+                "-"
+            } else {
+                short_id(&self.user_id)
+            },
         )
     }
 }
@@ -108,7 +119,11 @@ impl SessionRegistry {
                 "[CatPaw]",
                 &format!(
                     "账号 {} 的登录身份已变化（{}），作废其名下会话映射 {} 条",
-                    if account_id.is_empty() { "(默认登录态)" } else { account_id },
+                    if account_id.is_empty() {
+                        "(默认登录态)"
+                    } else {
+                        account_id
+                    },
                     identity.describe(),
                     count,
                 ),
@@ -122,7 +137,10 @@ impl SessionRegistry {
         let mut inner = self.lock();
         let account_id = identity.account_id.as_str();
         // 身份没变 → O(1) 早退（绝大多数请求走这一支；这一步不分配）
-        if inner.current_identities.get(account_id).map(|known| known.matches(identity))
+        if inner
+            .current_identities
+            .get(account_id)
+            .map(|known| known.matches(identity))
             == Some(true)
         {
             return 0;
@@ -155,7 +173,10 @@ impl SessionRegistry {
             .map(|(session_id, _)| session_id.clone())
             .collect();
         for session_id in victims {
-            if inner.invalidate(session_id.as_str(), InvalidationReason::IdentityChanged).is_some() {
+            if inner
+                .invalidate(session_id.as_str(), InvalidationReason::IdentityChanged)
+                .is_some()
+            {
                 count += 1;
             }
         }
@@ -175,7 +196,10 @@ impl SessionRegistry {
             .collect();
         for conversation_id in anonymous {
             if inner
-                .remove_anonymous(conversation_id.as_str(), InvalidationReason::IdentityChanged)
+                .remove_anonymous(
+                    conversation_id.as_str(),
+                    InvalidationReason::IdentityChanged,
+                )
                 .is_some()
             {
                 count += 1;

@@ -87,10 +87,7 @@ pub async fn panel_status() -> Response {
 ///
 /// 密码要求：至少 8 位。bcrypt 哈希只落库（`kv` 的 `panelAdmin`），明文
 /// 不留痕。注册成功直接签发会话 —— 用户注册完就进面板，不再输一次。
-pub async fn panel_setup(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    body: Bytes,
-) -> Response {
+pub async fn panel_setup(ConnectInfo(addr): ConnectInfo<SocketAddr>, body: Bytes) -> Response {
     if access::admin_registered() {
         return management_error(409, "管理员账号已存在，无需重复注册");
     }
@@ -133,10 +130,7 @@ pub async fn panel_setup(
 }
 
 /// `POST /api/panel/login` —— 账号密码换双令牌。
-pub async fn panel_login(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    body: Bytes,
-) -> Response {
+pub async fn panel_login(ConnectInfo(addr): ConnectInfo<SocketAddr>, body: Bytes) -> Response {
     if !access::admin_registered() {
         return management_error(400, "尚未注册管理员账号：请先在登录页完成首次注册");
     }

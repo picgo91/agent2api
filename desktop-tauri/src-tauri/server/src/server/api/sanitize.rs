@@ -54,10 +54,7 @@ pub async fn put_sanitize(State(_state): State<ServerState>, body: Bytes) -> Res
         return errors::management_error(400, format!("{key} 必须是 true 或 false"));
     };
     if !config::set_sanitize_fingerprints(enabled) {
-        logging::log(
-            "[Config]",
-            "⚠️  出站指纹脱敏设置写入失败，本次运行内仍生效",
-        );
+        logging::log("[Config]", "⚠️  出站指纹脱敏设置写入失败，本次运行内仍生效");
     }
     logging::log(
         "[Config]",

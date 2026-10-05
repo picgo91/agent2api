@@ -259,7 +259,10 @@ fn credentials_from_auth_file(snapshot: &AuthFileSnapshot) -> Result<RaccoonCred
     }
     let refresh_token = pick(&["refresh_token"]);
     let claims = jwt::decode_jwt_claims(&token);
-    let user_id = claims.as_ref().map(jwt::extract_user_id).unwrap_or_default();
+    let user_id = claims
+        .as_ref()
+        .map(jwt::extract_user_id)
+        .unwrap_or_default();
     Ok(RaccoonCredentials {
         id: DESKTOP_ACCOUNT_ID.to_string(),
         expires_at: jwt::jwt_expiry_ms(&token),
@@ -371,11 +374,7 @@ fn persist_auth_file_if_current(
 
 /// rename 前的最后确认：文件 mtime 未变，且内容仍是刷新前那份凭证。
 /// 读不到（被删/损坏/变成非常规文件）时视为「已变」→ 不替换。
-fn auth_file_still_matches(
-    path: &Path,
-    seen_mtime: i64,
-    expected: &RaccoonCredentials,
-) -> bool {
+fn auth_file_still_matches(path: &Path, seen_mtime: i64, expected: &RaccoonCredentials) -> bool {
     match read_auth_file_raw(path) {
         Ok(latest) => {
             latest.modified_at == seen_mtime
@@ -457,10 +456,7 @@ pub fn snapshot_for(
             401,
             format!(
                 "账号 {} 没有可用凭证，请重新添加",
-                record
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .unwrap_or("(未知)")
+                record.get("id").and_then(Value::as_str).unwrap_or("(未知)")
             ),
         ));
     }
@@ -602,10 +598,8 @@ async fn call_refresh_api(
     credentials: &RaccoonCredentials,
 ) -> Result<RaccoonCredentials, GatewayError> {
     let url = format!("{}/refresh", super::auth_api_base());
-    let headers: Vec<(String, String)> = vec![(
-        "Content-Type".to_string(),
-        "application/json".to_string(),
-    )];
+    let headers: Vec<(String, String)> =
+        vec![("Content-Type".to_string(), "application/json".to_string())];
     let body = json!({ "refresh_token": credentials.refresh_token });
     // 鉴权接口**不走账号级代理**：账号代理是给转发（流式长请求）准备的出口，
     // 而鉴权域与 LLM 域是两个不同的站点；源实现同样用裸 fetch。

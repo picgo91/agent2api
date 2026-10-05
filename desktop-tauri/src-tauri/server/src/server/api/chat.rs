@@ -101,7 +101,10 @@ pub async fn chat_completions(
 
     let method = "POST";
     let path = "/v1/chat/completions";
-    let stream = payload.get("stream").map(|value| value == &Value::Bool(true)).unwrap_or(false);
+    let stream = payload
+        .get("stream")
+        .map(|value| value == &Value::Bool(true))
+        .unwrap_or(false);
     let message_count = payload
         .get("messages")
         .and_then(Value::as_array)
@@ -153,15 +156,13 @@ pub async fn chat_completions(
     // （record_early_failure）没有 id，不插。id 取 telemetry 里刚生成的那个
     // —— 它与调试报文、收尾记账用的是同一个。
     let telemetry_id = telemetry.snapshot().id;
-    state
-        .request_stats()
-        .record_started(
-            &telemetry_id,
-            started_at,
-            &requested_model,
-            &client_model,
-            &client_reasoning,
-        );
+    state.request_stats().record_started(
+        &telemetry_id,
+        started_at,
+        &requested_model,
+        &client_model,
+        &client_reasoning,
+    );
     // ── 手动终止的取消令牌（本次新增）────────────────────────────
     // 登记在进程级注册表里（键 = 上面这个 id），详情页的「终止请求」按它
     // 找到这条在途请求；转发链的每个等待点 select 它。注销见
@@ -202,7 +203,10 @@ pub async fn chat_completions(
     let stats = state.request_stats();
 
     match outcome {
-        Ok(ForwardOutcome::Stream { status, stream: source }) => {
+        Ok(ForwardOutcome::Stream {
+            status,
+            stream: source,
+        }) => {
             // 流式：记账**不能**在这里做 —— 这里只是「响应头已就绪」，
             // 内容还在下发。包装一层，由流自己在跑完/被丢弃时记账
             let status = StatusCode::from_u16(status).unwrap_or(StatusCode::OK);
@@ -313,7 +317,8 @@ pub async fn chat_completions(
 /// 与 `key_scope` 模块头列的三条「不限制」情形是同一套语义。
 pub async fn list_models(State(state): State<ServerState>, headers: HeaderMap) -> Response {
     let scope = crate::server::http::key_scope_from_headers(&headers);
-    let body = crate::server::core::providers::catalog::models_response(state.store(), scope.as_ref());
+    let body =
+        crate::server::core::providers::catalog::models_response(state.store(), scope.as_ref());
     // 异步刷新模型目录，不阻塞响应（对照 Node 的 `void refreshModelCatalog()`）
     spawn_catalog_refresh(&state);
     // Anthropic 客户端（Claude Code / Claude Desktop）走同一路径，但它们
@@ -354,7 +359,11 @@ fn anthropic_models_view(body: &Value) -> Value {
         let id = item.get("id").map(text_of).unwrap_or_default();
         let display = {
             let name = item.get("name").map(text_of).unwrap_or_default();
-            if name.is_empty() { id.clone() } else { name }
+            if name.is_empty() {
+                id.clone()
+            } else {
+                name
+            }
         };
         let mut entry = match item.as_object() {
             Some(map) => map.clone(),
@@ -365,7 +374,10 @@ fn anthropic_models_view(body: &Value) -> Value {
         entry.insert("display_name".to_string(), Value::String(display));
         // created_at：Anthropic 用 ISO-8601 字符串；本地目录没有创建时间，
         // 用「目录最近刷新时刻」代替（比编一个假日期诚实），拿不到就省略
-        if let Some(refreshed) = body.pointer("/meta/lastRefreshedAt").and_then(Value::as_i64) {
+        if let Some(refreshed) = body
+            .pointer("/meta/lastRefreshedAt")
+            .and_then(Value::as_i64)
+        {
             if refreshed > 0 {
                 if let Some(utc) = chrono::DateTime::from_timestamp_millis(refreshed) {
                     entry.insert(
@@ -377,8 +389,16 @@ fn anthropic_models_view(body: &Value) -> Value {
         }
         data.push(Value::Object(entry));
     }
-    let first = data.first().and_then(|item| item.get("id")).cloned().unwrap_or(Value::Null);
-    let last = data.last().and_then(|item| item.get("id")).cloned().unwrap_or(Value::Null);
+    let first = data
+        .first()
+        .and_then(|item| item.get("id"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    let last = data
+        .last()
+        .and_then(|item| item.get("id"))
+        .cloned()
+        .unwrap_or(Value::Null);
     json!({
         "data": data,
         "has_more": false,

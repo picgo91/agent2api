@@ -132,7 +132,13 @@ pub async fn responses_endpoint(
         Ok(body) => body,
         Err(message) => {
             let error = GatewayError::bad_request(message);
-            record_early_failure(&state, started_at, &pipeline::model_field_text(&raw), &client_reasoning, &error);
+            record_early_failure(
+                &state,
+                started_at,
+                &pipeline::model_field_text(&raw),
+                &client_reasoning,
+                &error,
+            );
             return error.payload_response();
         }
     };
@@ -151,7 +157,13 @@ pub async fn responses_endpoint(
     let requested_model = match pipeline::resolve_model(&state, &mut chat_body, scope.as_ref()) {
         Ok(model) => model,
         Err(error) => {
-            record_early_failure(&state, started_at, &pipeline::model_field_text(&raw), &client_reasoning, &error);
+            record_early_failure(
+                &state,
+                started_at,
+                &pipeline::model_field_text(&raw),
+                &client_reasoning,
+                &error,
+            );
             return error.payload_response();
         }
     };
@@ -160,7 +172,11 @@ pub async fn responses_endpoint(
         "[Model]",
         &format!(
             "← POST {path} model={} stream={stream} bytes={} ua={user_agent}",
-            if requested_model.is_empty() { "(未指定)" } else { &requested_model },
+            if requested_model.is_empty() {
+                "(未指定)"
+            } else {
+                &requested_model
+            },
             body.len(),
         ),
     );
@@ -223,12 +239,18 @@ pub async fn responses_endpoint(
     };
 
     match outcome {
-        Ok(ForwardOutcome::Stream { status, stream: source }) => {
+        Ok(ForwardOutcome::Stream {
+            status,
+            stream: source,
+        }) => {
             let status = StatusCode::from_u16(status).unwrap_or(StatusCode::OK);
             let model = requested_model.clone();
             let request = original.clone();
             // 状态码进记账上下文（明细里记的必须是客户端实际看到的那个码）
-            let context = RecordContext { status: i64::from(status.as_u16()), ..context };
+            let context = RecordContext {
+                status: i64::from(status.as_u16()),
+                ..context
+            };
             if stream {
                 let mut machine = responses::ResponsesStream::new(&model, &request);
                 let transformed = pipeline::transformed_stream(
@@ -311,7 +333,13 @@ pub async fn messages_endpoint(
         Ok(body) => body,
         Err(message) => {
             let error = GatewayError::bad_request(message);
-            record_early_failure(&state, started_at, &pipeline::model_field_text(&raw), "", &error);
+            record_early_failure(
+                &state,
+                started_at,
+                &pipeline::model_field_text(&raw),
+                "",
+                &error,
+            );
             return anthropic_error_response(&error);
         }
     };
@@ -322,7 +350,13 @@ pub async fn messages_endpoint(
     let requested_model = match pipeline::resolve_model(&state, &mut chat_body, scope.as_ref()) {
         Ok(model) => model,
         Err(error) => {
-            record_early_failure(&state, started_at, &pipeline::model_field_text(&raw), &client_reasoning, &error);
+            record_early_failure(
+                &state,
+                started_at,
+                &pipeline::model_field_text(&raw),
+                &client_reasoning,
+                &error,
+            );
             return anthropic_error_response(&error);
         }
     };
@@ -331,7 +365,11 @@ pub async fn messages_endpoint(
         "[Model]",
         &format!(
             "← POST {path} model={} stream={stream} bytes={} ua={user_agent}",
-            if requested_model.is_empty() { "(未指定)" } else { &requested_model },
+            if requested_model.is_empty() {
+                "(未指定)"
+            } else {
+                &requested_model
+            },
             body.len(),
         ),
     );
@@ -393,10 +431,16 @@ pub async fn messages_endpoint(
     };
 
     match outcome {
-        Ok(ForwardOutcome::Stream { status, stream: source }) => {
+        Ok(ForwardOutcome::Stream {
+            status,
+            stream: source,
+        }) => {
             let status = StatusCode::from_u16(status).unwrap_or(StatusCode::OK);
             let model = requested_model.clone();
-            let context = RecordContext { status: i64::from(status.as_u16()), ..context };
+            let context = RecordContext {
+                status: i64::from(status.as_u16()),
+                ..context
+            };
             if stream {
                 let mut machine = anthropic::AnthropicStream::new(&model);
                 let transformed = pipeline::transformed_stream(

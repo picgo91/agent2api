@@ -77,9 +77,9 @@ pub(super) async fn query_usage(
     store: &AccountStore,
     account_id: &str,
 ) -> Result<Value, GatewayError> {
-    let record = store.zcode_account_record(account_id).ok_or_else(|| {
-        GatewayError::with_status(404, "找不到该 ZCode 账号".to_string())
-    })?;
+    let record = store
+        .zcode_account_record(account_id)
+        .ok_or_else(|| GatewayError::with_status(404, "找不到该 ZCode 账号".to_string()))?;
     let region = record
         .get("provider")
         .and_then(Value::as_str)
@@ -97,10 +97,12 @@ pub(super) async fn query_usage(
     if jwt.is_empty() {
         // 余额**只**认套餐 JWT（推理用的 accessToken 打这个接口必 401）。
         // 用可识别的「未配置」而不是失败：用户去账号设置里补上 jwt 就能查。
-        return Err(crate::server::core::providers::adapter::usage_not_configured(
-            &format!("ZCode {}", region.label()),
-            "Coding Plan JWT",
-        ));
+        return Err(
+            crate::server::core::providers::adapter::usage_not_configured(
+                &format!("ZCode {}", region.label()),
+                "Coding Plan JWT",
+            ),
+        );
     }
     let account_id_owned = record
         .get("id")
@@ -127,19 +129,30 @@ pub(super) async fn query_usage(
         ("Authorization".to_string(), format!("Bearer {jwt}")),
         ("Accept".to_string(), "application/json".to_string()),
     ];
-    if let Some(mid) = device_mid.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(mid) = device_mid
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         headers.push(("X-Device-Mid".to_string(), mid.to_string()));
     }
 
-    let response = send_raw("GET", &url, None, &headers, proxy.as_ref(), Some(REQUEST_TIMEOUT_MS))
-        .await
-        .map_err(|error| {
-            if error.is_timeout() {
-                GatewayError::with_status(504, "ZCode 余额查询超时")
-            } else {
-                GatewayError::with_status(502, format!("ZCode 余额查询失败: {error}"))
-            }
-        })?;
+    let response = send_raw(
+        "GET",
+        &url,
+        None,
+        &headers,
+        proxy.as_ref(),
+        Some(REQUEST_TIMEOUT_MS),
+    )
+    .await
+    .map_err(|error| {
+        if error.is_timeout() {
+            GatewayError::with_status(504, "ZCode 余额查询超时")
+        } else {
+            GatewayError::with_status(502, format!("ZCode 余额查询失败: {error}"))
+        }
+    })?;
 
     let payload = response.payload.clone().unwrap_or(Value::Null);
     let code = payload.get("code").and_then(Value::as_i64).unwrap_or(0);
@@ -183,7 +196,11 @@ pub(super) async fn query_usage(
         };
         // 业务码为 0 表示「响应体里没有 code」（HTTP 层错误，体可能是空的）——
         // 那种情况别拼一个读起来莫名其妙的「（0）」
-        let label = if code == 0 { String::new() } else { format!("（{code}）") };
+        let label = if code == 0 {
+            String::new()
+        } else {
+            format!("（{code}）")
+        };
         return Err(GatewayError::with_status(
             502,
             format!("ZCode 余额查询失败{label}：{detail}"),
@@ -232,9 +249,16 @@ fn normalize(data: &Value) -> Value {
         plans
             .iter()
             .copied()
-            .filter(|plan| match (user_plan_id, plan.get("user_plan_id").and_then(Value::as_str)) {
-                (Some(left), Some(right)) => left == right,
-                _ => plan_id.is_some() && plan.get("plan_id").and_then(Value::as_str) == plan_id,
+            .filter(|plan| {
+                match (
+                    user_plan_id,
+                    plan.get("user_plan_id").and_then(Value::as_str),
+                ) {
+                    (Some(left), Some(right)) => left == right,
+                    _ => {
+                        plan_id.is_some() && plan.get("plan_id").and_then(Value::as_str) == plan_id
+                    }
+                }
             })
             .collect()
     };
@@ -246,9 +270,7 @@ fn normalize(data: &Value) -> Value {
     // 桶所属套餐的展示名（给界面当「这个额度来自哪个套餐」的标签用；认不出就给 None，
     // 界面退回 `subscription.planName`）
     let owner_name = |bucket: &Value| -> Option<String> {
-        owners_of(bucket)
-            .into_iter()
-            .find_map(plan_display_name)
+        owners_of(bucket).into_iter().find_map(plan_display_name)
     };
 
     let mut wallets: Vec<Value> = Vec::new();
@@ -289,7 +311,11 @@ fn normalize(data: &Value) -> Value {
             let Some(remaining) = remaining else {
                 continue;
             };
-            let unit_for_row = if bucket_unit.is_empty() { unit.clone() } else { bucket_unit };
+            let unit_for_row = if bucket_unit.is_empty() {
+                unit.clone()
+            } else {
+                bucket_unit
+            };
             let view = match bucket_total {
                 Some(total) if total > 0.0 => format!(
                     "{} / {} {}",
@@ -340,7 +366,11 @@ fn normalize(data: &Value) -> Value {
         if let Some(status) = plan.get("status").and_then(Value::as_str) {
             subscription.insert("status".to_string(), Value::String(status.to_string()));
         }
-        if let Some(ends_at) = plan.get("ends_at").and_then(number_of).filter(|value| *value > 0.0) {
+        if let Some(ends_at) = plan
+            .get("ends_at")
+            .and_then(number_of)
+            .filter(|value| *value > 0.0)
+        {
             // 秒 → 毫秒：账号页各家（qoder / raccoon / workbuddy）的到期一律毫秒，
             // 混用会让时间显示成 1970 年。
             //
@@ -397,7 +427,11 @@ fn pick_plan<'a>(plans: &[&'a Value], now: f64) -> Option<&'a Value> {
                 .unwrap_or(false)
         })
         .collect();
-    let pool: Vec<&&Value> = if active.is_empty() { plans.iter().collect() } else { active };
+    let pool: Vec<&&Value> = if active.is_empty() {
+        plans.iter().collect()
+    } else {
+        active
+    };
     let mut best: Option<&&Value> = None;
     for plan in pool {
         match best {
@@ -406,8 +440,7 @@ fn pick_plan<'a>(plans: &[&'a Value], now: f64) -> Option<&'a Value> {
                 let key = plan_rank(plan, now);
                 let current_key = plan_rank(current, now);
                 let take = key < current_key
-                    || (key == current_key
-                        && plan_id_of(plan) < plan_id_of(current));
+                    || (key == current_key && plan_id_of(plan) < plan_id_of(current));
                 if take {
                     best = Some(plan);
                 }
@@ -486,7 +519,11 @@ fn has_daily_entitlement(plan: &Value) -> bool {
 fn number_of(value: &Value) -> Option<f64> {
     match value {
         Value::Number(number) => number.as_f64(),
-        Value::String(text) => text.trim().parse::<f64>().ok().filter(|value| value.is_finite()),
+        Value::String(text) => text
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|value| value.is_finite()),
         _ => None,
     }
 }

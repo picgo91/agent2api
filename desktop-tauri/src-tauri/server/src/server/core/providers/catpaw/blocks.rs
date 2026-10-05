@@ -54,7 +54,9 @@ pub(super) fn message_content(object: &Map<String, Value>) -> Result<Vec<Value>,
         Some(Value::Array(blocks)) => blocks.iter().map(normalize_content_block).collect(),
         // 这条文案**不带 messages 下标**（原实现 `messageContent` 里没有 index
         // 参数，文案就这一句），照抄
-        Some(_) => Err(GatewayError::bad_request("消息 content 必须是字符串、数组或 null")),
+        Some(_) => Err(GatewayError::bad_request(
+            "消息 content 必须是字符串、数组或 null",
+        )),
     }
 }
 
@@ -69,7 +71,9 @@ fn normalize_content_block(block: &Value) -> Result<Value, GatewayError> {
         return Ok(json!({ "type": "text", "text": text }));
     }
     let Some(object) = block.as_object() else {
-        return Err(GatewayError::bad_request("消息 content block 必须是对象或字符串"));
+        return Err(GatewayError::bad_request(
+            "消息 content block 必须是对象或字符串",
+        ));
     };
     match object.get("type").and_then(Value::as_str) {
         Some("text") | Some("output_text") => {
@@ -82,12 +86,16 @@ fn normalize_content_block(block: &Value) -> Result<Value, GatewayError> {
             // 原实现用对象展开、先驼峰后蛇形：两者都在时**蛇形覆盖驼峰**
             // （后写的赢）。顺序照抄。
             if let Some(value) = object.get("reasoningContent").and_then(Value::as_str) {
-                normalized
-                    .insert("reasoningContent".to_string(), Value::String(value.to_string()));
+                normalized.insert(
+                    "reasoningContent".to_string(),
+                    Value::String(value.to_string()),
+                );
             }
             if let Some(value) = object.get("reasoning_content").and_then(Value::as_str) {
-                normalized
-                    .insert("reasoningContent".to_string(), Value::String(value.to_string()));
+                normalized.insert(
+                    "reasoningContent".to_string(),
+                    Value::String(value.to_string()),
+                );
             }
             Ok(Value::Object(normalized))
         }
@@ -134,7 +142,9 @@ fn normalize_image_block(object: &Map<String, Value>) -> Result<Value, GatewayEr
         return Err(GatewayError::bad_request("图片消息缺少 image_url.url"));
     }
     if trimmed.len() > MAX_IMAGE_URL_LENGTH {
-        return Err(GatewayError::bad_request("图片 URL 或 Data URL 超过大小上限"));
+        return Err(GatewayError::bad_request(
+            "图片 URL 或 Data URL 超过大小上限",
+        ));
     }
     // 前缀判定**大小写敏感**（原实现 `trimmed.startsWith('data:')`）：
     // `DATA:...` 会落到 URL 分支并被「仅支持 http/https」拒绝
@@ -173,7 +183,11 @@ fn is_base64_image_data_url(value: &str) -> bool {
     let Some((header, body)) = value.split_once(',') else {
         return false;
     };
-    let Some(rest) = header.to_ascii_lowercase().strip_prefix("data:").map(str::to_owned) else {
+    let Some(rest) = header
+        .to_ascii_lowercase()
+        .strip_prefix("data:")
+        .map(str::to_owned)
+    else {
         return false;
     };
     let Some(meta) = rest.strip_suffix(";base64") else {
@@ -271,10 +285,14 @@ pub(super) fn normalize_tool_calls(
             .and_then(|value| value.get("arguments"))
             .filter(|value| !value.is_null())
             .or_else(|| {
-                call_object.and_then(|value| value.get("toolParams")).filter(|item| !item.is_null())
+                call_object
+                    .and_then(|value| value.get("toolParams"))
+                    .filter(|item| !item.is_null())
             })
             .or_else(|| {
-                call_object.and_then(|value| value.get("arguments")).filter(|item| !item.is_null())
+                call_object
+                    .and_then(|value| value.get("arguments"))
+                    .filter(|item| !item.is_null())
             })
             .cloned()
             .unwrap_or_else(|| Value::String(String::new()));
@@ -352,7 +370,9 @@ fn validate_json_value(value: &Value, index: usize) -> Result<(), GatewayError> 
             )));
         }
         match value {
-            Value::Array(items) => items.iter().try_for_each(|item| walk(item, depth + 1, index)),
+            Value::Array(items) => items
+                .iter()
+                .try_for_each(|item| walk(item, depth + 1, index)),
             Value::Object(object) => {
                 for (key, item) in object {
                     if matches!(key.as_str(), "__proto__" | "constructor" | "prototype") {

@@ -295,7 +295,12 @@ pub fn login_state(app: AppHandle) -> LoginState {
             edition: Some(active.edition),
             provider: Some(active.provider),
         },
-        None => LoginState { active: false, mode: None, edition: None, provider: None },
+        None => LoginState {
+            active: false,
+            mode: None,
+            edition: None,
+            provider: None,
+        },
     }
 }
 
@@ -346,7 +351,9 @@ pub fn get_app_settings(app: AppHandle) -> AppSettings {
         current.autostart = enabled;
     }
     // 顺手把缓存与磁盘对齐：拦截关窗时要用到最新值
-    app.state::<AppState>().window.set_close_to_tray(current.close_to_tray);
+    app.state::<AppState>()
+        .window
+        .set_close_to_tray(current.close_to_tray);
     current
 }
 
@@ -384,7 +391,9 @@ pub fn save_app_settings(app: AppHandle, patch: AppSettings) -> Result<AppSettin
 
     settings::save(&saved)?;
     // 立即生效：配置改完不用重启，下一次关窗就走新行为
-    app.state::<AppState>().window.set_close_to_tray(saved.close_to_tray);
+    app.state::<AppState>()
+        .window
+        .set_close_to_tray(saved.close_to_tray);
     Ok(saved)
 }
 
@@ -435,7 +444,10 @@ pub async fn export_accounts(app: AppHandle) -> Result<Value, String> {
 
 /// 导出文件里的一个段 → 数组（缺失 / 类型不对都当作空段）
 fn section(data: &Value, key: &str) -> Vec<Value> {
-    data.get(key).and_then(Value::as_array).cloned().unwrap_or_default()
+    data.get(key)
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
 }
 
 /// 从文件导入配置包（merge 语义：按身份匹配，命中更新、未命中追加）。
@@ -461,11 +473,10 @@ pub async fn import_accounts(app: AppHandle) -> Result<Value, String> {
     let path = target
         .into_path()
         .map_err(|error| format!("文件路径无效: {error}"))?;
-    let text = std::fs::read_to_string(&path)
-        .map_err(|error| format!("读取文件失败: {error}"))?;
+    let text = std::fs::read_to_string(&path).map_err(|error| format!("读取文件失败: {error}"))?;
 
-    let parsed: Value = serde_json::from_str(&text)
-        .map_err(|error| format!("文件不是有效 JSON: {error}"))?;
+    let parsed: Value =
+        serde_json::from_str(&text).map_err(|error| format!("文件不是有效 JSON: {error}"))?;
     let document = unwrap_envelope_file(parsed);
     let accounts = match &document {
         // 整体导出文件
@@ -640,7 +651,9 @@ pub fn set_window_theme(app: AppHandle, theme: Option<String>) -> Result<(), Str
     let window = app
         .get_webview_window(crate::MAIN_WINDOW_LABEL)
         .ok_or_else(|| "主窗口不存在".to_string())?;
-    window.set_theme(theme).map_err(|error| format!("设置窗口主题失败: {error}"))
+    window
+        .set_theme(theme)
+        .map_err(|error| format!("设置窗口主题失败: {error}"))
 }
 
 /// 设置主窗口的界面缩放（浏览器缩放同款：整体缩放整页，含布局与字号）。
@@ -664,7 +677,10 @@ pub fn set_zoom(app: AppHandle, scale: f64) -> Result<f64, String> {
     // 先规整再比范围：0.95 这类因子在浮点里是 0.9499999…，直接比大小会把 95% 误判出界
     let factor = (scale * 100.0).round() / 100.0;
     if !(MIN..=MAX).contains(&factor) {
-        return Err(format!("界面缩放需在 80%–130% 之间（收到 {:.0}%）", factor * 100.0));
+        return Err(format!(
+            "界面缩放需在 80%–130% 之间（收到 {:.0}%）",
+            factor * 100.0
+        ));
     }
     let window = main_window(&app)?;
     window
@@ -691,7 +707,9 @@ pub fn set_zoom(app: AppHandle, scale: f64) -> Result<f64, String> {
 #[tauri::command]
 pub fn window_minimize(app: AppHandle) -> Result<(), String> {
     let window = main_window(&app)?;
-    window.minimize().map_err(|error| format!("最小化窗口失败: {error}"))
+    window
+        .minimize()
+        .map_err(|error| format!("最小化窗口失败: {error}"))
 }
 
 /// 切换主窗口最大化 / 还原（标题栏「最大化」按钮）。
@@ -722,7 +740,9 @@ pub fn window_toggle_maximize(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn window_close(app: AppHandle) -> Result<(), String> {
     let window = main_window(&app)?;
-    window.close().map_err(|error| format!("关闭窗口失败: {error}"))
+    window
+        .close()
+        .map_err(|error| format!("关闭窗口失败: {error}"))
 }
 
 /// 查询主窗口是否处于最大化（标题栏据此切换最大化 / 还原图标）。
@@ -733,7 +753,9 @@ pub fn window_close(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn window_is_maximized(app: AppHandle) -> Result<bool, String> {
     let window = main_window(&app)?;
-    window.is_maximized().map_err(|error| format!("查询窗口状态失败: {error}"))
+    window
+        .is_maximized()
+        .map_err(|error| format!("查询窗口状态失败: {error}"))
 }
 
 /// 取主窗口句柄：四个窗口命令共用的一步查找（不存在时报可读错误）。
@@ -778,4 +800,3 @@ fn timestamp_for_filename() -> String {
 
     format!("{year:04}-{month:02}-{day:02}-{hour:02}-{minute:02}-{second:02}")
 }
-

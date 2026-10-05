@@ -63,7 +63,9 @@ fn decode_daily(row: &rusqlite::Row<'_>) -> rusqlite::Result<DailyEntry> {
 ///
 /// 「聚合寿命独立于明细」这条契约在这里成立：报表的区间统计只读这张表，
 /// 明细被保留期裁掉之后历史曲线不会出现空洞。
-pub(super) fn select_daily_map(conn: &Connection) -> rusqlite::Result<BTreeMap<String, DailyEntry>> {
+pub(super) fn select_daily_map(
+    conn: &Connection,
+) -> rusqlite::Result<BTreeMap<String, DailyEntry>> {
     let sql = format!("SELECT {DAILY_COLUMNS} FROM request_daily ORDER BY date ASC");
     let mut stmt = conn.prepare(&sql)?;
     let mut rows = stmt.query([])?;
@@ -127,7 +129,10 @@ pub(super) fn delete_daily(conn: &Connection, date: &str) -> rusqlite::Result<us
 
 /// 删掉 `date < cutoff_key` 的聚合行（时间维度保留；定长日期串字典序即时间序）
 pub(super) fn delete_daily_before(conn: &Connection, cutoff_key: &str) -> rusqlite::Result<usize> {
-    conn.execute("DELETE FROM request_daily WHERE date < ?1", params![cutoff_key])
+    conn.execute(
+        "DELETE FROM request_daily WHERE date < ?1",
+        params![cutoff_key],
+    )
 }
 
 /// 聚合行数与容量裁剪（兜底：手改库塞进十万行时不至于把报表撑爆）

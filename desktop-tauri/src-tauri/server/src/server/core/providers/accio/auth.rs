@@ -59,7 +59,14 @@ pub async fn get_with_token(
             pairs.append_pair("accessToken", token);
         }
     }
-    request("GET", url.as_str(), None, &endpoints::api_headers(region), proxy).await
+    request(
+        "GET",
+        url.as_str(),
+        None,
+        &endpoints::api_headers(region),
+        proxy,
+    )
+    .await
 }
 
 /// POST + JSON body（业务接口的约定之二）
@@ -70,7 +77,14 @@ pub async fn post_json(
     proxy: Option<&ResolvedProxy>,
 ) -> Result<ApiResponse, GatewayError> {
     let url = format!("{}{}", endpoints::gateway_base(), path);
-    request("POST", &url, Some(body), &endpoints::api_headers(region), proxy).await
+    request(
+        "POST",
+        &url,
+        Some(body),
+        &endpoints::api_headers(region),
+        proxy,
+    )
+    .await
 }
 
 /// 把响应翻成「有效 JSON 对象」，失败时给出人话。
@@ -86,10 +100,9 @@ pub fn payload(response: ApiResponse, action: &str) -> Result<Value, GatewayErro
             format!("Accio {action}失败（HTTP {}）{hint}", response.status),
         ));
     }
-    response
-        .payload
-        .filter(Value::is_object)
-        .ok_or_else(|| GatewayError::with_status(502, format!("Accio {action}未返回有效 JSON 对象")))
+    response.payload.filter(Value::is_object).ok_or_else(|| {
+        GatewayError::with_status(502, format!("Accio {action}未返回有效 JSON 对象"))
+    })
 }
 
 /// 账号级出口代理（解析失败按 400 报，不静默直连）
