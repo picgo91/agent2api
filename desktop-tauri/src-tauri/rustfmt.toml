@@ -1,0 +1,15 @@
+# rustfmt 配置 —— 固定代码风格，让 `cargo fmt` 与 CI 的 `--check` 有唯一口径。
+#
+# 为什么要有这份文件：项目此前从未跑过 rustfmt，默认设置下 `cargo fmt`
+# 会重排 import、重排结构体字段、拆长调用。先把这份配置钉死，之后任何一次
+# `cargo fmt` 的结果都是确定的，CI 里的 `cargo fmt --all -- --check` 才有意义
+# （配置漂移会让「本地 fmt 过、CI 不过」反复出现）。
+#
+# 只使用 **stable** 选项：unstable 选项需要 nightly 工具链，CI 用的是 stable，
+# 写了会被忽略并打印警告，等于没配。
+
+edition = "2021"
+# 与项目习惯一致：4 空格、Unix 换行、100 列
+tab_spaces = 4
+newline_style = "Unix"
+max_width = 100

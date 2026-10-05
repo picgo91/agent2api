@@ -116,13 +116,15 @@ pub(super) fn number_or(value: Option<&Value>, fallback: Value) -> Value {
 /// —— 与 Node 的 `String.replace(/^Bearer\s+/i, '')` 一致。
 pub(super) fn strip_bearer_prefix(value: &str) -> String {
     const PREFIX: &str = "bearer";
-    if value.len() < PREFIX.len() {
+    // `get(..)` 而非 `split_at`：输入来自导入 / 用户填写的凭证，第 6 字节可能落在
+    // 多字节字符中间，`split_at` 会 panic（见 http.rs 同名前缀函数的说明）。
+    let Some(head) = value.get(..PREFIX.len()) else {
         return value.to_string();
-    }
-    let (head, rest) = value.split_at(PREFIX.len());
+    };
     if !head.eq_ignore_ascii_case(PREFIX) {
         return value.to_string();
     }
+    let rest = &value[PREFIX.len()..];
     if rest.trim_start().len() == rest.len() {
         return value.to_string();
     }
@@ -160,5 +162,25 @@ pub(super) fn object_or_empty(value: Option<&Value>) -> Map<String, Value> {
     match value {
         Some(Value::Object(map)) => map.clone(),
         _ => Map::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_bearer_prefix_normal_forms() {
+        assert_eq!(strip_bearer_prefix("Bearer sk-abc"), "sk-abc");
+        assert_eq!(strip_bearer_prefix("bearer  sk-abc"), "sk-abc");
+        assert_eq!(strip_bearer_prefix("sk-abc"), "sk-abc");
+        assert_eq!(strip_bearer_prefix("BearerX"), "BearerX");
+    }
+
+    /// 回归：第 6 字节落在多字节字符中间时不能 panic。
+    #[test]
+    fn strip_bearer_prefix_multibyte_boundary() {
+        assert_eq!(strip_bearer_prefix("abc🦀x"), "abc🦀x");
+        assert_eq!(strip_bearer_prefix("Bear🦀"), "Bear🦀");
     }
 }

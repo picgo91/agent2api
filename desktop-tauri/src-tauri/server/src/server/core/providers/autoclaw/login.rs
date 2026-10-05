@@ -138,12 +138,21 @@ fn ensure_sms_region(region: Region) -> Result<(), GatewayError> {
 /// 验证码入口一起删掉了：一条永远走不到的分支只会让「号码格式不对时该看哪段
 /// 代码」变模糊（与 ui/sms-login.js 那边删的是同一条规则）。
 fn normalize_phone(raw: &str) -> Result<String, GatewayError> {
-    let trimmed: String = raw.chars().filter(|ch| !ch.is_whitespace() && *ch != '-').collect();
+    let trimmed: String = raw
+        .chars()
+        .filter(|ch| !ch.is_whitespace() && *ch != '-')
+        .collect();
     let digits = trimmed.strip_prefix("+86").unwrap_or(&trimmed);
-    let digits = digits.strip_prefix("86").filter(|rest| rest.len() == 11).unwrap_or(digits);
+    let digits = digits
+        .strip_prefix("86")
+        .filter(|rest| rest.len() == 11)
+        .unwrap_or(digits);
     if digits.len() == 11
         && digits.starts_with('1')
-        && digits.chars().nth(1).is_some_and(|ch| ('2'..='9').contains(&ch))
+        && digits
+            .chars()
+            .nth(1)
+            .is_some_and(|ch| ('2'..='9').contains(&ch))
         && digits.chars().all(|ch| ch.is_ascii_digit())
     {
         Ok(digits.to_string())
@@ -275,17 +284,13 @@ fn describe_login_error(code: i64, upstream_msg: &str) -> String {
         // 文案里**不能**说「改用网页登录」：这条链路只服务国内版，而国内版
         // 没有网页登录（它的 OAuth 开关是关的，见模块头）。指向一条不存在的路
         // 比不指路更糟。
-        631_002 => {
-            "上游要求过风控验证，本次登录无法在此完成；\
+        631_002 => "上游要求过风控验证，本次登录无法在此完成；\
              请改用「填写凭证」（可从 AutoClaw 客户端登录态文件里取）"
-                .to_string()
-        }
+            .to_string(),
         // 阿里云验证码校验失败（带上了验证码参数但没通过）。与 631002 是同一族：
         // 都在说「风控没过」，区别只是「没带」与「带了但无效」。同上的理由，
         // 这里也不提「网页登录」。
-        630_014 => {
-            "风控验证未通过，请稍后重试；若持续失败请改用「填写凭证」".to_string()
-        }
+        630_014 => "风控验证未通过，请稍后重试；若持续失败请改用「填写凭证」".to_string(),
         _ => {
             if upstream_msg.trim().is_empty() {
                 format!("登录失败（上游 code={code}）")
@@ -317,7 +322,10 @@ pub async fn send_code(region: Region, phone: &str) -> Result<Value, GatewayErro
     if code != 0 {
         let upstream_msg = payload.get("msg").and_then(Value::as_str).unwrap_or("");
         let message = describe_login_error(code, upstream_msg);
-        logging::log("[Login]", &format!("❌ AutoClaw 验证码发送失败（{code}）: {message}"));
+        logging::log(
+            "[Login]",
+            &format!("❌ AutoClaw 验证码发送失败（{code}）: {message}"),
+        );
         return Err(GatewayError::with_status(400, message));
     }
     // 源实现还要求 `data.result` 为真（`code === 0` 但 result 假也算失败）
@@ -327,7 +335,10 @@ pub async fn send_code(region: Region, phone: &str) -> Result<Value, GatewayErro
         .and_then(Value::as_bool)
         .unwrap_or(false);
     if !delivered {
-        logging::log("[Login]", "❌ AutoClaw 验证码发送失败：上游返回 result=false");
+        logging::log(
+            "[Login]",
+            "❌ AutoClaw 验证码发送失败：上游返回 result=false",
+        );
         return Err(GatewayError::with_status(502, "验证码发送失败，请稍后重试"));
     }
     // 不打手机号（它是个人信息）：只留下「发给了尾号 xxxx」这种可核对但不泄露的痕迹
@@ -420,9 +431,34 @@ pub async fn login_with_code(
 }
 
 /// 手机号脱敏（源实现 `maskPhone`：保留前 3 后 4）。
+///
+/// 按**字符**而不是字节切：用户填写的手机号里若混入 emoji / CJK，按字节
+/// `&phone[..3]` / `&phone[phone.len()-4..]` 会切到非字符边界而 panic。
 fn mask_phone(phone: &str) -> String {
-    if phone.len() < 7 {
+    let chars: Vec<char> = phone.chars().collect();
+    if chars.len() < 7 {
         return phone.to_string();
     }
-    format!("{}****{}", &phone[..3], &phone[phone.len() - 4..])
+    let head: String = chars[..3].iter().collect();
+    let tail: String = chars[chars.len() - 4..].iter().collect();
+    format!("{head}****{tail}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mask_phone_normal() {
+        assert_eq!(mask_phone("13800001234"), "138****1234");
+        assert_eq!(mask_phone("123456"), "123456");
+        assert_eq!(mask_phone("1234567"), "123****4567");
+    }
+
+    /// 回归：位数不足或含多字节字符时不能 panic。
+    #[test]
+    fn mask_phone_multibyte_and_short() {
+        assert_eq!(mask_phone("🦀🦀"), "🦀🦀");
+        assert_eq!(mask_phone("手机号一二三四五六七八"), "手机号****五六七八");
+    }
 }

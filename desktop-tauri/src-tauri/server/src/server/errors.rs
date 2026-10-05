@@ -17,7 +17,7 @@
 //! 都会直接带走整个桌面应用，所以错误一律走 Result + 本模块的类型，
 //! 不用 unwrap/expect。
 
-use axum::http::StatusCode;
+use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use chrono::TimeZone;
@@ -123,7 +123,10 @@ impl GatewayError {
     pub fn payload(&self) -> Value {
         let mut error = Map::new();
         error.insert("message".to_string(), Value::String(self.message.clone()));
-        error.insert("type".to_string(), Value::String(self.error_type().to_string()));
+        error.insert(
+            "type".to_string(),
+            Value::String(self.error_type().to_string()),
+        );
         if let Some(code) = &self.code {
             error.insert("code".to_string(), Value::String(code.clone()));
         }
@@ -244,6 +247,30 @@ pub fn v1_fail_closed_response() -> Response {
         .into_response()
 }
 
+/// 429：某把 Key 触发了它的每分钟请求数（RPM）上限。
+///
+/// 与上游的 429（`errorPayload` 的 `rate_limit_exceeded`）**刻意区分**：
+/// 那是上游账号被限流、会自动换号重试；这是**网关自己**按 Key 主动限流，
+/// 换号也没用，客户端应当退避。所以 type 用 `gateway_rate_limited`，
+/// 并带上标准的 `Retry-After` 头（秒），对齐 OpenAI 的 429 语义。
+pub fn rate_limited_response(retry_after_secs: u64) -> Response {
+    let retry_after = retry_after_secs.max(1);
+    (
+        StatusCode::TOO_MANY_REQUESTS,
+        [(header::RETRY_AFTER, retry_after.to_string())],
+        Json(json!({
+            "error": {
+                "message": format!(
+                    "请求过于频繁：该 API Key 已达每分钟请求上限，请在 {retry_after} 秒后重试"
+                ),
+                "type": "gateway_rate_limited",
+                "retry_after": retry_after,
+            }
+        })),
+    )
+        .into_response()
+}
+
 /// 404 兜底响应。
 ///
 /// 注意这里**不带 type 字段** —— Node 版 404 分支发的是
@@ -263,7 +290,11 @@ pub fn not_found_response(method: &str, path: &str) -> Response {
 /// 对应 Node 版各 route 模块里的 `sendJson(res, status, { success:false, error })`。
 pub fn management_error(status: i32, message: impl Into<String>) -> Response {
     let status = StatusCode::from_u16(status as u16).unwrap_or(StatusCode::BAD_REQUEST);
-    (status, Json(json!({ "success": false, "error": message.into() }))).into_response()
+    (
+        status,
+        Json(json!({ "success": false, "error": message.into() })),
+    )
+        .into_response()
 }
 
 /// 解析上游限额恢复时间：`YYYY-MM-DD HH:MM:SS UTC+8` → 毫秒时间戳。
@@ -343,7 +374,9 @@ pub fn parse_quota_reset_at(text: &str) -> i64 {
                         suffix += 1;
                     }
                     if bytes[suffix..].starts_with(b"UTC+8") {
-                        if let Some(millis) = to_utc_plus_8_millis(year, month, day, hour, minute, second) {
+                        if let Some(millis) =
+                            to_utc_plus_8_millis(year, month, day, hour, minute, second)
+                        {
                             return millis;
                         }
                     }
@@ -370,7 +403,12 @@ fn to_utc_plus_8_millis(
     let offset = chrono::FixedOffset::east_opt(8 * 3600)?;
     let naive = chrono::NaiveDate::from_ymd_opt(year as i32, month, day)?
         .and_hms_opt(hour, minute, second)?;
-    Some(offset.from_local_datetime(&naive).single()?.timestamp_millis())
+    Some(
+        offset
+            .from_local_datetime(&naive)
+            .single()?
+            .timestamp_millis(),
+    )
 }
 
 /// 恢复时间的本地化展示（对应 Node 版 `toLocaleString('zh-CN', { hour12:false })`）。

@@ -44,7 +44,10 @@ use crate::server::logging;
 use crate::server::ServerState;
 
 fn list_json(state: &ServerState) -> Value {
-    let keys: Vec<Value> = api_keys::list().iter().map(api_keys::ApiKeyEntry::public_json).collect();
+    let keys: Vec<Value> = api_keys::list()
+        .iter()
+        .map(api_keys::ApiKeyEntry::public_json)
+        .collect();
     let accounts = crate::server::core::routing::accounts_of(&state.store().list_accounts());
     // 「可用提供商」的候选 = **内置注册表 + 自定义提供商**。自定义家是运行期数据
     // （kv 里的 `customProviders`），按约定**不进** `PROVIDERS` / `ProviderKind`
@@ -60,7 +63,9 @@ fn list_json(state: &ServerState) -> Value {
     let count_of = |id: &str| {
         accounts
             .iter()
-            .filter(|account| crate::server::core::routing::provider_of(account).eq_ignore_ascii_case(id))
+            .filter(|account| {
+                crate::server::core::routing::provider_of(account).eq_ignore_ascii_case(id)
+            })
             .count()
     };
     let custom_candidates: Vec<Value> = crate::server::core::custom_providers::list()
@@ -122,21 +127,35 @@ fn parse_allowlist(
         // null 与空数组同义（都是「清成不限制」）—— JSON 客户端两种写法都常见
         Value::Null => return Ok(Some(Vec::new())),
         Value::Array(items) => items,
-        _ => return Err(errors::management_error(400, format!("{key} 必须是字符串数组"))),
+        _ => {
+            return Err(errors::management_error(
+                400,
+                format!("{key} 必须是字符串数组"),
+            ))
+        }
     };
     let mut out: Vec<String> = Vec::new();
     for item in items {
         let Some(text) = item.as_str() else {
-            return Err(errors::management_error(400, format!("{key} 的元素必须是字符串")));
+            return Err(errors::management_error(
+                400,
+                format!("{key} 的元素必须是字符串"),
+            ));
         };
         let text = text.trim();
         if text.is_empty() {
             continue;
         }
         if check_provider && !provider_is_acceptable(text) {
-            return Err(errors::management_error(400, format!("未知的提供商: {text}")));
+            return Err(errors::management_error(
+                400,
+                format!("未知的提供商: {text}"),
+            ));
         }
-        if out.iter().any(|known: &String| known.eq_ignore_ascii_case(text)) {
+        if out
+            .iter()
+            .any(|known: &String| known.eq_ignore_ascii_case(text))
+        {
             continue;
         }
         out.push(text.to_string());
@@ -150,6 +169,33 @@ fn body_object(body: &Bytes) -> Result<serde_json::Map<String, Value>, Response>
         .as_object()
         .cloned()
         .ok_or_else(|| errors::management_error(400, "请求体必须是 JSON 对象"))
+}
+
+/// 每分钟请求上限（RPM）的合法区间：0（不限制）或 1..=1_000_000。
+///
+/// 上限取一个「大得离谱但不至于溢出/误填成天文数字」的值：填错成 10 亿只会
+/// 让人以为限流坏了；给一个明确上界能当场报 400 而不是静默接受。
+const MAX_RPM: u64 = 1_000_000;
+
+/// 从请求体里读 `rateLimitRpm`（三态，与白名单同口径）：
+///   - 键缺失 → `None`（**不动**，PATCH 语义）；
+///   - `0` / `null` → `Some(0)`（清成不限制）；
+///   - 正整数 → `Some(n)`；
+///   - 其它（负数 / 小数 / 超上界 / 非数字）→ 400。
+fn parse_rpm(object: &serde_json::Map<String, Value>) -> Result<Option<u32>, Response> {
+    let Some(value) = object.get("rateLimitRpm") else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(Some(0));
+    }
+    let number = value.as_u64().filter(|n| *n <= MAX_RPM).ok_or_else(|| {
+        errors::management_error(
+            400,
+            format!("rateLimitRpm 必须是 0..{MAX_RPM} 的整数（0 = 不限制）"),
+        )
+    })?;
+    Ok(Some(number as u32))
 }
 
 /// GET /api/keys
@@ -175,9 +221,20 @@ pub async fn create_key(State(state): State<ServerState>, body: Bytes) -> Respon
         Ok(value) => value.unwrap_or_default(),
         Err(response) => return response,
     };
-    match api_keys::add(name, key, allowed_providers, allowed_models) {
+    // 新建时缺省 = 0（不限制），与两个白名单同口径
+    let rate_limit_rpm = match parse_rpm(&object) {
+        Ok(value) => value.unwrap_or(0),
+        Err(response) => return response,
+    };
+    match api_keys::add(name, key, allowed_providers, allowed_models, rate_limit_rpm) {
         Ok(entry) => {
-            logging::log("[Config]", &format!("✅ 新增 API Key「{}」，客户端需带 Authorization: Bearer <key>", entry.name));
+            logging::log(
+                "[Config]",
+                &format!(
+                    "✅ 新增 API Key「{}」，客户端需带 Authorization: Bearer <key>",
+                    entry.name
+                ),
+            );
             let mut payload = list_json(&state);
             if let Some(map) = payload.as_object_mut() {
                 map.insert("created".to_string(), entry.public_json());
@@ -189,7 +246,11 @@ pub async fn create_key(State(state): State<ServerState>, body: Bytes) -> Respon
 }
 
 /// PATCH /api/keys/{id}
-pub async fn update_key(State(state): State<ServerState>, Path(id): Path<String>, body: Bytes) -> Response {
+pub async fn update_key(
+    State(state): State<ServerState>,
+    Path(id): Path<String>,
+    body: Bytes,
+) -> Response {
     let object = match body_object(&body) {
         Ok(object) => object,
         Err(response) => return response,
@@ -206,11 +267,27 @@ pub async fn update_key(State(state): State<ServerState>, Path(id): Path<String>
         Ok(value) => value,
         Err(response) => return response,
     };
-    match api_keys::update(&id, name, enabled, allowed_providers, allowed_models) {
+    // 三态：键缺失 → None（不动）；0 / null → Some(0)（清成不限制）
+    let rate_limit_rpm = match parse_rpm(&object) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    match api_keys::update(
+        &id,
+        name,
+        enabled,
+        allowed_providers,
+        allowed_models,
+        rate_limit_rpm,
+    ) {
         Ok(entry) => {
             logging::log(
                 "[Config]",
-                &format!("API Key「{}」已更新（{}）", entry.name, if entry.enabled { "启用" } else { "停用" }),
+                &format!(
+                    "API Key「{}」已更新（{}）",
+                    entry.name,
+                    if entry.enabled { "启用" } else { "停用" }
+                ),
             );
             ok_json(list_json(&state))
         }
@@ -225,7 +302,11 @@ pub async fn delete_key(State(state): State<ServerState>, Path(id): Path<String>
             let remaining = config::current().api_key_set();
             logging::log(
                 "[Config]",
-                if remaining { "API Key 已删除" } else { "API Key 已删除，接口恢复免鉴权（仅监听 127.0.0.1）" },
+                if remaining {
+                    "API Key 已删除"
+                } else {
+                    "API Key 已删除，接口恢复免鉴权（仅监听 127.0.0.1）"
+                },
             );
             ok_json(list_json(&state))
         }

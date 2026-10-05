@@ -42,7 +42,10 @@ async function copyToClipboard(text) {
 }
 
 document.addEventListener('click', async event => {
-  const trigger = event.target.closest('[data-copy], [data-copy-from]');
+  // event.target 是 EventTarget，运行时若是元素才带 closest；非元素（如
+  // document / text node）没有，用可选调用兜住（TS 用 cast 表达这一层）
+  const target = /** @type {Element | null} */ (event.target);
+  const trigger = target?.closest('[data-copy], [data-copy-from]');
   if (!trigger) return;
   const text = copyTextOf(trigger);
   if (!(await copyToClipboard(text))) { toast('复制失败，请手动选择复制', 'err'); return; }

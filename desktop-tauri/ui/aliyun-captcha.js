@@ -720,6 +720,11 @@
     solve,
     cancel,
     isBusy,
+    // 作废当前实例（换地址失败 / 风控没过时，调用方要让它收起并重建）——
+    // 修复：autoclaw-oauth.js 曾在失败分支里裸调 `invalidateInitialization()`，
+    // 那是个**模块内的私有函数**，根本不在全局，运行时会 ReferenceError；
+    // 现在按公共 API 暴露出来，调用方走 window.wbAliyunCaptcha.invalidate()。
+    invalidate: invalidateInitialization,
     // 静默铸串（活动套餐转发通道的令牌来源，见 mintTraceless）
     mintTraceless,
     CaptchaError,

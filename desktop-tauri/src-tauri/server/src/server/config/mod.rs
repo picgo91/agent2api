@@ -68,6 +68,7 @@ use crate::server::db::Db;
 pub(crate) mod parse;
 pub(crate) mod sql;
 mod types;
+pub mod validate;
 
 pub use types::*;
 
@@ -404,7 +405,8 @@ fn build(raw: Map<String, Value>) -> RuntimeConfig {
         locale: env_text("WORKBUDDY_LOCALE")
             .or_else(|| string_field(&raw, "locale"))
             .unwrap_or_else(|| DEFAULT_LOCALE.to_string()),
-        default_model: env_text("WORKBUDDY_DEFAULT_MODEL").unwrap_or_else(|| DEFAULT_MODEL.to_string()),
+        default_model: env_text("WORKBUDDY_DEFAULT_MODEL")
+            .unwrap_or_else(|| DEFAULT_MODEL.to_string()),
         last_request_model: string_field(&raw, "lastRequestModel"),
         retention,
         scheduled,
@@ -416,7 +418,10 @@ fn build(raw: Map<String, Value>) -> RuntimeConfig {
         debug_dir: string_field(&raw, KEY_DEBUG_DIR),
         // 只有字面 `true` 算开启（手改文件写 "1" / "yes" 一律当关）：与
         // 「写坏回落」同一取向 —— 这个开关控制是否把凭据落盘，宁可少采
-        debug_mode: raw.get(KEY_DEBUG_MODE).and_then(Value::as_bool).unwrap_or(false),
+        debug_mode: raw
+            .get(KEY_DEBUG_MODE)
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         // 只有字面 `false` 算关闭：**默认开**（缺失 → true）。这个开关是「要不要
         // 剥离会被上游误拦的模板句」，默认关会让新用户一上来就撞 400 code=11128
         // ——与 debug_mode 的「默认关」取向相反，因为两者的默认值代价不同。
@@ -441,8 +446,7 @@ fn build(raw: Map<String, Value>) -> RuntimeConfig {
             .filter(|value| !value.is_null())
             .cloned(),
         // GitHub 令牌信封：空串按未设置处理（手改库写出的空值不该被当成密文）
-        github_token: string_field(&raw, KEY_GITHUB_TOKEN)
-            .filter(|envelope| !envelope.is_empty()),
+        github_token: string_field(&raw, KEY_GITHUB_TOKEN).filter(|envelope| !envelope.is_empty()),
         raw,
     }
 }
@@ -498,7 +502,9 @@ fn gateway_text_from(
         if id.is_empty() {
             continue;
         }
-        let Some(entry) = value.as_object() else { continue };
+        let Some(entry) = value.as_object() else {
+            continue;
+        };
         let mut blocks = crate::server::core::prompt::GatewayBlocks::default();
         for field in crate::server::core::prompt::GatewayBlocks::FIELDS {
             if let Some(text) = entry.get(field).and_then(Value::as_str) {
@@ -557,7 +563,9 @@ fn providers_from(raw: &Map<String, Value>) -> std::collections::BTreeMap<String
         if id.is_empty() {
             continue;
         }
-        let Some(entry) = value.as_object() else { continue };
+        let Some(entry) = value.as_object() else {
+            continue;
+        };
         let mode = entry
             .get(KEY_PROMPT_MODE)
             .and_then(Value::as_str)
@@ -636,7 +644,11 @@ fn resolve_choice(
         source: PromptSource::BuiltIn,
         file_error: None,
     };
-    let Some(path) = file.as_deref().map(str::trim).filter(|text| !text.is_empty()) else {
+    let Some(path) = file
+        .as_deref()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+    else {
         return built_in();
     };
     match read_prompt_file(path) {
@@ -648,7 +660,10 @@ fn resolve_choice(
             source: PromptSource::File,
             file_error: None,
         },
-        Err(error) => ResolvedChoice { file_error: Some(error), ..built_in() },
+        Err(error) => ResolvedChoice {
+            file_error: Some(error),
+            ..built_in()
+        },
     }
 }
 
@@ -673,9 +688,9 @@ pub fn read_prompt_file(path: &str) -> Result<String, String> {
         return Err("提示词文件路径为空".to_string());
     }
     match std::fs::read_to_string(trimmed) {
-        Ok(text) if text.trim().is_empty() => {
-            Err(format!("提示词文件是空的：{trimmed}（已回落内置默认提示词）"))
-        }
+        Ok(text) if text.trim().is_empty() => Err(format!(
+            "提示词文件是空的：{trimmed}（已回落内置默认提示词）"
+        )),
         Ok(text) => Ok(text),
         Err(error) => Err(format!("读不到提示词文件 {trimmed}: {error}")),
     }
@@ -909,7 +924,9 @@ pub fn save_raw(raw: &Map<String, Value>) -> bool {
 pub fn set_api_key(api_key: Option<String>) -> bool {
     update(|config| match api_key.clone() {
         Some(key) => {
-            config.raw.insert("apiKey".to_string(), Value::String(key.clone()));
+            config
+                .raw
+                .insert("apiKey".to_string(), Value::String(key.clone()));
             config.api_key = Some(key);
         }
         None => {
@@ -923,9 +940,10 @@ pub fn set_api_key(api_key: Option<String>) -> bool {
 /// 环境变量注入的 Key 不在文件里，`active_api_keys` 仍会把它算进去）。
 pub fn replace_api_keys(list: Value) -> bool {
     update(move |config| {
-        config
-            .raw
-            .insert(crate::server::core::api_keys::KEY_API_KEYS.to_string(), list.clone());
+        config.raw.insert(
+            crate::server::core::api_keys::KEY_API_KEYS.to_string(),
+            list.clone(),
+        );
         config.raw.remove("apiKey");
         config.api_key = None;
     })
@@ -935,7 +953,9 @@ pub fn replace_api_keys(list: Value) -> bool {
 pub fn set_locale(locale: &str) -> bool {
     let locale = locale.to_string();
     update(|config| {
-        config.raw.insert("locale".to_string(), Value::String(locale.clone()));
+        config
+            .raw
+            .insert("locale".to_string(), Value::String(locale.clone()));
         config.locale = locale.clone();
     })
 }
@@ -992,7 +1012,11 @@ pub fn set_retention(patch: RetentionPatch) -> bool {
             patch.request_days,
             &mut next.request_days,
         );
-        apply(KEY_DAILY_RETENTION_DAYS, patch.daily_days, &mut next.daily_days);
+        apply(
+            KEY_DAILY_RETENTION_DAYS,
+            patch.daily_days,
+            &mut next.daily_days,
+        );
         config.retention = next;
     })
 }
@@ -1010,12 +1034,7 @@ pub fn set_retention(patch: RetentionPatch) -> bool {
 /// 与 `set_retention` 同一模式：内存快照与 raw 底稿一起改 —— 前者让正在跑的
 /// 循环下一轮就用新间隔（不必重启进程），后者保证写盘时不吃掉兄弟字段
 /// （只改一条任务时，`scheduledTasks` 下其余各条必须原样保留）。
-pub fn set_scheduled_task(
-    key: &str,
-    patch: IntervalTaskPatch,
-    min: i64,
-    max: i64,
-) -> bool {
+pub fn set_scheduled_task(key: &str, patch: IntervalTaskPatch, min: i64, max: i64) -> bool {
     let key = key.to_string();
     update(move |config| {
         // 先在 raw 里把这条任务的子对象取出来（不存在就建一个），再逐项写入。
@@ -1073,13 +1092,16 @@ pub fn set_retry(patch: RetryPatch) -> bool {
     update(|config| {
         let mut next = config.retry.clone();
         if let Some(count) = patch.count {
-            config.raw.insert(KEY_RETRY_COUNT.to_string(), Value::from(count));
+            config
+                .raw
+                .insert(KEY_RETRY_COUNT.to_string(), Value::from(count));
             next.count = count;
         }
         if let Some(count) = patch.account_switch_count {
-            config
-                .raw
-                .insert(KEY_RETRY_ACCOUNT_SWITCH_COUNT.to_string(), Value::from(count));
+            config.raw.insert(
+                KEY_RETRY_ACCOUNT_SWITCH_COUNT.to_string(),
+                Value::from(count),
+            );
             next.account_switch_count = count;
         }
         if let Some(seconds) = patch.interval_seconds {
@@ -1130,10 +1152,18 @@ pub fn set_timeouts(patch: TimeoutPatch) -> bool {
             *slot = value;
         };
         if let Some(seconds) = patch.connect_seconds {
-            write(KEY_TIMEOUT_CONNECT_SECONDS, seconds, &mut next.connect_seconds);
+            write(
+                KEY_TIMEOUT_CONNECT_SECONDS,
+                seconds,
+                &mut next.connect_seconds,
+            );
         }
         if let Some(seconds) = patch.headers_seconds {
-            write(KEY_TIMEOUT_HEADERS_SECONDS, seconds, &mut next.headers_seconds);
+            write(
+                KEY_TIMEOUT_HEADERS_SECONDS,
+                seconds,
+                &mut next.headers_seconds,
+            );
         }
         if let Some(seconds) = patch.stream_idle_seconds {
             write(
@@ -1293,16 +1323,16 @@ pub fn github_token_envelope() -> Option<String> {
 /// 与校验。与 `set_update_proxy` 同一模式：内存立即生效（下一次检查更新就用
 /// 新令牌），写盘时不吃掉其它字段。
 pub fn set_github_token_envelope(envelope: Option<String>) -> bool {
-    update(move |config| {
-        match envelope.clone() {
-            Some(value) => {
-                config.raw.insert(KEY_GITHUB_TOKEN.to_string(), Value::String(value));
-                config.github_token = envelope.clone();
-            }
-            None => {
-                config.raw.remove(KEY_GITHUB_TOKEN);
-                config.github_token = None;
-            }
+    update(move |config| match envelope.clone() {
+        Some(value) => {
+            config
+                .raw
+                .insert(KEY_GITHUB_TOKEN.to_string(), Value::String(value));
+            config.github_token = envelope.clone();
+        }
+        None => {
+            config.raw.remove(KEY_GITHUB_TOKEN);
+            config.github_token = None;
         }
     })
 }
@@ -1327,9 +1357,10 @@ pub fn set_prompt(
     inline: Option<String>,
 ) -> bool {
     update(|config| {
-        config
-            .raw
-            .insert(KEY_PROMPT_MODE.to_string(), Value::String(mode.as_str().to_string()));
+        config.raw.insert(
+            KEY_PROMPT_MODE.to_string(),
+            Value::String(mode.as_str().to_string()),
+        );
         match file.filter(|text| !text.trim().is_empty()) {
             Some(path) => {
                 config

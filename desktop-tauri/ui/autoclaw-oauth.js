@@ -36,6 +36,7 @@
    add-provider-forms.js 之前 —— 后者加载期就要 create()。 */
 
 (() => {
+  /** id → 元素；返回 `any`，调用方按需取 value/disabled（见 app.js 同名说明） @type {(id: string) => any} */
   const $ = id => document.getElementById(id);
 
   /**
@@ -263,8 +264,9 @@
           return;
         }
         // 换地址失败（风控没过 / 上游拒绝）：滑块面板还停在「验证中」，作废实例
-        // 让它收起 —— 否则面板与报错同时在场，用户不知道该信哪一个
-        invalidateInitialization();
+        // 让它收起 —— 否则面板与报错同时在场，用户不知道该信哪一个。
+        // 走公共 API（window.wbAliyunCaptcha.invalidate），不要裸调模块内私有函数。
+        window.wbAliyunCaptcha?.invalidate?.();
         const reason = describeError(error);
         setHint(`登录失败：${reason}`);
         window.wbApp.toast(`登录失败：${reason}`, 'err');

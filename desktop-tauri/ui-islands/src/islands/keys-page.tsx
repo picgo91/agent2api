@@ -69,6 +69,8 @@ type KeyEntry = {
   /** 白名单，**空数组 = 不限制** */
   allowedProviders?: string[]
   allowedModels?: string[]
+  /** 每分钟请求上限（RPM）；**0 = 不限制**（与白名单同一取向） */
+  rateLimitRpm?: number
 }
 
 /** 「可用提供商」的候选项：后端注册表摘要（项目禁止维护第二份 provider 清单） */
@@ -93,10 +95,18 @@ type KeysBridge = {
     key?: string
     allowedProviders: string[]
     allowedModels: string[]
+    /** 每分钟请求上限；0 / 不传 = 不限制 */
+    rateLimitRpm?: number
   }): Promise<KeysPayload | null | undefined>
   updateKey(
     id: string,
-    patch: { enabled?: boolean; allowedProviders?: string[]; allowedModels?: string[] },
+    patch: {
+      enabled?: boolean
+      allowedProviders?: string[]
+      allowedModels?: string[]
+      /** 每分钟请求上限；0 = 清成不限制，不传 = 不动 */
+      rateLimitRpm?: number
+    },
   ): Promise<KeysPayload | null | undefined>
   deleteKey(id: string): Promise<KeysPayload | null | undefined>
 }
@@ -295,11 +305,13 @@ function modelOptions(
 function restrictionText(k: KeyEntry): string {
   const providers = Array.isArray(k.allowedProviders) ? k.allowedProviders : []
   const models = Array.isArray(k.allowedModels) ? k.allowedModels : []
-  if (!providers.length && !models.length) return '不限制'
+  const rpm = Number(k.rateLimitRpm ?? 0)
+  if (!providers.length && !models.length && rpm <= 0) return '不限制'
   const parts: string[] = []
   if (providers.length) parts.push(providers.map(providerLabel).join('、'))
   // 模型那半边只报个数：一屏 Row 里塞不下十几个模型名，悬停由 title 给全量
   if (models.length) parts.push(`${models.length} 个模型`)
+  if (rpm > 0) parts.push(`${rpm} RPM`)
   return `限制：${parts.join(' / ')}`
 }
 
@@ -307,12 +319,14 @@ function restrictionText(k: KeyEntry): string {
 function restrictionTitle(k: KeyEntry): string {
   const providers = Array.isArray(k.allowedProviders) ? k.allowedProviders : []
   const models = Array.isArray(k.allowedModels) ? k.allowedModels : []
-  if (!providers.length && !models.length) {
-    return '这把 Key 不限制提供商与模型（可用全部上游与全部对外模型）'
+  const rpm = Number(k.rateLimitRpm ?? 0)
+  if (!providers.length && !models.length && rpm <= 0) {
+    return '这把 Key 不限制提供商、模型与请求频率（可用全部上游与全部对外模型）'
   }
   const lines: string[] = []
   if (providers.length) lines.push(`可用提供商：${providers.map(providerLabel).join('、')}`)
   if (models.length) lines.push(`可用模型：${models.join('、')}`)
+  if (rpm > 0) lines.push(`请求频率上限：每分钟 ${rpm} 次（超出回 429）`)
   return lines.join('\n')
 }
 
@@ -321,17 +335,22 @@ function restrictionTitle(k: KeyEntry): string {
  * 「限制：…」一行；而多选的触发器只显示连接后的一行文案，清单长了会被省略号收掉。
  * 用户点完「保存范围」就看不到弹窗了，勾了哪几家 / 哪些模型得在这儿给他核对一遍。
  */
-function restrictionSummary(providers: readonly string[], models: readonly string[]): string {
-  if (!providers.length && !models.length) {
-    return '当前不限制：这把 Key 可以用全部提供商与全部对外模型'
+function restrictionSummary(
+  providers: readonly string[],
+  models: readonly string[],
+  rpm: number,
+): string {
+  if (!providers.length && !models.length && rpm <= 0) {
+    return '当前不限制：这把 Key 可以用全部提供商与全部对外模型，且不限请求频率'
   }
   const parts: string[] = []
   if (providers.length) parts.push(`提供商：${providers.map(providerLabel).join('、')}`)
   if (models.length) parts.push(`模型：${models.join('、')}`)
+  if (rpm > 0) parts.push(`频率：${rpm} RPM`)
   // 只限制了模型、没限制提供商（旧数据里可能存在这种组合）：模型候选此刻只剩已勾的
   // 那几个（没有提供商就没有并集可铺），要说清怎么把候选拿回来 —— 否则用户会以为
   // 「模型清单坏了，加不了新的」
-  if (!providers.length) {
+  if (!providers.length && models.length) {
     parts.push('（模型候选需先选提供商；不选则沿用当前这几项，保存后仍按模型白名单生效）')
   }
   return parts.join('　')
@@ -392,6 +411,17 @@ function KeyModal({ target, providers, modelsByProvider, onClose, onSaved }: Key
     () => stringList(target?.allowedModels),
   )
 
+  /**
+   * 每分钟请求上限（RPM）的输入值。用**字符串**存 state（而不是 number）：
+   * 输入框允许暂时为空 / 非法（用户清空正在重填），把它绑成 number 会在每次
+   * 按键时把「空」塌成 0（= 不限制），用户还没填完就被当成显式清零。
+   * 解析与校验放到提交时（`rpmNumber`）。
+   */
+  const [rpm, setRpm] = React.useState<string>(() => {
+    const value = Number(target?.rateLimitRpm ?? 0)
+    return value > 0 ? String(value) : ''
+  })
+
   /** 提供商候选 = 后端下发的注册表摘要（项目禁止维护第二份 provider 清单） */
   const providerOptions = React.useMemo<MultiSelectOption[]>(
     () => providers.map(item => ({ value: String(item.id), label: String(item.label ?? item.id) })),
@@ -443,6 +473,17 @@ function KeyModal({ target, providers, modelsByProvider, onClose, onSaved }: Key
   async function save(): Promise<void> {
     if (savingRef.current) return
     // 两个白名单直接用归一后的勾选（见 pickedFromOptions），字段名与取值口径都与旧实现一致
+    // RPM：空 = 0（不限制）；非法（负数 / 小数 / 非数字）当场报错，不静默当 0
+    const trimmedRpm = rpm.trim()
+    let rpmNumber = 0
+    if (trimmedRpm) {
+      const parsed = Number(trimmedRpm)
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        setStatus('每分钟请求上限要填 0 或正整数（留空 = 不限制）')
+        return
+      }
+      rpmNumber = parsed
+    }
     savingRef.current = true
     setSaving(true)
     setStatus('保存中…')
@@ -450,8 +491,10 @@ function KeyModal({ target, providers, modelsByProvider, onClose, onSaved }: Key
       const api = shared().workbuddyDesktop
       if (!api) throw new Error('后端桥不可用')
       if (editingId) {
-        // 只提交两个白名单：别名与启停都不动（部分更新语义，见后端 api_keys::update）
-        const next = await api.updateKey(editingId, { allowedProviders, allowedModels })
+        // 只提交两个白名单 + RPM：别名与启停都不动（部分更新语义，见后端 api_keys::update）
+        const next = await api.updateKey(editingId, {
+          allowedProviders, allowedModels, rateLimitRpm: rpmNumber,
+        })
         // 先解除守卫再关窗（旧实现同序：saving = false 在 closeModal 之前）
         stopSaving()
         onSaved(next)
@@ -466,6 +509,7 @@ function KeyModal({ target, providers, modelsByProvider, onClose, onSaved }: Key
       }
       const next = await api.createKey({
         name: name.trim(), key: trimmedKey || undefined, allowedProviders, allowedModels,
+        rateLimitRpm: rpmNumber,
       })
       stopSaving()
       onSaved(next, next?.created?.id)
@@ -555,10 +599,20 @@ function KeyModal({ target, providers, modelsByProvider, onClose, onSaved }: Key
               「可用模型」的候选跟着上面勾选的提供商走：没勾提供商时它是空的（还没有约束范围），
               勾了几家就列出这几家能收的全部对外名。
             </p>
+            {/* 每把 Key 的请求频率上限。留空 = 不限制（0）。超限的请求网关回 429 + Retry-After，
+                与上游账号被限流（换号重试）是两回事（见后端 core::rate_limit）。 */}
+            <div className='flex flex-wrap items-center gap-2.5'>
+              <Label htmlFor='key-rpm' className='text-[12.5px] whitespace-nowrap text-subtle'>每分钟请求上限</Label>
+              <Input id='key-rpm' type='text' inputMode='numeric' placeholder='留空 = 不限制'
+                autoComplete='off' value={rpm}
+                onChange={event => setRpm(event.currentTarget.value.replace(/[^0-9]/g, ''))}
+                className='min-w-[140px] max-w-[180px]' />
+              <span className='text-[11.5px] text-muted-foreground'>RPM；超出后回 429（0 或留空 = 不限制）</span>
+            </div>
             {/* 当前选的摘要：多选的触发器上只显示「连接后的一行文案」，清单长了会被省略号
                 收掉 —— 勾了哪几家 / 哪些模型要在这儿摊开。id 沿用旧实现的：page-gateway.css
                 按它给这行加了上边距（它是「当前选择」而不是「使用说明」）。 */}
-            <p id='key-restrict-summary'>{restrictionSummary(allowedProviders, allowedModels)}</p>
+            <p id='key-restrict-summary'>{restrictionSummary(allowedProviders, allowedModels, Number(rpm.trim() || 0) || 0)}</p>
           </DialogSection>
           <div className='min-h-[18px] text-[11.5px] text-muted-foreground'>{status}</div>
         </DialogBody>
@@ -854,9 +908,9 @@ function KeysPage() {
           <span>
             客户端请求需带 <code>{'Authorization: Bearer <key>'}</code> 或 <code>{'x-api-key: <key>'}</code>；
             修改后立即生效，本程序自身会自动使用第一把启用的 Key。每把 Key 可单独限制
-            <b>可用提供商</b>与<b>可用模型</b>（行内「可用范围」）：留空 = 不限制，两个都设时
-            按交集生效 —— 被限制的模型对这把 Key 表现为「不存在」（拉 /v1/models 也看不到它），
-            提供它的家不在可用列表里时请求同样被拒。
+            <b>可用提供商</b>、<b>可用模型</b>与<b>每分钟请求上限</b>（行内「可用范围」）：留空 = 不限制，
+            白名单两个都设时按交集生效 —— 被限制的模型对这把 Key 表现为「不存在」（拉 /v1/models 也看不到它），
+            提供它的家不在可用列表里时请求同样被拒；超过每分钟上限的请求回 429 + Retry-After。
           </span>
         )}
         total={keys.length}

@@ -58,6 +58,7 @@ pub mod health;
 pub mod import_sources;
 pub mod keys_api;
 pub mod logs_api;
+pub mod metrics;
 pub mod model_manage;
 pub mod models;
 pub mod panel;

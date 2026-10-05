@@ -40,6 +40,21 @@ use std::process::ExitCode;
 use aiapi_server::server::{config, logging, start, ServerState};
 
 fn main() -> ExitCode {
+    // 环境变量体检：致命项（端口非法 / 分端口撞车）当场拒绝启动，可疑项打印警告。
+    // 放在解析之前 —— 它自己会重新读一遍原始值，专门抓「静默回落会误导人」的写法
+    // （理由见 config::validate 的模块头）。
+    match config::validate::validate_env() {
+        Ok(warnings) => {
+            for warning in warnings {
+                eprintln!("⚠️  {warning}");
+            }
+        }
+        Err(reason) => {
+            eprintln!("❌ {reason}");
+            return ExitCode::FAILURE;
+        }
+    }
+
     // 端口口径与桌面壳一致：新名 > 改名前 > 1.x 旧名 > 默认（非法值当未设置）
     let port = env_port("AIAPI_PROXY_PORT")
         .or_else(|| env_port("AGENT2API_PROXY_PORT"))

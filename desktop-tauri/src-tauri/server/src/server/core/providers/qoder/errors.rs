@@ -101,7 +101,12 @@ pub struct ClassifiedError {
 
 impl ClassifiedError {
     fn new(kind: UpstreamKind, message: impl Into<String>, pricing_url: Option<String>) -> Self {
-        Self { kind, message: message.into(), pricing_url, queue: None }
+        Self {
+            kind,
+            message: message.into(),
+            pricing_url,
+            queue: None,
+        }
     }
 }
 
@@ -119,8 +124,9 @@ const AUTH_CODES: &[&str] = &["105"];
 /// 额度类：110 每日用量上限、112 额度耗尽、113 用量配额耗尽、114 试用额度用完、
 /// 115 免费用户配额用完、116/117/118 团队 / 成员 / 个人 Credits 用完、
 /// 119 所选模型的免费额度用完、122 计费组上限（110 / 112 另有 9router 实测佐证）
-const QUOTA_CODES: &[&str] =
-    &["110", "112", "113", "114", "115", "116", "117", "118", "119", "122"];
+const QUOTA_CODES: &[&str] = &[
+    "110", "112", "113", "114", "115", "116", "117", "118", "119", "122",
+];
 
 /// 嵌套 JSON 的钻取深度上限（防病态输入下的环；实测两层就到底了）
 const SIGNAL_SCAN_DEPTH: usize = 5;
@@ -221,11 +227,15 @@ fn raw_has_code(raw: &str, code: &str) -> bool {
 }
 
 /// 从文本里抠出定价页链接（源实现用正则 `/https?:\/\/[^"\\]*\/pricing[^"\\]*/i`）
+///
+/// 不用 `raw.to_lowercase()` 再做索引：`to_lowercase` 可能改变**字节长度**
+/// （如 `İ` / `ẞ`），拿它算出的偏移去切 `raw` 会落到非字符边界而 panic。
+/// 这里全程只在 `raw` 上按字节找 ASCII 的 `http`——命中处必然是字符边界
+/// （`h` 是 ASCII 单字节），后续切分也就安全。
 fn pricing_url_of(raw: &str) -> Option<String> {
-    let lowered = raw.to_lowercase();
+    let bytes = raw.as_bytes();
     let mut search_from = 0usize;
-    while let Some(offset) = lowered[search_from..].find("http") {
-        let start = search_from + offset;
+    while let Some(start) = find_ascii_ci(bytes, search_from, b"http") {
         let rest = &raw[start..];
         let end = rest
             .find(|ch: char| ch == '"' || ch == '\\' || ch.is_whitespace())
@@ -238,6 +248,23 @@ fn pricing_url_of(raw: &str) -> Option<String> {
         if search_from >= raw.len() {
             break;
         }
+    }
+    None
+}
+
+/// 在字节串里找 ASCII 模式（大小写不敏感），返回起始字节偏移。
+/// 只在模式全为 ASCII 时使用 —— 命中偏移必然落在字符边界上。
+fn find_ascii_ci(haystack: &[u8], from: usize, needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return None;
+    }
+    let last = haystack.len() - needle.len();
+    let mut i = from.min(haystack.len());
+    while i <= last {
+        if haystack[i..i + needle.len()].eq_ignore_ascii_case(needle) {
+            return Some(i);
+        }
+        i += 1;
     }
     None
 }
@@ -268,15 +295,9 @@ pub fn classify_upstream_error(status: u16, text: &str) -> ClassifiedError {
     }
     // ② 业务码：登录态失效（105）与额度类（110 / 112 / 113 …）
     if signals.has_code(AUTH_CODES) || AUTH_CODES.iter().any(|code| raw_has_code(text, code)) {
-        return ClassifiedError::new(
-            UpstreamKind::Auth,
-            "登录态已失效，请重新登录",
-            None,
-        );
+        return ClassifiedError::new(UpstreamKind::Auth, "登录态已失效，请重新登录", None);
     }
-    if signals.has_code(QUOTA_CODES)
-        || QUOTA_CODES.iter().any(|code| raw_has_code(text, code))
-    {
+    if signals.has_code(QUOTA_CODES) || QUOTA_CODES.iter().any(|code| raw_has_code(text, code)) {
         return ClassifiedError::new(
             UpstreamKind::Quota,
             "当前账号额度不足或套餐不支持该模型",
@@ -333,5 +354,32 @@ fn queued_message(queue: &QueueInfo) -> String {
             "上游模型排队中（模型暂不可服务，上游建议 {seconds} 秒后重试）：这不是登录态或额度问题"
         ),
         None => "上游模型排队中（模型暂不可服务）：这不是登录态或额度问题".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pricing_url_extracted() {
+        let body = r#"{"error":"quota exceeded, see https://qoder.com/pricing for details"}"#;
+        assert_eq!(
+            pricing_url_of(body).as_deref(),
+            Some("https://qoder.com/pricing")
+        );
+    }
+
+    /// 回归：`to_lowercase` 会改变字节长度，旧实现拿小写串的偏移去切原串会 panic。
+    /// 这里用能触发长度变化的字符（`İ` 大写→小写变两字节；`ẞ`→`ß` 变一字节）。
+    #[test]
+    fn pricing_url_survives_length_changing_lowercase() {
+        let weird = "İstanbul ẞ https://qoder.com/pricing";
+        assert_eq!(
+            pricing_url_of(weird).as_deref(),
+            Some("https://qoder.com/pricing")
+        );
+        assert_eq!(pricing_url_of("İİİİİİİİİ"), None);
+        assert_eq!(pricing_url_of(""), None);
     }
 }

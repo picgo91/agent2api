@@ -2,7 +2,22 @@
 /* global workbuddyDesktop */
 
 const api = window.workbuddyDesktop;
+/**
+ * 按 id 取元素。返回类型刻意放开成 `any`：这是 jQuery 式的 id 查询，
+ * 调用方心里有具体的元素类型（input / button / div…），由调用方按需取
+ * `value` / `disabled` / `dataset`；若在这里窄化成 `HTMLElement`，
+ * 每个取 `.value` 的地方都要写一遍 JSDoc cast，收益极低。
+ * @type {(id: string) => any}
+ */
 const $ = id => document.getElementById(id);
+/**
+ * querySelectorAll → 数组。元素按 `HTMLElement` 处理，方便直接取
+ * `dataset` / `classList`（TS 的 `Element` 上没有 `dataset`，逐处 JSDoc
+ * cast 太啰嗦，收拢到这个 helper 里一次）。
+ * @type {(selector: string) => HTMLElement[]}
+ */
+const qsa = selector =>
+  Array.from(/** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(selector)));
 let state = null;
 // 最近一次 `refresh()` 的失败原因（成功时清空）。
 // 它是给顶栏状态区挂 title 用的：后端不可达时页面上其余数字都只是「上一次的值」，
@@ -20,13 +35,16 @@ function esc(value) {
   }[ch]));
 }
 
+/** 轻提示的自动隐藏定时器句柄（连续调用时清上一个，避免提前/延后消失） */
+let toastTimer = 0;
+
 function toast(message, type = 'ok') {
   const element = $('toast');
   element.textContent = message;
   element.className = type;
   element.style.display = 'block';
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { element.style.display = 'none'; }, 3500);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { element.style.display = 'none'; }, 3500);
 }
 
 function formatTime(value) {
@@ -69,7 +87,7 @@ function applyTheme(mode) {
     if ((settledDark ? 'dark' : 'light') !== effective) applyTheme('system');
   })?.catch?.(() => { /* 命令失败时不做复核，界面保持本次结果 */ });
   localStorage.setItem('workbuddy-desktop-theme', mode);
-  document.querySelectorAll('#theme-switch button').forEach(item => {
+  qsa('#theme-switch button').forEach(item => {
     item.classList.toggle('active', item.dataset.mode === mode);
   });
   // 通知其它控制面（设置页「显示 → 显示模式」那组档位）：主题有两个入口
@@ -145,10 +163,10 @@ let currentPage = 'overview';
 function showPage(name, { persist = true } = {}) {
   const page = PAGES.includes(name) ? name : 'overview';
   currentPage = page;
-  document.querySelectorAll('.page').forEach(section => {
+  qsa('.page').forEach(section => {
     section.classList.toggle('active', section.dataset.page === page);
   });
-  document.querySelectorAll('.nav-item').forEach(item => {
+  qsa('.nav-item').forEach(item => {
     item.classList.toggle('active', item.dataset.page === page);
   });
   const crumb = $('crumb-page');
@@ -735,7 +753,7 @@ async function runAccountAction(action, id) {
 
 // ─── 事件绑定 ─────────────────────────────────
 
-document.querySelectorAll('#theme-switch button').forEach(button => {
+qsa('#theme-switch button').forEach(button => {
   button.addEventListener('click', () => applyTheme(button.dataset.mode));
 });
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -801,8 +819,8 @@ $('nav').addEventListener('click', event => {
 function paintIcons() {
   const icon = window.wbIcons?.icon;
   if (!icon) return;
-  document.querySelectorAll('.nav-item[data-icon] .ico').forEach(slot => {
-    const name = slot.closest('.nav-item').dataset.icon;
+  qsa('.nav-item[data-icon] .ico').forEach(slot => {
+    const name = /** @type {HTMLElement} */ (slot.closest('.nav-item')).dataset.icon;
     // 18 与 layout.css 里 .ico 的 24px 容器配套：图形 18、容器 24，
     // 差出来的 6px 就是选中态主色底的呼吸边（.nav-item.active .ico）。
     // 两个数一起改 —— 只改一处会让底色要么贴死图形、要么空出一大圈。

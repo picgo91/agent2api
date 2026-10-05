@@ -76,7 +76,11 @@ pub(crate) struct MergeReport {
 /// 返回 Err，调用方必须当成整批导入失败。
 pub(crate) fn merge_imported(items: &[Value]) -> Result<MergeReport, String> {
     let mut current = list();
-    let mut report = MergeReport { added: 0, skipped: 0, warnings: Vec::new() };
+    let mut report = MergeReport {
+        added: 0,
+        skipped: 0,
+        warnings: Vec::new(),
+    };
     // 两张去重表分开：existing 用于「本机已有」（命中即跳过），
     // file_seen 用于「文件内重复」（先到的赢，与自定义提供商定义同一取向）
     let existing: HashSet<String> = current.iter().map(|entry| entry.key.clone()).collect();
@@ -140,9 +144,7 @@ pub(crate) fn merge_imported(items: &[Value]) -> Result<MergeReport, String> {
 
     // 有新增才写：全跳过时不动配置（本机就是最终状态）
     if report.added > 0 && !save(&current) {
-        return Err(
-            "保存失败：API Key 写入未成功（请检查磁盘空间与配置目录权限）".to_string(),
-        );
+        return Err("保存失败：API Key 写入未成功（请检查磁盘空间与配置目录权限）".to_string());
     }
     Ok(report)
 }
@@ -161,18 +163,32 @@ fn entry_of(object: &Map<String, Value>) -> Option<ApiKeyEntry> {
     }
     Some(ApiKeyEntry {
         id: text(object, "id"),
-        name: object.get("name").and_then(Value::as_str).unwrap_or("").to_string(),
+        name: object
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
         key,
         // 与 from_value 同口径：只有显式 false 才算禁用
         enabled: !matches!(object.get("enabled"), Some(Value::Bool(false))),
         created_at: object.get("createdAt").and_then(Value::as_i64).unwrap_or(0),
         allowed_providers: string_list(object.get("allowedProviders")),
         allowed_models: string_list(object.get("allowedModels")),
+        rate_limit_rpm: object
+            .get("rateLimitRpm")
+            .and_then(Value::as_u64)
+            .unwrap_or(0)
+            .min(u32::MAX as u64) as u32,
     })
 }
 
 fn text(object: &Map<String, Value>, key: &str) -> String {
-    object.get(key).and_then(Value::as_str).unwrap_or("").trim().to_string()
+    object
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string()
 }
 
 /// 分配一个本机未被占用的 id（`add` 的 `k{时间戳:x}{序号}` 口径）。

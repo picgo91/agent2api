@@ -66,6 +66,9 @@ pub struct ApiKeyEntry {
     pub allowed_providers: Vec<String>,
     /// 可用模型白名单（**对外模型名**，含映射 alias）；**空 = 不限制**
     pub allowed_models: Vec<String>,
+    /// 每分钟请求数上限（RPM）；**0 = 不限制**（默认，与白名单同一取向）。
+    /// 判定与计数在 `core::rate_limit`（进程内固定窗口），这里只负责存取。
+    pub rate_limit_rpm: u32,
 }
 
 /// 从 JSON 里读一个「字符串数组」白名单（缺失 / 类型不对 / 空 → 空数组）。
@@ -99,7 +102,11 @@ fn string_list(value: Option<&Value>) -> Vec<String> {
 
 /// 白名单列表 → 落盘形态（**空也写成 `[]`**，见模块头）
 fn list_value(list: &[String]) -> Value {
-    Value::Array(list.iter().map(|item| Value::String(item.clone())).collect())
+    Value::Array(
+        list.iter()
+            .map(|item| Value::String(item.clone()))
+            .collect(),
+    )
 }
 
 impl ApiKeyEntry {
@@ -125,6 +132,11 @@ impl ApiKeyEntry {
             created_at: value.get("createdAt").and_then(Value::as_i64).unwrap_or(0),
             allowed_providers: string_list(value.get("allowedProviders")),
             allowed_models: string_list(value.get("allowedModels")),
+            rate_limit_rpm: value
+                .get("rateLimitRpm")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                .min(u32::MAX as u64) as u32,
         })
     }
 
@@ -137,6 +149,7 @@ impl ApiKeyEntry {
             "createdAt": self.created_at,
             "allowedProviders": list_value(&self.allowed_providers),
             "allowedModels": list_value(&self.allowed_models),
+            "rateLimitRpm": self.rate_limit_rpm,
         })
     }
 
@@ -151,6 +164,7 @@ impl ApiKeyEntry {
             "createdAt": self.created_at,
             "allowedProviders": list_value(&self.allowed_providers),
             "allowedModels": list_value(&self.allowed_models),
+            "rateLimitRpm": self.rate_limit_rpm,
         })
     }
 }
@@ -187,6 +201,8 @@ pub fn entries_from(raw: &Map<String, Value>) -> Vec<ApiKeyEntry> {
             // 与它升级前的行为（放行一切）逐字一致
             allowed_providers: Vec::new(),
             allowed_models: Vec::new(),
+            // 旧字段形态也没有限流概念 —— 0 = 不限制
+            rate_limit_rpm: 0,
         }],
         _ => Vec::new(),
     }
@@ -309,6 +325,7 @@ pub fn add(
     key: Option<&str>,
     allowed_providers: Vec<String>,
     allowed_models: Vec<String>,
+    rate_limit_rpm: u32,
 ) -> Result<ApiKeyEntry, String> {
     let mut entries = list();
     let key = match key.map(str::trim).filter(|k| !k.is_empty()) {
@@ -332,6 +349,7 @@ pub fn add(
         created_at,
         allowed_providers,
         allowed_models,
+        rate_limit_rpm,
     };
     entries.push(entry.clone());
     save(&entries);
@@ -351,6 +369,7 @@ pub fn update(
     enabled: Option<bool>,
     allowed_providers: Option<Vec<String>>,
     allowed_models: Option<Vec<String>>,
+    rate_limit_rpm: Option<u32>,
 ) -> Result<ApiKeyEntry, String> {
     let mut entries = list();
     let Some(entry) = entries.iter_mut().find(|entry| entry.id == id) else {
@@ -367,6 +386,9 @@ pub fn update(
     }
     if let Some(list) = allowed_models {
         entry.allowed_models = list;
+    }
+    if let Some(rpm) = rate_limit_rpm {
+        entry.rate_limit_rpm = rpm;
     }
     let updated = entry.clone();
     save(&entries);

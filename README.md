@@ -65,6 +65,8 @@ OpenAI 客户端 / 任意 SDK
 ```bash
 curl http://127.0.0.1:3065/health
 curl http://127.0.0.1:3065/v1/models
+# Prometheus 指标（免鉴权；按安全形态收敛暴露面，见下）
+curl http://127.0.0.1:3065/metrics
 
 curl http://127.0.0.1:3065/v1/chat/completions \
   -H 'Content-Type: application/json' \
@@ -94,7 +96,9 @@ docker run -d --name aiapi --restart unless-stopped \
   anwang520/agent2api:latest
 ```
 
-浏览器打开 `http://<主机>:3065`，首次进入会引导**注册管理员账号**（后续登录用它）；登录后在「网关 Key」页创建一把 API Key 给客户端用 —— `http://<主机>:3065/v1` 即 OpenAI 兼容端点，未建 Key 前拒绝转发，建第一把后自动恢复。所有状态（SQLite 库 / 配置 / 日志）都落在 `./data` 一个卷里。
+浏览器打开 `http://<主机>:3065`，首次进入会引导**注册管理员账号**（后续登录用它）；登录后在「网关 Key」页创建一把 API Key 给客户端用 —— `http://<主机>:3065/v1` 即 OpenAI 兼容端点，未建 Key 前拒绝转发，建第一把后自动恢复。每把 Key 可单独限制**可用提供商**、**可用模型**与**每分钟请求上限（RPM）**：前两者留空 = 不限制，两者都设时按交集生效；RPM 留空或 0 = 不限频，超出后网关回 `429` 并带标准 `Retry-After` 头（与上游账号被限流的 429 区分：这是网关按 Key 主动限流，换号无效）。所有状态（SQLite 库 / 配置 / 日志）都落在 `./data` 一个卷里。
+
+可观测性：`GET /metrics` 输出 Prometheus 文本格式（`aiapi_up`、`aiapi_requests_total`、`aiapi_requests_successful_total`、`aiapi_tokens_total`、`aiapi_models`，以及按提供商的 `aiapi_provider_requests_total` / `aiapi_provider_failures_total`）。它与 `/health` 一样免鉴权，但在 headless 的安全形态（未注册闸门或 `/v1` fail-closed）下只回进程级指标、不带按提供商拆分的标签，避免把用量结构泄露给公网探测者。
 
 compose 用户（`docker-compose.yml` 全文就这么多；amd64 / arm64 都有镜像）：
 

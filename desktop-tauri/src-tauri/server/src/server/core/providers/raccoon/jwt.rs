@@ -188,13 +188,15 @@ fn base64_decode(input: &str) -> Option<Vec<u8>> {
 pub fn strip_bearer(value: &str) -> String {
     const PREFIX: &str = "bearer";
     let trimmed = value.trim();
-    if trimmed.len() < PREFIX.len() {
+    // `get(..)` 而非 `split_at`：token 来自用户填写 / 导入的凭证，第 6 字节可能
+    // 落在多字节字符中间，`split_at` 会 panic（见 http.rs 同名前缀函数说明）。
+    let Some(head) = trimmed.get(..PREFIX.len()) else {
         return trimmed.to_string();
-    }
-    let (head, rest) = trimmed.split_at(PREFIX.len());
+    };
     if !head.eq_ignore_ascii_case(PREFIX) {
         return trimmed.to_string();
     }
+    let rest = &trimmed[PREFIX.len()..];
     if rest.trim_start().len() == rest.len() {
         return trimmed.to_string();
     }
@@ -209,6 +211,26 @@ pub fn js_text(value: &Value) -> String {
         Value::Number(number) => number.to_string(),
         Value::Bool(flag) => flag.to_string(),
         other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_bearer_normal_forms() {
+        assert_eq!(strip_bearer("Bearer sk-abc"), "sk-abc");
+        assert_eq!(strip_bearer("  bearer sk-abc  "), "sk-abc");
+        assert_eq!(strip_bearer("sk-abc"), "sk-abc");
+        assert_eq!(strip_bearer("BearerX"), "BearerX");
+    }
+
+    /// 回归：第 6 字节落在多字节字符中间时不能 panic。
+    #[test]
+    fn strip_bearer_multibyte_boundary() {
+        assert_eq!(strip_bearer("abc🦀x"), "abc🦀x");
+        assert_eq!(strip_bearer("Bear🦀"), "Bear🦀");
     }
 }
 

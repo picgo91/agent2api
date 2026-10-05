@@ -1,0 +1,114 @@
+name: checks
+
+# 代码质量门禁：格式、静态检查、单元测试，以及前端 islands 的构建同步校验。
+#
+# ── 为什么单独一个工作流 ───────────────────────────────────────
+# build.yml 的两个 job 要起 macOS / Windows runner 编桌面安装包（依赖多、
+# 分钟数高），docker.yml 要编多架构镜像。这三条都属于「发布产物」路径，
+# 不该被「代码风格 / 单测」这种秒级检查拖累，也不该在每次 push 都跑一遍
+# 重型构建。因此质量门禁独立成这个 checks.yml：只跑 ubuntu、只编网关
+# crate（aiapi-server，无 webkit2gtk 依赖，Linux 上可直接编），反馈快。
+#
+# ── 与发布的关系 ──────────────────────────────────────────────
+# 这是**独立的**工作流：它失败不会阻断 build / docker 的构建与推送
+# （三个工作流之间没有 needs 依赖）。它的作用是让 push / PR 当场看到
+# 红叉，而不是等到发版才发现问题。
+#
+# ── 为什么只 -p aiapi-server ──────────────────────────────────
+# 仓库是 workspace：桌面端 crate（workbuddy-proxy-desktop）依赖 tauri，
+# 在 Linux 上要 webkit2gtk / gtk3 一整套系统库才能编；网关 crate 拆出来
+# 本来就是为了无 GUI 依赖，因此 fmt / clippy / test 都只针对它。
+# 桌面端 crate 的检查由 build.yml 在 macOS / Windows 上自然覆盖（编译不过
+# 就出不了包）。
+#
+# ── clippy 为什么 continue-on-error ──────────────────────────
+# 项目此前从未跑过 clippy，存量告警数量未知；若一上来就 `-D warnings` 硬
+# 卡，会让每个 push 都红一片、反而没人看。先让它**报告**（日志里有完整
+# 清单，首页能看到数量），等存量清干净再摘掉 continue-on-error 转硬门禁。
+# fmt 与 test 立即可靠（前者纯粹是格式，后者是既有单测），直接硬卡。
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+env:
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ── Rust：格式 / clippy / 单测（只针对网关 crate）───────────
+  rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # 全部命令在 workspace 根执行；.cargo/config.toml 会把 target 指到 ../../target
+        working-directory: desktop-tauri/src-tauri
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # 两个都是 rustup 的可选组件，runner 上默认不带，必须显式声明
+          components: rustfmt, clippy
+
+      # 缓存键含 Cargo.lock 哈希；workspaces 写法与 build.yml 一致
+      - name: 缓存 Rust 依赖
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop-tauri/src-tauri -> ../../target
+
+      - name: 格式检查（cargo fmt）
+        run: cargo fmt --all -- --check
+
+      - name: 静态检查（cargo clippy）
+        # 存量告警未清，先只报告不阻断；见文件头说明
+        continue-on-error: true
+        run: cargo clippy -p aiapi-server --all-targets -- -D warnings
+
+      - name: 单元测试（cargo test）
+        run: cargo test -p aiapi-server
+
+  # ── 前端 islands：构建产物必须与源码同步 ─────────────────────
+  # ui/islands/ui.js + ui.css 是提交进库的构建产物 —— 桌面端与 Docker 镜像
+  # 都直接拷 ui/ 目录，**不在构建期重新打包 islands**。所以源码改了却忘了
+  # `npm run build`，线上跑的就是旧 UI，而且编译层面毫无征兆。
+  # 这里重跑一次构建，产物与库内不一致（git diff 非空）就失败。
+  islands:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop-tauri/ui-islands
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装 Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop-tauri/ui-islands/package-lock.json
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建（tsc --noEmit && vite build）
+        run: npm run build
+
+      - name: 校验产物已入库
+        # 构建后工作区若有改动，说明 ui/islands/ 里的产物不是最新源码编出来的。
+        # 用 git -C 指回仓库根比较（工作目录是 ui-islands/）。
+        run: |
+          if ! git -C "$GITHUB_WORKSPACE" diff --quiet -- desktop-tauri/ui/islands; then
+            echo "::error::desktop-tauri/ui/islands/ 与源码不同步，请在本地跑 npm --prefix desktop-tauri/ui-islands run build 后一并提交"
+            git -C "$GITHUB_WORKSPACE" --no-pager diff --stat -- desktop-tauri/ui/islands
+            exit 1
+          fi
+
+      - name: 原生前端类型检查（tsc -p ../ui）
+        # ui/ 下的原生脚本用 tsconfig.json 开了 checkJs；这里复用 ui-islands
+        # 已装的 typescript 二进制，省一个 npm 安装。
+        run: npx tsc -p ../ui/tsconfig.json

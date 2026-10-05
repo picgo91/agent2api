@@ -130,7 +130,8 @@ pub fn panel_router(state: ServerState) -> Router {
         // 那样挑一个别家撞不到的名字。GET 收查询串、POST 收表单里的 code。
         .route(
             "/oauth/callback",
-            get(api::session::login_codearts_callback).post(api::session::login_codearts_callback_post),
+            get(api::session::login_codearts_callback)
+                .post(api::session::login_codearts_callback_post),
         );
 
     // 需鉴权：Node 版对这些路径都调用了 checkApiKey
@@ -273,10 +274,19 @@ pub fn panel_router(state: ServerState) -> Router {
         .route("/api/proxies", any(api::accounts::proxies_entry))
         .route("/api/proxies/test", any(api::accounts::proxies_entry))
         .route("/api/proxies/pool", any(api::accounts::proxies_entry))
-        .route("/api/proxies/pool/update", any(api::accounts::proxies_entry))
-        .route("/api/proxies/pool/remove", any(api::accounts::proxies_entry))
+        .route(
+            "/api/proxies/pool/update",
+            any(api::accounts::proxies_entry),
+        )
+        .route(
+            "/api/proxies/pool/remove",
+            any(api::accounts::proxies_entry),
+        )
         .route("/api/proxies/pool/test", any(api::accounts::proxies_entry))
-        .route("/api/proxies/pool/sync-clash", any(api::accounts::proxies_entry))
+        .route(
+            "/api/proxies/pool/sync-clash",
+            any(api::accounts::proxies_entry),
+        )
         // ── 积分 / 签到 / 运营活动（对照 server.mjs 871-911 行）──
         // 六条都挂在 protected（Node 版每条都调了 checkApiKey），
         // 失败时的 body 是 OpenAI 风格（那几条在 server.mjs 的大 try 里）
@@ -295,12 +305,18 @@ pub fn panel_router(state: ServerState) -> Router {
         // ── 会话与登录 ──
         .route("/api/session/login/start", post(api::session::login_start))
         .route("/api/session/login/wait", get(api::session::login_wait))
-        .route("/api/session/login/cancel", post(api::session::login_cancel))
+        .route(
+            "/api/session/login/cancel",
+            post(api::session::login_cancel),
+        )
         // 网页登录的回调入口：壳侧登录窗口把 `office-raccoon://auth/callback?…`
         // 原样 POST 到这里（Tauri 不能像 Electron 那样在会话里注册协议处理器，
         // 见 api::session::login_callback 的说明）。与其他 login/* 一样在
         // protected 组 —— 它写账号库，必须过 API Key。
-        .route("/api/session/login/callback", post(api::session::login_callback))
+        .route(
+            "/api/session/login/callback",
+            post(api::session::login_callback),
+        )
         // AutoClaw 的手机号验证码登录（**不是**网页登录，见 api::session 模块头）：
         // 上游没有授权码 / 回调这条路，登录就是「发码 → 用码换 token」两次请求，
         // 因此不需要登录窗口与轮询。两条都挂 protected —— 它们都写账号库，
@@ -344,13 +360,22 @@ pub fn panel_router(state: ServerState) -> Router {
         .route("/api/models/manage", get(api::model_manage::get_manage))
         .route("/api/models/state", post(api::model_manage::set_state))
         .route("/api/models/mappings", post(api::model_manage::add_mapping))
-        .route("/api/models/mappings/remove", post(api::model_manage::remove_mapping))
+        .route(
+            "/api/models/mappings/remove",
+            post(api::model_manage::remove_mapping),
+        )
         // 自定义模型（手动登记上游目录里没有的模型）
         .route("/api/models/custom", post(api::model_manage::add_custom))
-        .route("/api/models/custom/remove", post(api::model_manage::remove_custom))
+        .route(
+            "/api/models/custom/remove",
+            post(api::model_manage::remove_custom),
+        )
         // 能力位覆盖（纠正对下游声明的那五个字段；只服务内置家，自定义家
         // 走 /api/custom-providers/models 的整表保存，见该 handler 的说明）
-        .route("/api/models/capabilities", post(api::model_manage::set_capabilities))
+        .route(
+            "/api/models/capabilities",
+            post(api::model_manage::set_capabilities),
+        )
         // ── 自定义提供商（用户自建上游端点：存储 + 管理）──
         // 与 /api/models/manage 同级敏感：写配置（customProviders 键）且「新建」
         // 会顺带写账号库，挂 protected。账号侧不经这里 —— 客户端走
@@ -387,8 +412,14 @@ pub fn panel_router(state: ServerState) -> Router {
             "/api/custom-providers/fetch-models",
             post(api::custom_providers::fetch_custom_models),
         )
-        .route("/api/keys", get(api::keys_api::list_keys).post(api::keys_api::create_key))
-        .route("/api/keys/{id}", patch(api::keys_api::update_key).delete(api::keys_api::delete_key))
+        .route(
+            "/api/keys",
+            get(api::keys_api::list_keys).post(api::keys_api::create_key),
+        )
+        .route(
+            "/api/keys/{id}",
+            patch(api::keys_api::update_key).delete(api::keys_api::delete_key),
+        )
         // ── 出站指纹脱敏开关 ──
         // 与 /api/debug 同形的单开关端点（GET 读 / PUT 写），挂 protected：
         // 它决定出站请求体要不要剥离审核指纹，敏感度与调试模式同级。
@@ -505,6 +536,10 @@ pub fn gateway_router(state: ServerState) -> Router {
     let open = Router::new()
         .route("/health", get(api::health::handle))
         .route("/v1/models", get(api::chat::list_models))
+        // /metrics 同样免鉴权：Prometheus 采集器通常拿不到网关 Key。
+        // 暴露面按安全形态收敛（闸门 / fail-closed 下只回进程级指标），
+        // 见 api::metrics 模块头。
+        .route("/metrics", get(api::metrics::handle))
         .with_state(state.clone());
     // 三条协议入口 + Anthropic 的 token 计数端点：都查 API Key。
     // 与 chat/completions 完全同构：都走同一套转发链路，差异只在出入口的
@@ -563,7 +598,11 @@ async fn cors(request: Request, next: Next) -> Response {
     // ——只有开了 AIAPI_VERBOSE=1（旧名 WORKBUDDY_VERBOSE 仍可读）才入库，
     // 普通启动只是控制台多一行
     if logging::is_verbose() && !path.starts_with("/v1/") {
-        let query = request.uri().query().map(|q| format!("?{q}")).unwrap_or_default();
+        let query = request
+            .uri()
+            .query()
+            .map(|q| format!("?{q}"))
+            .unwrap_or_default();
         logging::verbose("[HTTP]", &format!("← {method} {path}{query}"));
     }
 
@@ -654,7 +693,9 @@ async fn require_api_key(mut request: Request, next: Next) -> Response {
     //   · `/api/panel/` 前缀：注册 / 状态 / 登录本身就在这个前缀里。
     if !panel_auth && crate::server::access::panel_gate() && path.starts_with("/api/") {
         if !path.starts_with("/api/panel/")
-            && !(keys.iter().any(|expected| request_matches_key(&request, expected)))
+            && !(keys
+                .iter()
+                .any(|expected| request_matches_key(&request, expected)))
         {
             return errors::panel_login_required_response();
         }
@@ -678,14 +719,37 @@ async fn require_api_key(mut request: Request, next: Next) -> Response {
         .cloned();
     if let Some(matched) = matched {
         // 命中的那把 Key 的限制随请求带到 handler（见函数头）
-        if let Some(scope) = scope_for_key(&snapshot.raw(), &matched) {
-            crate::server::core::key_scope::attach(&mut request, scope);
+        if let Some(entry) =
+            crate::server::core::api_keys::entry_for_key_from(&snapshot.raw(), &matched)
+        {
+            // 每把 Key 的 RPM 限流：先判限流再放行（超限直接 429 + Retry-After）。
+            // 用记录的 **id** 当计数键（不是明文 Key）：明文不该在内存表里当键，
+            // 且 id 在改名时稳定。rpm == 0 / 无记录 / 环境变量 Key → 不限制。
+            if let crate::server::core::rate_limit::Decision::Reject { retry_after_secs } =
+                crate::server::core::rate_limit::check(&entry.id, entry.rate_limit_rpm)
+            {
+                logging::log(
+                    "[Security]",
+                    &format!(
+                        "⏳ 拒绝超频请求（Key「{}」达每分钟 {} 次上限）: {path}",
+                        entry.name, entry.rate_limit_rpm
+                    ),
+                );
+                return errors::rate_limited_response(retry_after_secs);
+            }
+            crate::server::core::key_scope::attach(
+                &mut request,
+                crate::server::core::key_scope::KeyScope::from_entry(&entry),
+            );
         }
         return next.run(request).await;
     }
 
     let method = request.method().as_str().to_string();
-    logging::log("[Security]", &format!("❌ 拒绝未授权的请求: {method} {path}"));
+    logging::log(
+        "[Security]",
+        &format!("❌ 拒绝未授权的请求: {method} {path}"),
+    );
     errors::unauthorized_response()
 }
 
@@ -708,7 +772,9 @@ pub fn key_scope_from_headers(
     if keys.is_empty() {
         return None;
     }
-    let matched = keys.iter().find(|expected| headers_match_key(headers, expected))?;
+    let matched = keys
+        .iter()
+        .find(|expected| headers_match_key(headers, expected))?;
     scope_for_key(&snapshot.raw(), matched)
 }
 
@@ -725,7 +791,10 @@ fn scope_for_key(
 /// （`GET /v1/models` 的 handler）。实现与 `request_matches_key` 逐字一致 ——
 /// 后者委托给它，保证两处不可能漂移。
 fn headers_match_key(headers: &axum::http::HeaderMap, expected: &str) -> bool {
-    if let Some(value) = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()) {
+    if let Some(value) = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+    {
         if strip_bearer_prefix(value) == expected {
             return true;
         }
@@ -765,13 +834,18 @@ fn request_matches_key(request: &Request, expected: &str) -> bool {
 /// 不匹配时**原样返回**整个字符串 —— 与 Node 的 `String.replace` 语义一致。
 fn strip_bearer_prefix(value: &str) -> &str {
     const PREFIX: &str = "bearer";
-    if value.len() < PREFIX.len() {
+    // 用 `get(..)` 而不是 `split_at`：Authorization 头是客户端完全可控的字节串，
+    // 只要第 6 个字节落在多字节字符中间（如 `Bearer` 后紧跟一个 emoji），
+    // `split_at(6)` 会 panic；`panic = "abort"` 下这等于**未认证的远程 DoS**
+    // （中间件在任何 Key 比对之前就走到这里）。`get` 在非字符边界返回 `None`，
+    // 与「没有 Bearer 前缀」同一处理：原样返回。
+    let Some(head) = value.get(..PREFIX.len()) else {
         return value;
-    }
-    let (head, rest) = value.split_at(PREFIX.len());
+    };
     if !head.eq_ignore_ascii_case(PREFIX) {
         return value;
     }
+    let rest = &value[PREFIX.len()..];
     // `\s+` 要求至少一个空白字符，"BearerX" 不匹配、应原样返回
     let trimmed = rest.trim_start();
     if trimmed.len() == rest.len() {
@@ -893,4 +967,46 @@ pub fn parse_query_ms(value: Option<&String>) -> Option<i64> {
         return None;
     }
     Some(number as i64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_bearer_prefix_normal_forms() {
+        assert_eq!(strip_bearer_prefix("Bearer sk-abc"), "sk-abc");
+        assert_eq!(strip_bearer_prefix("bearer   sk-abc"), "sk-abc");
+        assert_eq!(strip_bearer_prefix("BEARER\tsk-abc"), "sk-abc");
+        // 无前缀 / 前缀后无空白 → 原样返回（与 Node 的 replace 语义一致）
+        assert_eq!(strip_bearer_prefix("sk-abc"), "sk-abc");
+        assert_eq!(strip_bearer_prefix("BearerX"), "BearerX");
+        assert_eq!(strip_bearer_prefix("Bear"), "Bear");
+        assert_eq!(strip_bearer_prefix(""), "");
+    }
+
+    /// 回归：`Authorization` 头字节串里第 6 个字节落在多字节字符中间时，
+    /// 旧的 `split_at(6)` 会 panic（panic=abort 下等于未认证远程 DoS）。
+    #[test]
+    fn strip_bearer_prefix_does_not_panic_on_multibyte_boundary() {
+        assert_eq!(strip_bearer_prefix("abc🦀x"), "abc🦀x");
+        assert_eq!(strip_bearer_prefix("Bear🦀"), "Bear🦀");
+        assert_eq!(strip_bearer_prefix("bear🦀 x"), "bear🦀 x");
+        assert_eq!(strip_bearer_prefix("日本語"), "日本語");
+    }
+
+    #[test]
+    fn parse_query_ms_accepts_int_and_integral_float() {
+        assert_eq!(
+            parse_query_ms(Some(&"1700000000000".to_string())),
+            Some(1700000000000)
+        );
+        assert_eq!(
+            parse_query_ms(Some(&"1700000000.0".to_string())),
+            Some(1700000000)
+        );
+        assert_eq!(parse_query_ms(Some(&"".to_string())), None);
+        assert_eq!(parse_query_ms(Some(&"1.5".to_string())), None);
+        assert_eq!(parse_query_ms(None), None);
+    }
 }

@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "None",
+    "moduleDetection": "legacy",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["*.js", "globals.d.ts"],
+  "exclude": ["islands", "altcha.min.js", "aliyun-captcha.js"]
+}

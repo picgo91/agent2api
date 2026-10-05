@@ -17,6 +17,7 @@
    某一家在等待时，另一家的发起按钮也要禁用（点下去必然报错）。 */
 
 (() => {
+  /** id → 元素；返回 `any`，调用方按需取 value/disabled（见 app.js 同名说明） @type {(id: string) => any} */
   const $ = id => document.getElementById(id);
   const { toast } = window.wbApp;
 
