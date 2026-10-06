@@ -52,6 +52,16 @@ export type CustomModelContext = { provider: string; locked: boolean }
  */
 export type CapabilityContext = { provider: string; id: string }
 
+/** 「测试模型」的响应（后端 `/api/models/test`；恒 200，成败都在字段里） */
+export type ModelTestResult = {
+  ok?: boolean
+  reply?: string | null
+  error?: string | null
+  durationMs?: number
+  provider?: string
+  model?: string
+}
+
 type Filters = { provider: string; state: string; search: string }
 
 /** 表格现造的绑定（默认绑定 alias == target 由模型行合成，不在 mappings 里另占一格） */
@@ -84,6 +94,8 @@ export type SharedWindow = {
     setModelCapabilities(
       provider: string, id: string, patch: Record<string, number | boolean | null>,
     ): Promise<ManageView | null | undefined>
+    /** 测试某模型能否正常回复（发一条极小对话） */
+    testModel(provider: string, id: string): Promise<ModelTestResult | null | undefined>
   }
   wbApp?: {
     toast?: (message: string, kind?: 'err' | 'ok') => void
@@ -653,6 +665,41 @@ export async function runRowAction(key: string, run: () => Promise<unknown>, don
     if (doneText) toast(doneText)
   } catch (error) {
     toast(`操作失败：${errorMessage(error)}`, 'err')
+  } finally {
+    const pending = new Set(snapshot.pending)
+    pending.delete(key)
+    patch({ pending })
+  }
+}
+
+/**
+ * 「测试模型」：对某一行 `(provider, id)` 发一条极小对话，回来看能否正常回复。
+ *
+ * 与 `runRowAction` 分开：那条的返回值会被 `accept()` 当成新的 ManageView 铺回页面，
+ * 而测试接口回的是 `{ok, reply, error}` —— 塞进 accept 会把页面数据搞坏。这里自己
+ * 管在途标记（复用 pending，让那颗按钮转圈、并禁用同行其它按钮），自己按结果 toast：
+ * 成功 `✅ 可以正常回复（N ms）：<片段>`，失败 `❌ 该模型未能回复：<原因>`。
+ */
+export async function testModel(provider: string, id: string): Promise<void> {
+  const api = shared().workbuddyDesktop
+  if (!api?.testModel) {
+    toast('后端桥不支持测试接口', 'err')
+    return
+  }
+  const key = rowKeyOf({ provider, id } as ManageModel)
+  if (snapshot.pending.has(key)) return
+  patch({ pending: new Set(snapshot.pending).add(key) })
+  try {
+    const result = await api.testModel(provider, id)
+    if (result?.ok) {
+      const ms = Number(result.durationMs) || 0
+      const reply = String(result.reply || '').trim()
+      toast(`✅ 可以正常回复（${ms} ms）：${reply || '（空回复）'}`)
+    } else {
+      toast(`❌ 该模型未能回复：${result?.error || '未知原因'}`, 'err')
+    }
+  } catch (error) {
+    toast(`测试失败：${errorMessage(error)}`, 'err')
   } finally {
     const pending = new Set(snapshot.pending)
     pending.delete(key)

@@ -517,6 +517,10 @@ pub fn shim_js() -> &'static str {
     setModelCapabilities: function (provider, id, capabilities) {
       return call('POST', '/api/models/capabilities', { provider: provider, id: id, capabilities: capabilities });
     },
+    // 测试某模型能否正常回复（发一条极小对话，回 {ok, reply?, error?, durationMs}）
+    testModel: function (provider, id) {
+      return call('POST', '/api/models/test', { provider: provider, id: id });
+    },
 
     // ── 网关 API Key（多把）──
     getKeys: function () { return call('GET', '/api/keys'); },

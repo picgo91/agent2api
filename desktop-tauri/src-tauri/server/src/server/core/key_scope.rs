@@ -63,6 +63,23 @@ impl KeyScope {
         }
     }
 
+    /// 只允许**一个** provider（模型维度不限制）。
+    ///
+    /// 给「模型回复测试」用：管理页某一行点名了 `(provider, id)`，测试请求必须
+    /// 只走这一家 —— 否则同一个模型 id 若被多家承载，测试可能落到别家，「测的是
+    /// 这一行吗」就说不清。**不是** Key 的鉴权路径，只是借用同一套选路白名单机制。
+    pub fn for_provider(provider: &str) -> Self {
+        let mut allowed_providers = HashSet::new();
+        let name = normalize_one(provider);
+        if !name.is_empty() {
+            allowed_providers.insert(name);
+        }
+        Self {
+            allowed_providers,
+            allowed_models: HashSet::new(),
+        }
+    }
+
     /// 是否限制提供商（界面上「有没有勾」的判据，也用于日志措辞）
     pub fn restricts_providers(&self) -> bool {
         !self.allowed_providers.is_empty()

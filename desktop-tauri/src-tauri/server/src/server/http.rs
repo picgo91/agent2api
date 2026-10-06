@@ -379,6 +379,8 @@ pub fn panel_router(state: ServerState) -> Router {
             "/api/models/capabilities",
             post(api::model_manage::set_capabilities),
         )
+        // 测试某个模型能否正常回复（发一条极小对话，回 ok/error；恒 200）
+        .route("/api/models/test", post(api::model_manage::test_model))
         // ── 自定义提供商（用户自建上游端点：存储 + 管理）──
         // 与 /api/models/manage 同级敏感：写配置（customProviders 键）且「新建」
         // 会顺带写账号库，挂 protected。账号侧不经这里 —— 客户端走

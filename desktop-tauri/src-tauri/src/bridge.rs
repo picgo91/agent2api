@@ -292,6 +292,8 @@ const BRIDGE_JS: &str = r#"
     // 见后端 `api::model_manage::remove_custom` 的说明。
     addCustomModel: (provider, id) => call('POST', '/api/models/custom', { provider, id }),
     removeCustomModel: (provider, id) => call('POST', '/api/models/custom/remove', { provider, id }),
+    // 测试某模型能否正常回复（发一条极小对话，回 {ok, reply?, error?, durationMs}）
+    testModel: (provider, id) => call('POST', '/api/models/test', { provider, id }),
     // 能力位覆盖（只服务内置家；自定义家走 /api/custom-providers/models 的
     // 整表保存，见后端 handler 的说明）。`capabilities` 各键三态：不给 = 不改、
     // null = 恢复清单原值、给值 = 覆盖。

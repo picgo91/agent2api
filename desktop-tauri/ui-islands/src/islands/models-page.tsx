@@ -107,7 +107,7 @@ import {
   openAddCustomProvider, openCapability, openCustomModel, openMapping, providerOptions, refreshAll,
   refreshModels, registerColumnSettings, removeCustomProvider, render, resolveProvider, restoreSavedFilters,
   rowEnabled, rowKeyOf, runRowAction, same, selectProvider, setSearch, setStateFilter, setTableEl,
-  shared, subscribe, syncHead, toast, upstreamOptions, viewData, visibleColumns, writeAddModel,
+  shared, subscribe, syncHead, testModel, toast, upstreamOptions, viewData, visibleColumns, writeAddModel,
   writeBinding, writeRemoveMapping, writeRemoveModel,
   type Align, type Binding, type ColumnView, type CustomModelContext, type MappingContext,
 } from './models-panel-state'
@@ -453,6 +453,9 @@ function ModelsPage() {
         return (
           <td className={cellClass('cell-act r', column.align)}>
             <div className='row-actions'>
+              <Button variant='ghost' size='sm' disabled={busyRow}
+                title='发一条极小对话，看这个模型能否正常回复'
+                onClick={() => void testModel(model.provider || '', model.id)}>测试</Button>
               {model.source === 'manual' || custom ? (
                 <Button variant='ghost' size='sm' className='text-destructive' disabled={busyRow}
                   onClick={() => void confirmRemoveModel()}>移除</Button>

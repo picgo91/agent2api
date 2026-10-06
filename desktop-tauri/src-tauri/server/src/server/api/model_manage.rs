@@ -24,15 +24,20 @@
 
 use axum::body::Bytes;
 use axum::extract::State;
+use axum::http::HeaderMap;
 use axum::response::Response;
 use serde_json::{json, Value};
+use std::sync::Arc;
 
 use crate::server::core::capability;
+use crate::server::core::key_scope::KeyScope;
 use crate::server::core::model_rules;
 use crate::server::core::models::model_id;
 use crate::server::core::providers::adapter::{adapter_for, refresh_implemented_forced};
 use crate::server::core::providers::catalog;
 use crate::server::core::providers::kind_from_id;
+use crate::server::core::upstream::usage::RequestTelemetry;
+use crate::server::core::upstream::{ForwardOutcome, ForwardRequest};
 use crate::server::errors;
 use crate::server::http::{ok_json, parse_body};
 use crate::server::logging;
@@ -164,6 +169,144 @@ pub async fn fetch_models(State(state): State<ServerState>, body: Bytes) -> Resp
     });
     // 与 refresh_models 同一日志口径（失败不抬级别）
     ok_json(payload)
+}
+
+/// POST /api/models/test —— 「测试模型」：对某一行 `(provider, id)` 真发一条极小的
+/// 对话请求，看它能否正常拿到回复。
+///
+/// 请求体：`{provider, id}`；响应（**恒 200**，与 `/api/proxies/test` 同一取向）：
+/// `{success, ok, reply?, error?, durationMs, provider, model}`
+///   - `ok: true` 时带 `reply`（回复正文的截断片段）与 `durationMs`
+///   - `ok: false` 时带 `error`（失败原因，直接来自转发链路）
+///
+/// ── 为什么恒 200 ──────────────────────────────────────────────
+/// 「测出来这家不通」是**结果**而不是请求错误：客户端要拿 `ok/error` 展示，
+/// 而不是把一次业务失败当 HTTP 错误去解析。与代理连通性测试同口径。
+///
+/// ── 为什么直连 `forward` 而不是打自己的 /v1 ────────────────────
+/// 走 HTTP 要绕一大圈（本机再发请求、还要带 Key），且会把这条测试记进报表 /
+/// 日志（`RequestStats::record` 只由 `chat_completions` 触发）—— 测试是诊断
+/// 动作，不该污染用量统计。`forward` 本身**不记账**（记账在调用方），所以直接
+/// 调它既最短、又不留痕。选路 / 账号轮换 / 429 降级这些正是「能不能正常回复」
+/// 想覆盖的，全都在 `forward` 里。
+///
+/// ── 为什么用 `KeyScope::for_provider` 钉住这一家 ──────────────
+/// 同一个模型 id 可能被多家承载；测试点是页面上的**某一行**（点名了 provider），
+/// 必须只走这一家，否则「测的到底是不是这一行」说不清。借用选路白名单机制实现。
+pub async fn test_model(State(state): State<ServerState>, body: Bytes) -> Response {
+    let object = match body_object(&body) {
+        Ok(object) => object,
+        Err(response) => return response,
+    };
+    let provider = text_field(&object, "provider");
+    let id = text_field(&object, "id");
+    if provider.is_empty() || id.is_empty() {
+        return errors::management_error(400, "缺少 provider 或模型 id");
+    }
+    // provider 必须认识（内置注册表 ∪ 自定义家）：写错的话转发只会白跑一趟，
+    // 这里先挡掉、给出明确原因（与 add_custom 同一校验口径）。
+    let known = kind_from_id(&provider).is_some()
+        || crate::server::core::custom_providers::is_custom_provider_id(&provider);
+    if !known {
+        return errors::management_error(400, format!("未知的提供商: {provider}"));
+    }
+
+    // 极小请求：一条 user 消息 + max_tokens 限制。`stream:false` 让 `forward`
+    // 内部把上游流聚合好、返回 `Completion`（build 里会强制上游 stream:true，
+    // 但对外是非流式结果）。
+    let payload = json!({
+        "model": id,
+        "messages": [{ "role": "user", "content": "ping" }],
+        "max_tokens": 16,
+        "stream": false,
+    });
+    let started = std::time::Instant::now();
+    let outcome = state
+        .upstream()
+        .forward(ForwardRequest {
+            body: payload,
+            stream: false,
+            // 空串 = 不参与去重排队（测试请求彼此之间、与被测的真实流量之间都不该串）
+            dedupe_key: String::new(),
+            client_headers: HeaderMap::new(),
+            telemetry: Arc::new(RequestTelemetry::new()),
+            allowed_providers: Some(KeyScope::for_provider(&provider)),
+        })
+        .await;
+    let duration_ms = started.elapsed().as_millis() as u64;
+
+    match outcome {
+        Ok(ForwardOutcome::Completion { body }) => {
+            let reply = completion_reply(&body);
+            logging::log(
+                "[Models]",
+                &format!("测试模型 [{provider}] {id}：成功（{duration_ms} ms）"),
+            );
+            ok_json(json!({
+                "success": true,
+                "ok": true,
+                "reply": reply,
+                "error": Value::Null,
+                "durationMs": duration_ms,
+                "provider": provider,
+                "model": id,
+            }))
+        }
+        // 非流式请求理论上只回 Completion；真收到 Stream 说明有意外，如实报出
+        Ok(ForwardOutcome::Stream { status, .. }) => {
+            logging::log(
+                "[Models]",
+                &format!("测试模型 [{provider}] {id}：意外收到流式响应（status {status}）"),
+            );
+            ok_json(json!({
+                "success": true,
+                "ok": false,
+                "reply": Value::Null,
+                "error": format!("意外收到流式响应（status {status}）"),
+                "durationMs": duration_ms,
+                "provider": provider,
+                "model": id,
+            }))
+        }
+        Err(error) => {
+            logging::log(
+                "[Models]",
+                &format!("测试模型 [{provider}] {id}：失败（{}）", error.message),
+            );
+            ok_json(json!({
+                "success": true,
+                "ok": false,
+                "reply": Value::Null,
+                "error": error.message,
+                "durationMs": duration_ms,
+                "provider": provider,
+                "model": id,
+            }))
+        }
+    }
+}
+
+/// 从 chat.completion 响应体里取回复正文（`choices[0].message.content`，截断到
+/// 一个够展示的长度）。取不到时回一句占位说明（拿不到正文不等于失败 —— 有些家
+/// 会回空的 reasoning-only 片段）。
+fn completion_reply(body: &Value) -> String {
+    let content = body
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("message"))
+        .and_then(|message| message.get("content"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return "（上游返回了成功响应，但正文为空）".to_string();
+    }
+    let mut out: String = trimmed.chars().take(200).collect();
+    if trimmed.chars().count() > 200 {
+        out.push('…');
+    }
+    out
 }
 
 /// POST /api/models/state
