@@ -462,7 +462,8 @@ async function syncFromCache(): Promise<void> {
 /**
  * 那颗按钮的两种语义：下载 / 取消，以及安装包就绪后的安装。
  *
- * 显隐照旧实现的 toggleActions：有更新且真的有可下载资产时才给。额外保留「下载中 /
+ * 显隐照旧实现的 toggleActions：桌面端有更新且真的有可下载资产时才给；网页端有更新即可给。
+ * 额外保留「下载中 /
  * 已就绪」两种状态下的显隐 —— 那时即便 info 变了也得让用户能取消或安装（旧实现靠
  * 「不重铺 toggleActions」实现同一效果，这里写成显式条件）。
  */
@@ -648,8 +649,11 @@ async function openAndDownload(checkedInfo?: UpdateInfo | null): Promise<void> {
 
 /** 面板上那颗按钮的形态；null = 不渲染（显隐一律条件渲染，理由见文件头） */
 function downloadButton(snap: Snapshot): { label: string; disabled: boolean } | null {
-  // 有更新且真的有可下载资产时才给出「下载并安装」
-  const actionable = snap.info?.hasUpdate === true && !!snap.info?.asset?.url
+  // 桌面端需要安装包资产；网页端更新的是 Docker 镜像，不依赖 GitHub 安装包。
+  // 之前这里统一要求 asset.url，导致 Docker 发布只有源码/镜像更新、没有桌面安装包
+  // 时按钮直接不渲染，用户看不到「一键更新」或「复制更新命令」。
+  const actionable = snap.info?.hasUpdate === true
+    && (isWebShell() || !!snap.info?.asset?.url)
   if (!actionable && snap.phase !== 'downloading' && snap.phase !== 'ready') return null
   // 网页端装不了安装包（理由见 downloadOrCancel 开头）：按钮换成「复制更新命令」，
   // 点击复制宿主机执行的 docker 命令并把指引铺进状态行。只改语义不改分发 ——
