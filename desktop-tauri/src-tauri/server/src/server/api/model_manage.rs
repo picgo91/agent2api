@@ -148,7 +148,7 @@ pub async fn fetch_models(State(state): State<ServerState>, body: Bytes) -> Resp
                 "id": id,
                 "name": name,
                 "enabled": rules.default_enabled(&provider, &id),
-                "custom": rules.is_custom(&provider, &id),
+                "custom": model_rules::is_custom(&provider, &id),
             }))
         })
         .collect();
