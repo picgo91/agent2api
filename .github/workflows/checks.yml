@@ -90,9 +90,18 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: desktop-tauri/ui-islands/package-lock.json
+          cache-dependency-path: |
+            desktop-tauri/ui-islands/package-lock.json
+            desktop-tauri/ui-kit/package-lock.json
 
-      - name: 安装依赖
+      # 组件库 ui-kit 是同级**源码**工程（@ui 别名指向 ../ui-kit/src），
+      # 它自带独立的 node_modules 供 tsc 解析 @base-ui/react / clsx 等依赖 ——
+      # 只装 ui-islands 的依赖，tsc 会因为找不到 ui-kit 的依赖而报一片 TS2307。
+      - name: 安装组件库依赖（ui-kit）
+        working-directory: desktop-tauri/ui-kit
+        run: npm ci
+
+      - name: 安装依赖（ui-islands）
         run: npm ci
 
       - name: 构建（tsc --noEmit && vite build）
