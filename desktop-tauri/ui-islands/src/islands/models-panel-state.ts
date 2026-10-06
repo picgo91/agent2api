@@ -96,6 +96,8 @@ export type SharedWindow = {
     ): Promise<ManageView | null | undefined>
     /** 测试某模型能否正常回复（发一条极小对话） */
     testModel(provider: string, id: string): Promise<ModelTestResult | null | undefined>
+    /** 模型启停（粒度 = 提供商 × 模型 id；只服务内置家，自定义家走自家清单字段） */
+    setModelState(payload: { id: string; enabled: boolean; provider?: string }): Promise<ManageView | null | undefined>
   }
   wbApp?: {
     toast?: (message: string, kind?: 'err' | 'ok') => void
@@ -660,6 +662,24 @@ export async function writeCapabilities(
   const api = shared().workbuddyDesktop
   if (!api) throw new Error('后端桥不可用')
   return api.setModelCapabilities(provider, id, capabilities)
+}
+
+/**
+ * 模型启停（操作列的「启用 / 禁用」按钮，也是行内最常用的一颗）。
+ *
+ * 两个数据源分流，与 `writeBinding` 同一条口径：
+ *   · 自定义家：启停就是清单里那条模型自己的 `enabled` 字段（等价于默认绑定芯片的开关），
+ *     走整表提交（`customSource.setBinding(provider, id, id, { enabled })`）——
+ *     后端的 `/api/models/state` 只认内置提供商 id，自定义 id 打过去会 400；
+ *   · 内置家：`POST /api/models/state`（粒度 = 提供商 × 模型 id；启用时后端会把
+ *     其余同样承载该模型的各家一并展开为启用，见 `set_state`）。
+ */
+export async function writeModelState(provider: string, id: string, enabled: boolean): Promise<unknown> {
+  if (customSource.isCustom(provider)) return customSource.setBinding(provider, id, id, { enabled })
+  const api = shared().workbuddyDesktop
+  if (!api) throw new Error('后端桥不可用')
+  if (!api.setModelState) throw new Error('后端桥不支持启停接口')
+  return api.setModelState({ id, enabled, provider })
 }
 
 /* ─── 行内操作 ───────────────────────────────── */

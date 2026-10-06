@@ -148,7 +148,13 @@ type SharedWindow = {
   /** 齿轮图标（icons.js 挂的；返回一段 SVG 串） */
   wbIcons?: { icon?: (name: string, size?: number) => string }
   /** 列宽层：静态表头重排之后要让它重新对一遍把手与轨道 */
-  wbTableColumns?: { repaint?: (id: string) => void }
+  wbTableColumns?: {
+    repaint?: (id: string) => void
+    /** 清掉某张表全部列宽覆盖值（「恢复列宽」按钮调它；给 id 只清那张表） */
+    resetWidths?: (id?: string) => void
+  }
+  /** 顶部提示（app.js 挂的全局单份实现） */
+  wbApp?: { toast?: (message: string, kind?: 'err' | 'ok') => void }
 }
 
 function shared(): SharedWindow {
@@ -497,6 +503,16 @@ function ColSettingsPanel({ spec, anchor, repaintRef, onClose }: PanelProps) {
   }
 
   /**
+   * 恢复列宽：清掉这张表**拖出来的全部列宽**（与「恢复默认」不同 —— 那个只管
+   * 顺序 / 显隐 / 对齐，列宽存在另一处 localStorage，dragging 之前只靠双击把手
+   * 逐列还原，没有一键）。清完由 table-columns.js 自己落盘重画，这里不必 commit。
+   */
+  function resetWidths(): void {
+    shared().wbTableColumns?.resetWidths?.(spec.id)
+    shared().wbApp?.toast?.('已恢复默认列宽')
+  }
+
+  /**
    * 开始拖动排序。用指针事件而不是 HTML5 拖放（理由见文件头）。
    * 拖动过程中每跨过一行就重排一次配置并重画，但**不写盘、不通知表** ——
    * 每跨一行都重绘表格会很吵；松手（或浮层被关掉）才 commit。
@@ -626,7 +642,12 @@ function ColSettingsPanel({ spec, anchor, repaintRef, onClose }: PanelProps) {
 
         <div className='flex items-center gap-2 border-t border-hairline px-3 pt-2 pb-[9px]'>
           <span className='flex-1 text-[11px] text-muted-foreground'>拖动 ⋮⋮ 调整顺序</span>
-          <Button variant='outline' size='sm' onClick={resetAll}>
+          <Button variant='outline' size='sm'
+            title='把所有拖过的列宽清掉，各列回到默认宽度（不影响顺序 / 显隐 / 对齐）'
+            onClick={resetWidths}>
+            恢复列宽
+          </Button>
+          <Button variant='outline' size='sm' title='顺序、显隐、对齐一起回到默认' onClick={resetAll}>
             恢复默认
           </Button>
         </div>

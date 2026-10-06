@@ -49,7 +49,7 @@
  * 换组件库：左栏导航项（NavItem）、面板头两颗按钮、状态筛选（SegmentedControl）、搜索框
  * （InputGroup）、chip 上的映射开关（Switch size='sm'）、chip 上的等级标与删除 ×（Button 的
  * 2xs / icon-2xs 档）、「＋ 映射」（Button variant='dashed'）、模型 ID 的复制按钮、展开/收起、
- * 行内「移除」、来源徽标（Badge）、三个弹窗整块（Dialog 一族 + Input / Select / Label / Tooltip；
+ * 操作列的按钮组（测试 / 启用·禁用 / ⋯ 更多，见 RowActions）、来源徽标（Badge）、三个弹窗整块（Dialog 一族 + Input / Select / Label / Tooltip；
  * 「模型能力」在 model-capability-dialog.tsx，能力位两列的单元格样式在 page-gateway.css）。
  * 保留旧实现的两处都不是控件本身：
  *   · 自定义家条目外层的 `.pv-row` 定位容器与那颗 `.pv-del` —— HTML 不允许 button 嵌套，
@@ -80,6 +80,9 @@ import {
   InputGroupInput,
   Label,
   NavItem,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   SegmentedControl,
   Select,
   SelectContent,
@@ -109,7 +112,7 @@ import {
   refreshModels, registerColumnSettings, removeCustomProvider, render, resolveProvider, restoreSavedFilters,
   rowEnabled, rowKeyOf, runRowAction, same, selectProvider, setSearch, setStateFilter, setTableEl,
   shared, subscribe, syncHead, testModel, toast, upstreamOptions, viewData, visibleColumns, writeAddModel,
-  writeBinding, writeRemoveMapping, writeRemoveModel,
+  writeBinding, writeModelState, writeRemoveMapping, writeRemoveModel,
   batchRemoveModels, batchTestModels, clearSelection, setAllPicked, togglePick,
   type Align, type Binding, type ColumnView, type CustomModelContext, type MappingContext,
 } from './models-panel-state'
@@ -143,6 +146,84 @@ function matches(model: ManageModel, keyword: string, provider: string, stateFil
   if (!keyword) return true
   const hay = [model.id, model.name, ...(model.aliases || [])].join(' ').toLowerCase()
   return hay.includes(keyword)
+}
+
+/**
+ * 「移除」删掉的是那条**登记**（它的存在完全由这次登记决定，没有「上游刷新会把它带回来」
+ * 这回事，移除后 /v1/models、路由同时消失）。判据用后端给的 source，前端不自己推断。
+ */
+async function removeModelRow(model: ManageModel, custom: boolean): Promise<void> {
+  const ok = await shared().wbConfirm?.ask?.({
+    title: '移除自定义模型',
+    html: `确定移除自定义模型「<strong>${esc(model.id)}</strong>」？这条登记会被<b>直接移除</b>，之后 <code>/v1/models</code> 不再广告它、请求它也会被拒。`,
+    okText: '移除',
+    okClass: 'danger',
+  })
+  if (!ok) return
+  void runRowAction(
+    rowKeyOf(model),
+    () => writeRemoveModel(model.provider || '', model.id),
+    custom ? '模型已移除' : '自定义模型已移除',
+  )
+}
+
+/**
+ * 操作列的按钮组：**测试 · 启用/禁用 · ⋯ 更多**。
+ *
+ * 做成独立组件而不是塞在 `cellFor` 里的原因：⋯ 的浮层要持有一份 open 状态，而 `cellFor`
+ * 是普通函数（不是组件），在里面调 hook 会违反 hook 规则。组件在模块级定义、身份稳定
+ * （不会每次渲染重挂，浮层开关不会被父级重绘打断）。
+ *
+ * 「启用 / 禁用」写的是**模型自己的启停**（`writeModelState`，粒度 = 提供商 × 模型 id），
+ * 与映射列里默认绑定芯片上那颗开关是同一个状态、两条等价入口 —— 常用动作放在操作列里，
+ * 不必先去映射列找。
+ */
+function RowActions({ model, busyRow, custom }: { model: ManageModel; busyRow: boolean; custom: boolean }) {
+  const [open, setOpen] = React.useState(false)
+  const enabled = rowEnabled(model)
+  const removable = model.source === 'manual' || custom
+  const provider = model.provider || ''
+  const itemClass = 'w-full justify-start px-2 font-normal'
+  const dangerClass = `${itemClass} text-destructive hover:text-destructive`
+  const close = () => setOpen(false)
+
+  return (
+    <div className='row-actions'>
+      <Button variant='ghost' size='sm' disabled={busyRow}
+        title='发一条极小对话，看这个模型能否正常回复'
+        onClick={() => void testModel(provider, model.id)}>测试</Button>
+      <Button variant='ghost' size='sm' disabled={busyRow}
+        title={enabled ? '禁用后该模型不再参与路由（别名映射一并停用）' : '重新启用该模型'}
+        onClick={() => void runRowAction(
+          rowKeyOf(model),
+          () => writeModelState(provider, model.id, !enabled),
+          enabled ? '模型已禁用' : '模型已启用',
+        )}>{enabled ? '禁用' : '启用'}</Button>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger render={<Button variant='ghost' size='sm' title='更多操作' />}>⋯</PopoverTrigger>
+        <PopoverContent align='end' sideOffset={4} className='w-[168px] p-1.5'>
+          <div className='flex flex-col gap-0.5'>
+            <Button variant='ghost' size='sm' className={itemClass}
+              title='修改上下文窗口 / 最大输出与各项能力声明'
+              onClick={() => { close(); openCapability(provider, model.id) }}>能力 / 预算…</Button>
+            <Button variant='ghost' size='sm' className={itemClass}
+              title='给这个模型再加一条对外别名映射'
+              onClick={() => { close(); openMapping({ target: model.id, provider }) }}>＋ 映射…</Button>
+            <Button variant='ghost' size='sm' className={itemClass} data-copy={model.id}
+              title={`复制上游模型 ID：${model.id}`}
+              onClick={close}>复制模型 ID</Button>
+            {removable ? (
+              <>
+                <div className='my-1 h-px bg-hairline' />
+                <Button variant='ghost' size='sm' className={dangerClass} disabled={busyRow}
+                  onClick={() => { close(); void removeModelRow(model, custom) }}>移除</Button>
+              </>
+            ) : null}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
 }
 
 function ModelsPage() {
@@ -438,25 +519,6 @@ function ModelsPage() {
    * 对外名称统一在模型映射列切换。
    */
   function cellFor(column: ColumnView, model: ManageModel, busyRow: boolean) {
-    /**
-     * 「移除」删掉的是那条**登记**（它的存在完全由这次登记决定，没有「上游刷新会把它带回来」
-     * 这回事，移除后 /v1/models、路由同时消失）。判据用后端给的 source，前端不自己推断。
-     */
-    async function confirmRemoveModel(): Promise<void> {
-      const ok = await shared().wbConfirm?.ask?.({
-        title: '移除自定义模型',
-        html: `确定移除自定义模型「<strong>${esc(model.id)}</strong>」？这条登记会被<b>直接移除</b>，之后 <code>/v1/models</code> 不再广告它、请求它也会被拒。`,
-        okText: '移除',
-        okClass: 'danger',
-      })
-      if (!ok) return
-      void runRowAction(
-        rowKeyOf(model),
-        () => writeRemoveModel(model.provider || '', model.id),
-        custom ? '模型已移除' : '自定义模型已移除',
-      )
-    }
-
     switch (column.key) {
       case 'pick':
         return (
@@ -496,15 +558,7 @@ function ModelsPage() {
       case 'act':
         return (
           <td className={cellClass('cell-act r', column.align)}>
-            <div className='row-actions'>
-              <Button variant='ghost' size='sm' disabled={busyRow}
-                title='发一条极小对话，看这个模型能否正常回复'
-                onClick={() => void testModel(model.provider || '', model.id)}>测试</Button>
-              {model.source === 'manual' || custom ? (
-                <Button variant='ghost' size='sm' className='text-destructive' disabled={busyRow}
-                  onClick={() => void confirmRemoveModel()}>移除</Button>
-              ) : null}
-            </div>
+            <RowActions model={model} busyRow={busyRow} custom={custom} />
           </td>
         )
       default:

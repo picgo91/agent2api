@@ -579,6 +579,25 @@
     attach(table);
   }
 
+  /**
+   * 清掉某张表**全部**列宽覆盖值 → 所有列回到 CSS 默认宽度。
+   *
+   * 与双击把手的「还原这一列」是同一件事，只是范围是全表（列设置面板的「恢复列宽」
+   * 按钮调它）。overrides 是列宽的唯一真相，清空后 persist 落盘、paint 重画 ——
+   * 每列都回到 colgroup 的百分比 / 固定像素，用户此前怎么拖的全部抹平。
+   *
+   * `id` 缺省 = 所有已注册的表都清（给「一键全重置」留的口子）。
+   */
+  function resetWidths(id) {
+    const targets = id ? TABLES.filter(item => item.id === id) : TABLES.slice();
+    for (const table of targets) {
+      const state = stateOf(table);
+      state.overrides = {};
+      persist(table);
+      if (rootOf(table)) paint(table);
+    }
+  }
+
   // 供别处重画用（表格自己重绘了列宽骨架时调一次）
-  window.wbTableColumns = { paint, grips: paintGrips, register, repaint };
+  window.wbTableColumns = { paint, grips: paintGrips, register, repaint, resetWidths };
 })();

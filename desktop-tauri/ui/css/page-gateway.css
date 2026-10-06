@@ -139,21 +139,28 @@
 
 /* 列宽（table-layout: fixed 下按 colgroup 分配）。
    勾选列与操作列用**像素**固定（不参与百分比分配）：勾选框是定宽控件，操作列要装下
-   「测试 / 移除」两颗按钮 —— 用百分比的话表窄时会先被挤掉，操作按钮被裁（这正是一次
+   「测试 / 启用·禁用 / ⋯」一组按钮 —— 用百分比的话表窄时会先被挤掉，操作按钮被裁（这正是一次
    线上反馈）。参照账号页 .cell-actions 的「量出来」做法，见 page-accounts-table.css。 */
 .models-table .c-pick { width: 44px; }
-.models-table .c-model { width: 22%; }
-.models-table .c-rate { width: 6%; }
-.models-table .c-source { width: 7%; }
-/* 能力位两列：数值一格（上下文 / 最大输出）、三枚布尔徽章一格。
-   并入映射列的宽度从这里来 —— 五列会把它挤到装不下 chips（见 models-page
-   文件头的列数取舍） */
-.models-table .c-budget { width: 11%; }
-.models-table .c-caps { width: 13%; }
+.models-table .c-model { width: 21%; }
+.models-table .c-rate { width: 5%; }
+.models-table .c-source { width: 6%; }
+/* 能力位两列：数值一格（上下文 / 最大输出）、四枚布尔徽章一格。
+    并入映射列的宽度从这里来 —— 五列会把它挤到装不下 chips（见 models-page
+    文件头的列数取舍） */
+.models-table .c-budget { width: 10%; }
+/* 能力列要一行装下四枚徽章（工具 / 图片 / 视频 / 思考）：
+    单枚 ≈ 32px（10px 字 × 2 + 横向内边距 8 + 描边 2），四枚 + 三个 2px 缝 ≈ 134px，
+    再加单元格左右内边距 ≈ 142px 才够。13% 在 1000px 级的表里只有 ~130px，
+    必然换行成两排（旧截图里每行都折两行、行高还忽高忽低就是这个）。
+    给到 17%（配合下面徽章收紧到 10px 字 / 2px 缝、单元格内边距 4px，见 .cap-badge）
+    一行即可放下；多出来的百分点从 model / rate / source / budget 各让 1 点，
+    百分比总和仍是 88%，不新增溢出。 */
+.models-table .c-caps { width: 17%; }
 .models-table .c-alias { width: 29%; }
-/* 操作列：装下「测试」「移除」两颗 size=sm 按钮（各约 46px）+ 4px 间距 + 16px 单元格
-   内边距 ≈ 112px，留一点余量到 132px。改按钮文案或增删按钮时**重算一遍**。 */
-.models-table .c-act { width: 132px; }
+/* 操作列：三颗按钮 —— 「测试」「启用 / 禁用」（各约 46px）+ 「⋯」（约 28px）
+    + 4px × 2 缝 + 16px 单元格内边距 ≈ 152px。改按钮文案或增删按钮时**重算一遍**。 */
+.models-table .c-act { width: 152px; }
 /* 勾选列：居中、去掉左右内边距（与账号页 .cell-pick 同口径） */
 .models-table .cell-pick { padding-inline: 0; text-align: center; }
 .models-table .cell-pick input[type="checkbox"] { width: 15px; height: 15px; margin: 0; accent-color: var(--primary); cursor: pointer; }
@@ -254,17 +261,21 @@
 .cap-num.unset { color: var(--text-3); opacity: .6; }
 .cap-sep { color: var(--text-3); font-size: 11px; }
 
-/* 三枚布尔徽章：支持 = 品牌淡底实心；不支持 = 描边压淡；未声明 = 虚线。
-   窄窗口下列宽会被压小，允许换行 —— 不换行只会让第三枚压到映射列上 */
-.caps-open.caps-badges { gap: 4px; flex-wrap: wrap; }
+/* 四枚布尔徽章：支持 = 品牌淡底实心；不支持 = 描边压淡；未声明 = 虚线。
+   徽章做紧一点（字 10px / 缝 2px / 横向内边距 4px）让四枚能挤进一行 ——
+   真放不下时仍允许换行兜底（更窄的窗口不该把第三枚压到映射列上）。 */
+.caps-open.caps-badges { gap: 2px; flex-wrap: wrap; }
+/* 能力列两侧各留 4px（默认 8px）—— 补上收紧徽章后仍缺的那几像素。
+   先例：勾选列 .cell-pick { padding-inline: 0 } */
+.models-table .cell-caps { padding-inline: 4px; }
 .cap-badge {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 1px 6px;
+  gap: 2px;
+  padding: 1px 4px;
   border: 1px solid transparent;
   border-radius: var(--r-pill);
-  font-size: 10.5px;
+  font-size: 10px;
   line-height: 16px;
   white-space: nowrap;
 }
@@ -281,10 +292,16 @@
    第一行是例外：默认那条与「＋ 映射」并排（.alias-row）—— 入口按钮不是绑定，
    让它独占一行会把每个模型行都撑高三行。 */
 .aliases { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
-/* 默认 chip + 「＋ 映射」。max-width: 100% 让这一行在最宽处收住，放不下时
-   按钮自己折到第二行，而不是把 chip 挤扁或把列顶宽（.mm 是 minmax(0,1fr)，
-   列一被顶宽，横向滚动条就挂到面板上了）。 */
-.alias-row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; max-width: 100%; }
+/* 默认 chip + 「＋ 映射」并排一行，**不换行**。
+   原先写的是 flex-wrap: wrap，但 flex 的换行判定发生在收缩之前 —— 它先拿 chip
+   的 max-content 去比一行宽度，别名一长（≳15 字符）就把「＋ 映射」整颗顶到第二行，
+   于是相邻行一个 26px、一个 55px，行高参差（旧截图里约一半的行这样）。
+   chip 的最小内容宽度（开关 + 名字 1 字 + 等级标）离一行宽度还差得远，本就不该换行：
+   让默认 chip 可收缩（flex: 1 1 0; min-width: 0），别名超出时由 .t 省略号收尾，
+   「＋ 映射」恒定留在第一行右侧（flex: 0 0 auto）。 */
+.alias-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 5px; max-width: 100%; }
+.alias-row > .alias { flex: 1 1 0; min-width: 0; }
+.alias-row > button { flex: 0 0 auto; }
 .alias {
   display: inline-flex;
   align-items: center;
@@ -305,7 +322,10 @@
    关着」的状态要一眼可辨，所以另起一个类名。 */
 .alias.map-off { border-color: var(--border); background: var(--surface-inset); color: var(--text-3); }
 .alias.map-off .t { text-decoration: line-through; }
-.alias .t { min-width: 0; overflow-wrap: anywhere; }
+/* 别名文本：一行 + 省略号（models-page 里那颗名字的 title 早就承诺了「被省略号
+   截断时悬停看全」，但 CSS 一直没实现）。原先 overflow-wrap: anywhere 会让长名字
+   在 chip 内折成两行，把 chip 撑高、进而把整行撑高 —— 换行权收在省略号里更稳。 */
+.alias .t { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .alias { height: auto; min-height: 26px; max-width: 100%; padding-top: 3px; padding-bottom: 3px; gap: 5px; }
 .binding-default { flex: 0 0 auto; padding: 0 4px; border: 1px solid var(--border); border-radius: var(--r-xs); background: var(--surface); color: var(--text-3); font-family: var(--font-sans); font-size: 10px; font-weight: 500; }
 .alias .switch { flex: 0 0 auto; }
