@@ -285,12 +285,9 @@ pub fn shim_js() -> &'static str {
       return httpCall(request.method || 'GET', request.path || '/', request.body);
     },
     check_update: function () {
-      // 网页端走镜像更新（拉新镜像重启容器），不提供安装包下载
-      return Promise.resolve({
-        currentVersion: 'web', latestVersion: 'web', hasUpdate: false,
-        notes: '网页端通过 Docker 镜像更新：拉取新镜像后重启容器即可。',
-        publishedAt: '', pageUrl: '', installerKind: 'none',
-      });
+      // 网页端走镜像更新（拉新镜像重启容器），但版本检查仍复用后端缓存。
+      // 不能返回固定的「web / 无更新」结果，否则网页端永远不会渲染更新按钮。
+      return call('GET', '/api/update/status');
     },
     get_update_status: function () { return call('GET', '/api/update/status'); },
     backend_status: function () {
