@@ -67,6 +67,7 @@ import { createRoot } from 'react-dom/client'
 import {
   Badge,
   Button,
+  Checkbox,
   Dialog,
   DialogBody,
   DialogContent,
@@ -109,6 +110,7 @@ import {
   rowEnabled, rowKeyOf, runRowAction, same, selectProvider, setSearch, setStateFilter, setTableEl,
   shared, subscribe, syncHead, testModel, toast, upstreamOptions, viewData, visibleColumns, writeAddModel,
   writeBinding, writeRemoveMapping, writeRemoveModel,
+  batchRemoveModels, batchTestModels, clearSelection, setAllPicked, togglePick,
   type Align, type Binding, type ColumnView, type CustomModelContext, type MappingContext,
 } from './models-panel-state'
 
@@ -183,6 +185,40 @@ function ModelsPage() {
    * 却只有 8 行）。选「全部」这一档时恢复原来的折叠行为，一个字都不变。
    */
   const paging = useClientPaging(shown.length, 'models')
+
+  /* ─── 批量勾选（照抄账号页 / 代理页的口径）──────────────────────
+     「全选」作用于**当前筛选出的全部行**（shown），不只是当前分页那一屏；
+     勾选集合跨筛选 / 分页保持（键 = provider:id）。批量操作作用于「筛选结果里
+     被勾中的行」—— 被筛选隐藏但仍勾着的行也参与（与账号页一致），用徽标提示。 */
+  const shownKeys = shown.map(model => rowKeyOf(model))
+  const selectedCount = state.selected.size
+  const allPicked = shownKeys.length > 0 && shownKeys.every(key => state.selected.has(key))
+  const somePicked = shownKeys.some(key => state.selected.has(key))
+  const batchActive = selectedCount > 0
+  /** 勾中的行（从当前筛选结果里取，保证批量操作只碰看得见的这批；隐藏的另提示） */
+  const pickedModels = shown.filter(model => state.selected.has(rowKeyOf(model)))
+  const hiddenPicked = selectedCount - pickedModels.length
+
+  /** 批量删除的确认：数量 + 后果说清（不可恢复）。确认后交给数据层的 batchRemoveModels。 */
+  async function confirmBatchRemove(): Promise<void> {
+    const removable = pickedModels.filter(model => model.source === 'manual' || customSource.isCustom(model.provider))
+    const skipped = pickedModels.length - removable.length
+    if (!removable.length) {
+      toast('选中的都是内置目录里的模型，不能删除（仅「手工登记」与自定义家的模型可删）', 'err')
+      return
+    }
+    const ok = await shared().wbConfirm?.ask?.({
+      title: '批量删除模型',
+      html: `确定删除勾选的 <strong>${removable.length}</strong> 个模型？`
+        + (skipped ? `（另有 ${skipped} 个内置模型会被跳过）` : '')
+        + '删除后 <code>/v1/models</code> 不再广告它们、请求也会被拒。',
+      okText: '删除',
+      okClass: 'danger',
+    })
+    if (!ok) return
+    await batchRemoveModels(pickedModels)
+    clearSelection()
+  }
 
   /** 左栏：内置提供商（全部 + 各家）+ 自定义提供商（每家 + 新建） */
   function rail() {
@@ -422,6 +458,14 @@ function ModelsPage() {
     }
 
     switch (column.key) {
+      case 'pick':
+        return (
+          <td className={cellClass('cell-pick', column.align)}>
+            <Checkbox checked={state.selected.has(rowKeyOf(model))} title='勾选后可批量操作'
+              aria-label='勾选后可批量操作'
+              onCheckedChange={next => togglePick(rowKeyOf(model), next === true)} />
+          </td>
+        )
       case 'model':
         return (
           <td className={cellClass('cell-model', column.align)}>
@@ -470,8 +514,9 @@ function ModelsPage() {
 
   function modelRow(model: ManageModel) {
     const busyRow = state.pending.has(rowKeyOf(model))
+    const picked = state.selected.has(rowKeyOf(model))
     return (
-      <tr key={`${model.provider || ''}\u0001${model.id}`}>
+      <tr key={`${model.provider || ''}\u0001${model.id}`} className={picked ? 'selected' : undefined}>
         {columns.map(column => (
           <React.Fragment key={column.key}>{cellFor(column, model, busyRow)}</React.Fragment>
         ))}
@@ -590,6 +635,35 @@ function ModelsPage() {
                 {/* 「列设置」按钮由 wbColSettings.register 追加到这个容器的末尾（React 不接管它） */}
               </div>
             </div>
+            {/* 批量栏（照抄账号页 / 代理页的 .batch-bar 类，CSS 全局加载）：勾选集合非空时
+                高亮；「全选当前筛选结果」作用于 shown 全量（不只当前分页）。 */}
+            <div className={cn('batch-bar', batchActive && 'active')} id='models-batch-bar'>
+              <label className='batch-select-all'>
+                <Checkbox checked={allPicked} indeterminate={!allPicked && somePicked}
+                  disabled={!shownKeys.length} aria-label='全选当前筛选结果'
+                  onCheckedChange={next => setAllPicked(shownKeys, next === true)} />
+                <span>{shownKeys.length ? `全选当前筛选结果（${shownKeys.length} 个）` : '没有可全选的模型'}</span>
+              </label>
+              <span className='batch-count'>
+                已选 <b>{selectedCount}</b> 个 · 共 <b>{shown.length}</b> 个
+              </span>
+              {state.batchBusy ? (
+                <span className='batch-count'>进行中 {state.batchProgress.done}/{state.batchProgress.total}…</span>
+              ) : null}
+              {hiddenPicked > 0 ? (
+                <span className='batch-hidden'>另有 {hiddenPicked} 个已勾选模型被当前筛选隐藏</span>
+              ) : null}
+              <div className='batch-actions'>
+                <Button variant='outline' disabled={!batchActive || state.batchBusy}
+                  title='对勾选的模型逐个发一条「你好，你是什么模型」看能否正常回复'
+                  onClick={() => void batchTestModels(pickedModels)}>批量测试</Button>
+                <Button variant='outline' className='text-destructive' disabled={!batchActive || state.batchBusy}
+                  title='删除勾选的自定义/手工登记模型（内置目录里的模型不可删）'
+                  onClick={() => void confirmBatchRemove()}>批量删除</Button>
+                <Button variant='outline' disabled={!batchActive || state.batchBusy}
+                  onClick={() => clearSelection()}>取消选择</Button>
+              </div>
+            </div>
             <div className='models-table-wrap'>
               {/* 表骨架（colgroup + thead）是**字面量**、永远按 index.html 的原始顺序渲染全部
                   5 列、不随任何状态变化：列的显隐与顺序由 wbColSettings.syncStaticHead 就地
@@ -599,6 +673,7 @@ function ModelsPage() {
                   数据行相反：完全按 visibleColumns() 逐列渲染，与表头读同一份配置。 */}
               <table className='models-table' ref={el => setTableEl(el)}>
                 <colgroup>
+                  <col className='c-pick' data-col='pick' />
                   <col className='c-model' data-col='model' />
                   <col className='c-rate' data-col='rate' />
                   <col className='c-source' data-col='source' />
@@ -608,6 +683,12 @@ function ModelsPage() {
                   <col className='c-act' data-col='act' />
                 </colgroup>
                 <thead><tr>
+                  <th className='cell-pick' data-col='pick'>
+                    <Checkbox checked={allPicked} indeterminate={!allPicked && somePicked}
+                      disabled={!shownKeys.length} title='全选当前筛选结果'
+                      aria-label='全选当前筛选结果'
+                      onCheckedChange={next => setAllPicked(shownKeys, next === true)} />
+                  </th>
                   <th data-col='model'>上游模型</th>
                   <th data-col='rate'>倍率</th>
                   <th data-col='source'>来源</th>

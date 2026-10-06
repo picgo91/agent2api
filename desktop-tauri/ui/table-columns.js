@@ -101,7 +101,12 @@
       id: 'models',
       mode: 'table',
       root: '.page[data-page="gateway"] table.models-table',
-      columns: ['model', 'rate', 'source', 'budget', 'caps', 'alias', 'act'].map(key => ({ key })),
+      columns: [
+        // 勾选列：定宽（44px，见 page-gateway.css），不给拖动把手 —— 一个复选框列
+        // 调宽没有意义，把手挤在窄列上还会盖住复选框
+        { key: 'pick', grip: false },
+        ...['model', 'rate', 'source', 'budget', 'caps', 'alias', 'act'].map(key => ({ key })),
+      ],
       columnsOf: visibleColumnsOf(() => window.wbModelsPanel?.visibleColumns?.()),
     },
     {
@@ -304,6 +309,8 @@
     }
 
     columns.forEach((column, index) => {
+      // 定宽列（如模型页的勾选列）不给把手：见 TABLES 里 grip:false 的说明
+      if (column.grip === false) return;
       const cell = headCellOf(table, root, column);
       if (!cell || cell.querySelector(`:scope > .${GRIP_CLASS}`)) return;
       cell.insertAdjacentHTML('beforeend', gripHtml(table.mode === 'table' && index === columns.length - 1));

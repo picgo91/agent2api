@@ -191,6 +191,8 @@ export const MODEL_STATE_OPTIONS: readonly SegmentedControlOption<string>[] = MO
  * 表头 th、table-columns.js 的列宽登记三处同名，键名只有一套）。顺序即默认渲染顺序。
  */
 const COLUMNS: ColumnDecl[] = [
+  // 勾选列在最前（批量操作用）；没有标题文字，宽度在 page-gateway.css 里定
+  { key: 'pick', label: '' },
   { key: 'model', label: '上游模型' },
   { key: 'rate', label: '倍率' },
   { key: 'source', label: '来源' },
@@ -227,6 +229,12 @@ export type PanelState = {
   expanded: ReadonlySet<string>
   /** 行内操作在途标记（防同一行连点） */
   pending: ReadonlySet<string>
+  /** 批量勾选集合（键 = rowKeyOf，`provider:id`）：跨筛选/分页保持 */
+  selected: ReadonlySet<string>
+  /** 批量操作在途（批量按钮禁用、显示进度文案） */
+  batchBusy: boolean
+  /** 批量进度：{done,total}（0/0 = 未在跑） */
+  batchProgress: { done: number; total: number }
   /** 映射弹窗的上下文；null = 关着（弹窗内部状态归弹窗自己管） */
   mapping: MappingContext | null
   /** 添加模型弹窗的上下文；null = 关着 */
@@ -266,6 +274,9 @@ let snapshot: PanelState = {
   data: null,
   expanded: new Set<string>(),
   pending: new Set<string>(),
+  selected: new Set<string>(),
+  batchBusy: false,
+  batchProgress: { done: 0, total: 0 },
   mapping: null,
   customModel: null,
   capability: null,
@@ -705,6 +716,109 @@ export async function testModel(provider: string, id: string): Promise<void> {
     pending.delete(key)
     patch({ pending })
   }
+}
+
+/* ─── 批量勾选 ───────────────────────────────── */
+
+/** 勾 / 取消勾选一行。键 = `rowKeyOf`（provider:id），与行在途标记同一套键。 */
+export function togglePick(key: string, on: boolean): void {
+  const next = new Set(snapshot.selected)
+  if (on) next.add(key)
+  else next.delete(key)
+  patch({ selected: next })
+}
+
+/**
+ * 全选 / 全不选**当前筛选结果**（传入的是可见行的 key 列表）。
+ * 与账号页同口径：作用于当前筛选出的全部行，不只是当前分页那一屏。
+ */
+export function setAllPicked(keys: string[], on: boolean): void {
+  const next = new Set(snapshot.selected)
+  for (const key of keys) {
+    if (on) next.add(key)
+    else next.delete(key)
+  }
+  patch({ selected: next })
+}
+
+export function clearSelection(): void {
+  patch({ selected: new Set<string>() })
+}
+
+/**
+ * 批量测试：对选中的行逐条发极小对话（照抄代理页批量测试的**串行**做法 —— 避免
+ * 同时打上游把账号连接数配额占满）。每条结果累计成功 / 失败，最后一条汇总 toast。
+ */
+export async function batchTestModels(targets: ManageModel[]): Promise<void> {
+  const api = shared().workbuddyDesktop
+  if (!api?.testModel) {
+    toast('后端桥不支持测试接口', 'err')
+    return
+  }
+  if (!targets.length || snapshot.batchBusy) return
+  patch({ batchBusy: true, batchProgress: { done: 0, total: targets.length } })
+  let ok = 0
+  const failures: string[] = []
+  try {
+    for (let index = 0; index < targets.length; index += 1) {
+      const model = targets[index]
+      try {
+        const result = await api.testModel(model.provider || '', model.id)
+        if (result?.ok) ok += 1
+        else failures.push(`${model.id}：${result?.error || '未能回复'}`)
+      } catch (error) {
+        failures.push(`${model.id}：${errorMessage(error)}`)
+      }
+      patch({ batchProgress: { done: index + 1, total: targets.length } })
+    }
+  } finally {
+    patch({ batchBusy: false, batchProgress: { done: 0, total: 0 } })
+  }
+  if (!failures.length) {
+    toast(`✅ 全部可以正常回复（${ok}/${targets.length}）`)
+  } else {
+    const head = failures.slice(0, 3).join('；')
+    const more = failures.length > 3 ? `…等 ${failures.length} 个失败` : ''
+    toast(`测试完成：成功 ${ok} / ${targets.length}；失败：${head}${more}`, 'err')
+  }
+}
+
+/**
+ * 批量删除：逐条调 `writeRemoveModel`（串行 —— 自定义家整表提交，并发会互相覆盖）。
+ * **只有可删的行会被删**：内置家自动目录里的行不能删（页面行内也只在
+ * `manual` / 自定义家时才给「移除」），这里跳过并计入 skipped，如实汇报。
+ */
+export async function batchRemoveModels(targets: ManageModel[]): Promise<void> {
+  if (!targets.length || snapshot.batchBusy) return
+  const removable = targets.filter(model => model.source === 'manual' || customSource.isCustom(model.provider))
+  const skipped = targets.length - removable.length
+  if (!removable.length) {
+    toast('选中的都是内置目录里的模型，不能删除（仅「手工登记」与自定义家的模型可删）', 'err')
+    return
+  }
+  patch({ batchBusy: true, batchProgress: { done: 0, total: removable.length } })
+  let ok = 0
+  let failed = 0
+  try {
+    for (let index = 0; index < removable.length; index += 1) {
+      const model = removable[index]
+      try {
+        await writeRemoveModel(model.provider || '', model.id)
+        ok += 1
+      } catch {
+        failed += 1
+      }
+      patch({ batchProgress: { done: index + 1, total: removable.length } })
+    }
+  } finally {
+    patch({ batchBusy: false, batchProgress: { done: 0, total: 0 } })
+  }
+  // 目录变了：自定义家在 writeRemoveModel 内部已触发刷新；内置家重拉一次 manage 视图
+  await load({ force: true })
+  const parts = [`已删除 ${ok} 个`]
+  if (skipped) parts.push(`跳过 ${skipped} 个（不可删）`)
+  if (failed) parts.push(`失败 ${failed} 个`)
+  toast(`${failed ? '⚠️' : '✅'} ${parts.join('，')}`, failed ? 'err' : 'ok')
 }
 
 /**

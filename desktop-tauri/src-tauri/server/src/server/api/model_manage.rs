@@ -216,8 +216,8 @@ pub async fn test_model(State(state): State<ServerState>, body: Bytes) -> Respon
     // 但对外是非流式结果）。
     let payload = json!({
         "model": id,
-        "messages": [{ "role": "user", "content": "ping" }],
-        "max_tokens": 16,
+        "messages": [{ "role": "user", "content": "你好，你是什么模型" }],
+        "max_tokens": 128,
         "stream": false,
     });
     let started = std::time::Instant::now();

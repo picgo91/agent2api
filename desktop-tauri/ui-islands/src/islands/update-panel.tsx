@@ -797,6 +797,15 @@ function UpdatePanel() {
           {snap.stateText}
         </div>
 
+        {/* 网页端且未开启一键更新时，说明「怎么把按钮变成真的一键更新」——否则用户
+            只会看到「复制更新命令」，不知道还有一键这条路。开启后这条消失。 */}
+        {isWebShell() && !snap.selfUpdate ? (
+          <div className='detail' style={{ color: 'var(--text-3)', fontSize: '11.5px' }}>
+            想要面板里点一下就更新（不用去宿主机敲命令）：在部署里设 <code>AIAPI_ALLOW_SELF_UPDATE=1</code>、
+            并给容器挂载 <code>/var/run/docker.sock</code>，重启后面板会出现「一键更新」按钮。详见 README「面板一键更新」。
+          </div>
+        ) : null}
+
         {/* 进度条：旧实现只在 0 < percent < 100 时露出，这里同样条件渲染 */}
         {snap.phase === 'downloading' && snap.percent > 0 && snap.percent < 100
           ? <Progress value={snap.percent} />
