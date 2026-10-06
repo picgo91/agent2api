@@ -495,6 +495,7 @@ pub fn shim_js() -> &'static str {
     // 早先这里写死 `{}`，两个可选项一起丢了：范围收窄失效（界面上看不到的家
     // 也进结果，多出一批「缺少登录态」的噪音行），点名账号同样不生效。
     refreshModels: function (payload) { return call('POST', '/api/models/refresh', payload || {}); },
+    fetchModels: function (provider, accountId) { return call('POST', '/api/models/fetch', { provider: provider, accountId: accountId || '' }); },
     getModelManage: function () { return call('GET', '/api/models/manage'); },
     setModelState: function (payload) { return call('POST', '/api/models/state', payload); },
     // 第 4 / 第 5 个参数（思考等级 / 映射开关）都按「有没有传」决定是否进请求体：

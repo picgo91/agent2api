@@ -81,6 +81,15 @@ type RefreshItem = {
 }
 type RefreshResponse = { results?: RefreshItem[]; refreshed?: unknown }
 
+/** 内置家单家勾选屏的一项（`POST /api/models/fetch` 的 models[]）：上游模型 id 与它**当前**的
+ *  启停态；`custom` 表示这条是手工登记进来的（不在上游原始清单里）。 */
+type FetchModel = { id: string; name: string; enabled: boolean; custom: boolean }
+/** `POST /api/models/fetch` 的响应：原始清单 + 启停态 + 来源 / 时刻 / 失败原因。 */
+type FetchResponse = {
+  provider?: string; providerLabel?: string; models?: FetchModel[]
+  source?: string; refreshedAt?: unknown; accountId?: unknown; message?: unknown
+}
+
 /** open() 的入参（与旧实现逐字一致） */
 type OpenOptions = {
   providerId: string
@@ -109,6 +118,10 @@ type SharedWindow = {
     refreshModels(payload: {
       accounts: Record<string, string>; providers: string[]
     }): Promise<RefreshResponse | null | undefined>
+    /** POST /api/models/fetch：单家拉取原始清单 + 启停态（内置家勾选屏） */
+    fetchModels?(provider: string, accountId?: string): Promise<FetchResponse | null | undefined>
+    /** POST /api/models/state：启停一条内置模型（`{id, enabled, provider}`） */
+    setModelState?(payload: { id: string; enabled: boolean; provider?: string }): Promise<unknown>
   }
   wbApp?: {
     toast?: (message: string, kind?: 'err' | 'ok') => void
@@ -151,10 +164,12 @@ function shared(): SharedWindow {
  * 空间，登记按「表」记账，同一登记的元素会在弹窗重建中换好几茬）。`COLS_*` 是列 key 的**顺序
  * 表**，`<colgroup>` 与表头都按它建。
  */
-const TABLE_ID = { intl: 'fm-table-intl', custom: 'fm-table-custom' }
+const TABLE_ID = { intl: 'fm-table-intl', custom: 'fm-table-custom', single: 'fm-table-single' }
 const TABLE_COL_ID = { intl: 'fetch-models', custom: 'fetch-models-custom' }
 const COLS_INTL: readonly string[] = ['provider', 'source', 'state', 'count', 'note', 'updated']
 const COLS_CUSTOM: readonly string[] = ['pick', 'model', 'state']
+/** 内置家单家勾选屏的列（勾选 / 模型 / 标记）：与自定义家的三列同形 */
+const COLS_SINGLE: readonly string[] = ['pick', 'model', 'state']
 
 /**
  * 列宽百分数（逐字照抄旧 CSS 的 `#fm-table-intl .f-*` / `#fm-table-custom .f-*`）：没拖过的列走
@@ -172,12 +187,16 @@ const WIDTH_INTL: Record<string, string> = {
 }
 /** 自定义家的窄形态（三列）：勾选 40px ≈ 8%、状态 92px ≈ 18%、上游模型吃剩余 */
 const WIDTH_CUSTOM: Record<string, string> = { pick: 'w-[8%]', model: 'w-[74%]', state: 'w-[18%]' }
+/** 内置家单家勾选屏（三列）：与自定义家同宽口径 */
+const WIDTH_SINGLE: Record<string, string> = { pick: 'w-[8%]', model: 'w-[74%]', state: 'w-[18%]' }
 
 /** 表头文案（按列 key 取；空串 = 勾选列没有标题，与旧实现一致） */
 const HEAD_LABEL: Record<string, string> = {
   pick: '', provider: '提供商', source: '模型来源', state: '状态', count: '模型数',
   note: '说明', updated: '更新日期', model: '上游模型',
 }
+/** 单家勾选屏的表头：第三列是「来源」（手工 / 上游目录）而不是内置批量表的「状态」 */
+const HEAD_LABEL_SINGLE: Record<string, string> = { pick: '', model: '模型', state: '来源' }
 
 /**
  * 逐家结果的三种状态（旧实现的 KIND 映射逐字搬过来，kind 从 CSS 类名换成组件库 Badge 的
@@ -339,6 +358,16 @@ function ModelsFetchModal({ options, onClose }: { options: OpenOptions; onClose:
   const name = options.name || providerId
   const { onDone, onRefreshed } = options
 
+  /**
+   * 内置家的**单家勾选屏**：只在「选中了某一家内置家」（而非左栏的「全部」）时为真。
+   *
+   * 与「全部」档的区别：全部档是「逐家批量刷新」表（一次点、多家拉、回逐家状态）；
+   * 单家档是「拉这一家的原始清单 → 勾选 → 启停」—— 与自定义家的勾选屏同形，区别只在
+   * 导入语义（自定义家是写进手工清单，内置家是切启停）。左栏没有任何具体家（数据没
+   * 加载完 / 只剩「全部」）时退回批量表，不硬撑一个单家屏。
+   */
+  const builtinSingle = !custom && providerId !== 'all' && Boolean(providerId)
+
   const [status, setStatus] = React.useState<Status>('idle')
   /** 拉取失败的原因：整屏换成「获取失败：…」，同时留一份脚注 */
   const [errorText, setErrorText] = React.useState('')
@@ -363,6 +392,12 @@ function ModelsFetchModal({ options, onClose }: { options: OpenOptions; onClose:
   const [picked, setPicked] = React.useState<ReadonlySet<string>>(() => new Set<string>())
   /** 内置家：逐家刷新结果（status === 'ready' 时的表体） */
   const [results, setResults] = React.useState<RefreshItem[]>([])
+  /** 内置家单家勾选屏：拉回来的原始清单（`{id,enabled,custom}`） */
+  const [candidates, setCandidates] = React.useState<FetchModel[]>([])
+  /** 内置家单家勾选屏：勾选中的 id（**勾 = 启用**；未勾 = 停用）。初值 = 拉回来的 enabled */
+  const [checked, setChecked] = React.useState<ReadonlySet<string>>(() => new Set<string>())
+  /** 内置家单家勾选屏：本次拉取失败原因（有值就在结果上方提示一行，但清单照常显示） */
+  const [fetchNote, setFetchNote] = React.useState('')
   /** 自定义家：搜索词（受控；旧实现是 input 事件即时过滤） */
   const [keyword, setKeyword] = React.useState('')
   /** 「模型来源」的落盘记忆（打开时读一次；选中即写回并更新本状态） */
@@ -394,7 +429,21 @@ function ModelsFetchModal({ options, onClose }: { options: OpenOptions; onClose:
     ? fetched
       ? `已选 ${picked.size} 个 · 上游共 ${upstream.length} 个 · 清单已有 ${managed.size} 个`
       : '尚未获取'
-    : intlSummary()
+    : builtinSingle
+      ? builtinSingleSummary()
+      : intlSummary()
+
+  /** 单家勾选屏的汇总：勾选数 / 总模型数（勾 = 启用） */
+  function builtinSingleSummary(): string {
+    if (status === 'loading') return '正在获取…'
+    if (status === 'error') return ''
+    if (status === 'ready') {
+      if (!candidates.length) return fetchNote ? '未取到模型' : '上游没有返回任何模型'
+      const on = candidates.filter(item => checked.has(item.id)).length
+      return `已启用 ${on} / 共 ${candidates.length} 个模型`
+    }
+    return '尚未获取'
+  }
 
   /** 内置家的汇总文案（待获取 / 刷新中 / 失败 / 逐家结果四档） */
   function intlSummary(): string {
@@ -493,6 +542,28 @@ function ModelsFetchModal({ options, onClose }: { options: OpenOptions; onClose:
         setStatus('ready')
         return
       }
+      // 内置家单家勾选屏：拉这一家的原始清单 + 启停态，勾选后启停（不是批量刷新的逐家表）
+      if (builtinSingle) {
+        const accountId = selectSource(providerId).selected
+        const data = await shared().workbuddyDesktop?.fetchModels?.(providerId, accountId)
+        if (!data) throw new Error('后端桥不可用')
+        const list: FetchModel[] = Array.isArray(data.models)
+          ? data.models.map(item => ({
+              id: String(item?.id ?? ''),
+              name: String(item?.name ?? item?.id ?? ''),
+              enabled: item?.enabled !== false,
+              custom: item?.custom === true,
+            })).filter(item => item.id)
+          : []
+        setCandidates(list)
+        // 勾 = 启用：初值就是当前启用中的那些
+        setChecked(new Set(list.filter(item => item.enabled).map(item => item.id)))
+        // 拉取失败（后端仍回一份缓存清单 + message）：照常显示清单，另在顶部提示一行
+        setFetchNote(typeof data.message === 'string' ? data.message : '')
+        setFetched(true)
+        setStatus('ready')
+        return
+      }
       // 「模型来源」下拉的选择与刷新范围随请求带上（范围见 scopeProviders）
       const result = await shared().workbuddyDesktop?.refreshModels({
         accounts: buildSourceMap(sourceRows), providers: scopeProviders(),
@@ -541,6 +612,55 @@ function ModelsFetchModal({ options, onClose }: { options: OpenOptions; onClose:
   /** 底部那颗（自定义家「取消」/ 内置家「完成」）：与 Esc 同一条收口，在途时不许关 */
   function handleCloseClick() {
     if (!busy) onClose()
+  }
+
+  /**
+   * 内置家勾选屏的「保存启停」：只对**与初值不同**的行发 `POST /api/models/state`
+   * （勾 = 启用，未勾 = 停用），逐条串行提交。
+   *
+   * 为什么只提交变化项：`set_state` 每条都是一次配置写 + 一次目录重算，全量提交在
+   * 几十个模型时会明显变慢，且把没动过的行也重写一遍（时间戳 / 副作用）。
+   * 失败不中断：逐条累计成功数，最后汇总提示 —— 一条失败不该让整批回滚，用户能看到
+   * 到底成了几个。
+   */
+  async function saveBuiltin() {
+    if (!builtinSingle || busy) return
+    const api = shared().workbuddyDesktop
+    if (!api?.setModelState) {
+      toast('后端桥不支持启停接口', 'err')
+      return
+    }
+    const changed = candidates.filter(item => checked.has(item.id) !== item.enabled)
+    if (!changed.length) {
+      toast('没有改动')
+      onClose()
+      return
+    }
+    setBusyKind('import')
+    setHint('')
+    let ok = 0
+    let failed = 0
+    for (const item of changed) {
+      try {
+        await api.setModelState({ id: item.id, enabled: checked.has(item.id), provider: providerId })
+        ok += 1
+      } catch {
+        failed += 1
+      }
+    }
+    setBusyKind(null)
+    if (failed) {
+      toast(`已更新 ${ok} 个，${failed} 个失败`, 'err')
+      setHint(`已更新 ${ok} 个，${failed} 个失败（可重试）`)
+      // 有失败就不关窗：让用户看到还剩哪些没成
+      return
+    }
+    toast(`✅ 已更新 ${ok} 个模型的启停`)
+    onClose()
+    // 启停改了 modelRules，模型管理页自持的 manage 视图（启用开关 / 排序）就旧了，
+    // 用 onRefreshed 让它重拉一次（它对内置家就是 load({force:true})）。
+    onRefreshed?.()
+    onDone?.()
   }
 
   /** 全选未添加：把上游里所有「不在本地清单」的 id 勾上（在已选之上追加，不清空） */
@@ -679,6 +799,37 @@ function ModelsFetchModal({ options, onClose }: { options: OpenOptions; onClose:
     })
   }
 
+  /**
+   * 内置家**单家勾选屏**的表体：一行一个原始模型 + 勾选框（勾 = 启用），与自定义家的勾选屏同形，
+   * 差别只在「导入」在这里是「启停」。手工登记的条目（`custom`）加一枚徽章区分。
+   *
+   * 第一屏（idle）只给一句引导，拉取由用户点「获取模型」触发（与全库「打开不自动拉」一致）。
+   */
+  function builtinSingleBody() {
+    if (status === 'idle') return stateRow('点右侧「获取模型」从上游拉取这家的模型清单，勾选要启用的')
+    if (status === 'loading') return stateRow('正在获取…')
+    if (status === 'error') return stateRow(`获取失败：${errorText}`)
+    if (!candidates.length) {
+      return stateRow(fetchNote ? `未取到模型：${fetchNote}` : '上游没有返回任何模型')
+    }
+    return candidates.map(item => (
+      <TableRow key={item.id}>
+        <TableCell>
+          <Checkbox checked={checked.has(item.id)} aria-label={item.id}
+            onCheckedChange={next => setChecked(prev => {
+              const out = new Set(prev); if (next) out.add(item.id); else out.delete(item.id); return out
+            })} />
+        </TableCell>
+        <TableCell>{nameCell(item.name || item.id)}</TableCell>
+        <TableCell>
+          {item.custom
+            ? <Badge variant='outline' title='手工登记的条目（不在上游原始清单里）'>手工</Badge>
+            : <span className='text-[11.5px] text-muted-foreground'>上游目录</span>}
+        </TableCell>
+      </TableRow>
+    ))
+  }
+
   /* ─── 结构 ───────────────────────────────── */
 
   return (
@@ -698,7 +849,7 @@ function ModelsFetchModal({ options, onClose }: { options: OpenOptions; onClose:
     >
       {/* 宽度：内置家是宽表（旧 .modal-wide ≈ 920px），自定义家只有三列（旧
           .modal-narrow ≈ 552px，与宽表区分开）；两侧各留 24px 与遮罩内边距对齐 */}
-      <DialogContent className={custom ? 'w-[min(552px,calc(100vw-48px))]' : 'w-[min(920px,calc(100vw-48px))]'}>
+      <DialogContent className={custom || builtinSingle ? 'w-[min(552px,calc(100vw-48px))]' : 'w-[min(920px,calc(100vw-48px))]'}>
         <DialogHeader>
           <DialogTitle>获取模型 — {name}</DialogTitle>
         </DialogHeader>
@@ -722,6 +873,14 @@ function ModelsFetchModal({ options, onClose }: { options: OpenOptions; onClose:
                 <Button variant='ghost' size='sm' onClick={() => setPicked(new Set())}>清空</Button>
               </>
             )}
+            {builtinSingle && (
+              <>
+                <Button variant='ghost' size='sm' disabled={!candidates.length || busy}
+                  onClick={() => setChecked(new Set(candidates.map(item => item.id)))}>全选</Button>
+                <Button variant='ghost' size='sm' disabled={!candidates.length || busy}
+                  onClick={() => setChecked(new Set())}>全不选</Button>
+              </>
+            )}
             {/* 文案按「这次有没有真的拿到一份结果」定：拉失败时仍是「获取模型」（用户要的是再试
                 一次），成功之后才是「重新获取」 */}
             <Button variant='outline' size='sm' title='从上游拉一次' disabled={busy}
@@ -729,35 +888,45 @@ function ModelsFetchModal({ options, onClose }: { options: OpenOptions; onClose:
               {busyKind === 'load' ? '获取中…' : fetched ? '重新获取' : '获取模型'}
             </Button>
           </div>
-          <Table id={custom ? TABLE_ID.custom : TABLE_ID.intl}
+          <Table id={builtinSingle ? TABLE_ID.single : custom ? TABLE_ID.custom : TABLE_ID.intl}
             // table-fixed：colgroup 的百分数（含列宽层写回的 px）要靠它生效
             className='table-fixed'
             // 滚动盒的高度上限（旧 .fm-wrap 的 max-height）
             containerClassName='max-h-[min(48vh,460px)]'>
             {/* col / th 上的 data-col 是列宽层（table-columns.js）定位列的依据 */}
             <colgroup>
-              {(custom ? COLS_CUSTOM : COLS_INTL).map(key => (
-                <col key={key} data-col={key} className={custom ? WIDTH_CUSTOM[key] : WIDTH_INTL[key]} />
+              {(builtinSingle ? COLS_SINGLE : custom ? COLS_CUSTOM : COLS_INTL).map(key => (
+                <col key={key} data-col={key}
+                  className={builtinSingle ? WIDTH_SINGLE[key] : custom ? WIDTH_CUSTOM[key] : WIDTH_INTL[key]} />
               ))}
             </colgroup>
             <TableHeader>
               <TableRow>
-                {(custom ? COLS_CUSTOM : COLS_INTL).map(key => (
-                  <TableHead key={key} data-col={key}>{HEAD_LABEL[key]}</TableHead>
+                {(builtinSingle ? COLS_SINGLE : custom ? COLS_CUSTOM : COLS_INTL).map(key => (
+                  <TableHead key={key} data-col={key}>
+                    {builtinSingle ? (HEAD_LABEL_SINGLE[key] ?? '') : HEAD_LABEL[key]}
+                  </TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             {/* 末行不画底线（旧 .models-table tbody tr:last-child td 的规则） */}
-            <TableBody className='[&_tr:last-child>td]:border-b-0'>{custom ? customBody() : intlBody()}</TableBody>
+            <TableBody className='[&_tr:last-child>td]:border-b-0'>
+              {builtinSingle ? builtinSingleBody() : custom ? customBody() : intlBody()}
+            </TableBody>
           </Table>
         </DialogBody>
         <DialogFooter>
           <span className='min-w-0 text-[11.5px] text-muted-foreground'>{hint}</span>
           <div className='mr-auto' />
-          <Button variant='outline' onClick={handleCloseClick}>{custom ? '取消' : '完成'}</Button>
+          <Button variant='outline' onClick={handleCloseClick}>{custom || builtinSingle ? '取消' : '完成'}</Button>
           {custom && (
             <Button variant='default' disabled={!picked.size || busy} onClick={() => { void importPicked() }}>
               {busyKind === 'import' ? '导入中…' : picked.size ? `导入选中的 ${picked.size} 个模型` : '导入'}
+            </Button>
+          )}
+          {builtinSingle && (
+            <Button variant='default' disabled={!candidates.length || busy} onClick={() => { void saveBuiltin() }}>
+              {busyKind === 'import' ? '保存中…' : '保存启停'}
             </Button>
           )}
         </DialogFooter>

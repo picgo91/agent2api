@@ -25,11 +25,14 @@
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::Response;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::server::core::capability;
 use crate::server::core::model_rules;
+use crate::server::core::models::model_id;
+use crate::server::core::providers::adapter::{adapter_for, refresh_implemented_forced};
 use crate::server::core::providers::catalog;
+use crate::server::core::providers::kind_from_id;
 use crate::server::errors;
 use crate::server::http::{ok_json, parse_body};
 use crate::server::logging;
@@ -56,6 +59,111 @@ fn text_field(object: &serde_json::Map<String, Value>, key: &str) -> String {
 /// GET /api/models/manage
 pub async fn get_manage(State(state): State<ServerState>) -> Response {
     ok_json(catalog::manage_view(state.store()))
+}
+
+/// POST /api/models/fetch —— 「获取模型」弹窗内置家的**勾选屏**：拉一次这家的
+/// 上游目录，把原始模型清单连同**当前启停状态**返回，供用户勾选后启停。
+///
+/// 请求体：`{provider, accountId?}`；响应：
+/// `{provider, providerLabel, models: [{id, name, enabled, custom}], source, refreshedAt, message?}`
+///
+/// ── 与 /api/models/refresh 的关系 ───────────────────────────
+/// 两者都**真打一次上游**、都会把结果落进该家的目录缓存（刷新本来就是目录
+/// 的自有语义）。差别只在范围与返回：`refresh` 面向「多家批量刷新」、回逐家
+/// 状态；本接口面向「单家、把清单摊开来勾选」、回具体 id 列表 + 启停态。
+/// 因此这里直接复用 `refresh_implemented_forced`（范围收成一家），不另写一套
+/// 上游调用 —— 各家拉目录的实现只有一处，不会分叉。
+///
+/// ── 为什么「拉取」会带回 `enabled`（而不是让前端自己查）──────
+/// 勾选屏要在一屏里同时表达「上游有什么」与「哪些是开着的」。后者住在
+/// `modelRules`，前端没有直接读它的通道（只有整份 manage 视图）。这里随清单
+/// 一并算好，前端只做受控勾选与提交，不必再拉 manage 再自己比对（那种两次
+/// 往返之间的票不一致正是要避免的）。
+///
+/// ── 失败口径 ────────────────────────────────────────────────
+/// 「拉取失败」是常态（token 过期 / 网络抖动），不返回非 2xx：把原因放进
+/// `message`，并**照常回一份可能为空的 models**（失败时用现有缓存清单兜底），
+/// 让弹窗既报错又能显示「当前有的模型」—— 与 `refresh_models` 同一取向。
+pub async fn fetch_models(State(state): State<ServerState>, body: Bytes) -> Response {
+    let object = match body_object(&body) {
+        Ok(object) => object,
+        Err(response) => return response,
+    };
+    let provider = text_field(&object, "provider");
+    let account_id = text_field(&object, "accountId");
+    if provider.is_empty() {
+        return errors::management_error(400, "缺少提供商");
+    }
+    let Some(kind) = kind_from_id(&provider) else {
+        return errors::management_error(400, format!("未知的提供商: {provider}"));
+    };
+    if !adapter_for(kind).supports_model_refresh() {
+        return errors::management_error(
+            400,
+            format!(
+                "{} 没有可拉取的远程模型目录",
+                crate::server::core::providers::label_of(&provider)
+            ),
+        );
+    }
+
+    // 范围收成这一家；点名的账号随 accounts 映射传下去（与弹窗「模型来源」同通道）。
+    // 走完整刷新路径：拉到的目录会落进该家缓存，随后的 manifest 读到的就是新内容。
+    let mut accounts = serde_json::Map::new();
+    if !account_id.is_empty() {
+        accounts.insert(provider.clone(), Value::String(account_id.clone()));
+    }
+    let scope = [provider.clone()];
+    let results =
+        refresh_implemented_forced(state.store(), &accounts, Some(scope.as_slice())).await;
+    let message = results
+        .iter()
+        .find(|item| item.get("provider").and_then(Value::as_str) == Some(provider.as_str()))
+        .and_then(|item| item.get("message").and_then(Value::as_str))
+        .map(str::to_string);
+    let account_used = results
+        .iter()
+        .find(|item| item.get("provider").and_then(Value::as_str) == Some(provider.as_str()))
+        .and_then(|item| item.get("accountId").and_then(Value::as_str))
+        .unwrap_or("")
+        .to_string();
+
+    // 刷新之后读原始清单（上游 + 手工登记），再逐条算启停态（默认开 = 未被禁用，
+    // 判据与 manage 视图同源，见 model_rules::default_enabled）。
+    let rules = model_rules::current();
+    let models: Vec<Value> = catalog::manifest_for_provider(&provider)
+        .iter()
+        .filter_map(|item| {
+            let id = model_id(item);
+            if id.is_empty() {
+                return None;
+            }
+            let name = item
+                .get("name")
+                .and_then(Value::as_str)
+                .filter(|text| !text.is_empty())
+                .unwrap_or(&id)
+                .to_string();
+            Some(json!({
+                "id": id,
+                "name": name,
+                "enabled": rules.default_enabled(&provider, &id),
+                "custom": rules.is_custom(&provider, &id),
+            }))
+        })
+        .collect();
+    let (remote, refreshed_at) = catalog::refresh_meta(kind);
+    let payload = json!({
+        "provider": provider,
+        "providerLabel": crate::server::core::providers::label_of(&provider),
+        "models": models,
+        "source": if remote { "remote" } else { "builtin" },
+        "refreshedAt": refreshed_at,
+        "accountId": if account_used.is_empty() { Value::Null } else { Value::String(account_used) },
+        "message": message.map(Value::String).unwrap_or(Value::Null),
+    });
+    // 与 refresh_models 同一日志口径（失败不抬级别）
+    ok_json(payload)
 }
 
 /// POST /api/models/state

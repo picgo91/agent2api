@@ -356,6 +356,9 @@ pub fn panel_router(state: ServerState) -> Router {
         // 免鉴权的只读探针不受影响（两者是不同的东西，见 api::models 模块头）。
         // 永远返回 2xx：逐家结果自己表达成败，理由见该模块头
         .route("/api/models/refresh", post(api::models::refresh_models))
+        // 单家拉取原始模型清单（「获取模型」弹窗内置家的勾选屏）：真打一次上游、
+        // 回原始清单 + 启停态，供勾选后启停。见 api::model_manage::fetch_models
+        .route("/api/models/fetch", post(api::model_manage::fetch_models))
         // 模型管理（启停 / 隐藏 / 映射）与网关 Key 列表：都是写配置的管理接口，挂 protected
         .route("/api/models/manage", get(api::model_manage::get_manage))
         .route("/api/models/state", post(api::model_manage::set_state))

@@ -266,6 +266,9 @@ const BRIDGE_JS: &str = r#"
     //     不打网络也不进结果（弹窗按「模型管理页实有清单的家 ∪ 有启用账号的家」
     //     组装，见 models-fetch-modal.js 的 scopeProviders）。
     refreshModels: payload => call('POST', '/api/models/refresh', payload || {}),
+    // 单家拉取原始模型清单（「获取模型」弹窗内置家的勾选屏）：真打一次上游，
+    // 回 `{provider, models:[{id,name,enabled,custom}], source, refreshedAt, message}`。
+    fetchModels: (provider, accountId) => call('POST', '/api/models/fetch', { provider, accountId: accountId || '' }),
     // 模型管理（启停 / 映射）：写接口都返回最新 {models, mappings, reasoningLevels}
     // 映射照抄 OmniProxy 语义：对外名自由命名（允许与上游 id 同名），同一对外名
     // 可在不同提供商各建一条（主备）；provider 为空 = 旧版全局语义

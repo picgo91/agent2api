@@ -52,6 +52,19 @@ fn advertised_manifest_for(store: &AccountStore, kind: ProviderKind) -> Vec<Valu
     adapter_for(kind).advertise_models(store, manifest_for(kind))
 }
 
+/// 某**内置家**（provider id）的原始清单（上游清单 + 手工登记 + 能力位覆盖）。
+///
+/// 给「获取模型」弹窗的内置家勾选屏用：它要的是这家**有什么**（原始清单），
+/// 而不是对外可见的那份（`advertised` 会按账号池 / 门控再收窄）—— 勾选屏的目的
+/// 正是让用户决定这些模型的启停，所以基础集合应当是完整清单。
+/// 认不出的 id（自定义家 / 拼错）返回空表。
+pub fn manifest_for_provider(id: &str) -> Vec<Value> {
+    match kind_from_id(id) {
+        Some(kind) => manifest_for(kind),
+        None => Vec::new(),
+    }
+}
+
 fn workbuddy_catalog() -> ModelCatalog {
     crate::server::core::models::global_catalog()
 }
