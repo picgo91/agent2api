@@ -95,6 +95,9 @@ type Snapshot = {
   checking: boolean
   /** 下载 / 安装请求在途：按钮临时禁用（与旧实现置 DOM disabled 等价） */
   actionBusy: boolean
+  /** 网页端「面板一键更新」是否可用（部署里开了 AIAPI_ALLOW_SELF_UPDATE 且挂了
+   *  docker.sock）。桌面端恒为 false。可用时按钮改成真的一键更新。 */
+  selfUpdate: boolean
 }
 
 const INITIAL_SNAPSHOT: Snapshot = {
@@ -111,6 +114,7 @@ const INITIAL_SNAPSHOT: Snapshot = {
   readyPath: '',
   checking: false,
   actionBusy: false,
+  selfUpdate: false,
 }
 
 /* ─── 工具 ─────────────────────────────────── */
@@ -245,10 +249,12 @@ function renderCheckResult(): void {
   const at = checkedAt ? `（检查于 ${formatClock(checkedAt)}）` : ''
   if (info.hasUpdate === true) {
     setBadge('发现新版本', 'warn')
-    // 网页端（Docker 部署）没有桌面壳、容器也碰不到宿主机的 docker：状态行直接
-    // 把「宿主机执行什么」写清楚，不给人留「这里能不能自动升」的疑问
+    // 网页端（Docker 部署）：开了面板一键更新时按钮是真的（后端经 docker.sock 重建
+    // 容器）；否则状态行写明「宿主机执行什么」，不给人留「这里能不能自动升」的疑问
     setState(isWebShell()
-      ? `发现新版本 ${info.latestVersion}（当前 ${info.currentVersion}），${at}；${DOCKER_UPDATE_GUIDE}`
+      ? (snapshot.selfUpdate
+        ? `发现新版本 ${info.latestVersion}（当前 ${info.currentVersion}），${at}；点「一键更新」将拉取新镜像并重建本容器（会短暂断开，稍后刷新本页）`
+        : `发现新版本 ${info.latestVersion}（当前 ${info.currentVersion}），${at}；${DOCKER_UPDATE_GUIDE}`)
       : `发现新版本 ${info.latestVersion}（当前 ${info.currentVersion}），${at}`)
   } else if (info.hasUpdate === false) {
     setBadge('已是最新', 'ok')
@@ -467,6 +473,27 @@ async function downloadOrCancel(): Promise<void> {
   // 「宿主机执行的更新命令」并把指引铺进状态行，而不是等 web_shim 把
   // download_update 拒掉才让人看见：装不了的按钮压根不该先亮。
   if (isWebShell()) {
+    // 部署里开了「面板一键更新」（挂了 docker.sock）时，按钮是真的：后端会拉起
+    // 一次性更新器去 pull + 重建本容器。此时页面会短暂断开，提示用户稍后刷新。
+    if (snapshot.selfUpdate) {
+      if (busy) return
+      busy = true
+      publish({ actionBusy: true })
+      setBadge('更新中', 'warn')
+      setState('正在启动更新器：它会拉取新镜像并重建本容器，约十几秒后本页面会短暂断开，请稍后刷新…')
+      try {
+        const result = await shared().workbuddyDesktop?.selfUpdate?.()
+        setState(result?.message || '更新器已启动，请稍后刷新本页面')
+        toast('✅ 已开始更新，请稍后刷新页面')
+      } catch (error) {
+        setBadge('更新失败', 'bad')
+        setState(`一键更新失败：${errorMessage(error)}；可改用宿主机命令：${DOCKER_UPDATE_COMMAND}`, true)
+      } finally {
+        busy = false
+        publish({ actionBusy: false })
+      }
+      return
+    }
     const ok = await copyText(DOCKER_UPDATE_COMMAND)
     setState(DOCKER_UPDATE_GUIDE)
     if (ok) toast(`✅ 已复制：${DOCKER_UPDATE_COMMAND}（在宿主机执行）`)
@@ -530,6 +557,18 @@ async function downloadOrCancel(): Promise<void> {
 
 /** 面板数据入口（切入设置页时由 settings-panel.js 调用） */
 async function load(): Promise<void> {
+  // 先问一次「面板一键更新是否可用」（仅网页端有意义）：可用时那颗按钮是真的一键更新，
+  // 否则退回「复制更新命令」。桌面端没有这个桥方法，按不可用处理。
+  if (isWebShell()) {
+    try {
+      const caps = await shared().workbuddyDesktop?.getUpdateCapabilities?.()
+      publish({ selfUpdate: caps?.selfUpdate === true })
+    } catch {
+      publish({ selfUpdate: false })
+    }
+    renderCheckResult()
+  }
+
   // 日志与版本号同源：先按当前结果铺一次（含启动时那次自动检查的结果与检查时刻），
   // 切回来时不会白着一块等接口
   renderCheckResult()
@@ -618,6 +657,10 @@ function downloadButton(snap: Snapshot): { label: string; disabled: boolean } | 
   // 面板按钮 / 弹窗「查看更新方法」 / 自动触发三条路因此同源，不会出现
   // 「这里复制命令、那里报不可用」的分裂。
   if (isWebShell()) {
+    // 面板一键更新可用（部署里挂了 docker.sock）时是真按钮；否则退回「复制更新命令」
+    if (snap.selfUpdate) {
+      return actionable ? { label: '一键更新', disabled: snap.actionBusy } : null
+    }
     return actionable ? { label: '复制更新命令', disabled: false } : null
   }
   const label = snap.phase === 'downloading'

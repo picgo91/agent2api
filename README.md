@@ -100,6 +100,22 @@ docker run -d --name aiapi --restart unless-stopped \
 
 可观测性：`GET /metrics` 输出 Prometheus 文本格式（`aiapi_up`、`aiapi_requests_total`、`aiapi_requests_successful_total`、`aiapi_tokens_total`、`aiapi_models`，以及按提供商的 `aiapi_provider_requests_total` / `aiapi_provider_failures_total`）。它与 `/health` 一样免鉴权，但在 headless 的安全形态（未注册闸门或 `/v1` fail-closed）下只回进程级指标、不带按提供商拆分的标签，避免把用量结构泄露给公网探测者。
 
+### 面板一键更新（可选，默认关闭）
+
+默认情况下网页端的更新按钮是「复制更新命令」——因为容器**碰不到宿主机的 Docker**，无法自我重建。你要的是「面板里点一下就能更新」，可以显式开启：
+
+1. 在 `docker-compose.yml` 里取消 `docker.sock` 挂载那行的注释：
+   ```yaml
+   volumes:
+     - ./data:/data
+     - /var/run/docker.sock:/var/run/docker.sock
+   ```
+2. 设环境变量 `AIAPI_ALLOW_SELF_UPDATE=1`（或写进 `.env`），`docker compose up -d` 重启。
+
+之后面板「软件更新」里的按钮就变成真的**一键更新**：后端通过 docker.sock 拉起一个一次性的 [Watchtower](https://github.com/containrrr/watchtower) 容器（`--run-once --cleanup`），由它 pull 新镜像并重建本容器 —— 页面会短暂断开，十几秒后刷新即可。
+
+> ⚠️ **安全代价**：挂载 `docker.sock` 等于把宿主机 Docker 的**完全控制权**交给这个容器（能起特权容器、挂任意宿主目录）。只建议在**自己的私有机（局域网 / 单用户）**开启；一旦公网暴露或多人可登录面板，**不要开**。不开启时按钮退回「复制更新命令」，零额外权限。
+
 compose 用户（`docker-compose.yml` 全文就这么多；amd64 / arm64 都有镜像）：
 
 ```yaml

@@ -114,6 +114,10 @@ export type UpdateBridge = {
   ): Promise<{ launched?: boolean; path?: string; restart?: boolean } | null | undefined>
   /** 打开外链的唯一出口（只放行 http(s)，见 commands.rs） */
   openReleasePage(url: string): Promise<{ url?: string } | null | undefined>
+  /** 面板一键更新的可用性（仅网页端有；桌面端为 undefined，按 false 处理） */
+  getUpdateCapabilities?(): Promise<{ selfUpdate?: boolean } | null | undefined>
+  /** 面板一键更新：后端经 docker.sock 拉起一次性更新器 → pull + 重建本容器 */
+  selfUpdate?(): Promise<{ started?: boolean; message?: string } | null | undefined>
   /** 端标识：web_shim 注入 'web'，桌面壳按 target_platform() 注入 macos / windows / linux */
   platform?: string
 }

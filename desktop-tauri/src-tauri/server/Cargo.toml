@@ -93,6 +93,16 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 # bcrypt 与 htpasswd -nBC 的输出格式互通，生成命令无需额外工具
 bcrypt = "0.15"
 
+# 「面板一键更新」（Docker 部署）：通过挂进容器的 docker.sock 调 Docker Engine
+# API，拉起一个**一次性的 Watchtower 容器**去 pull 新镜像 + 重建本容器。
+# 为什么要 bollard 而不是手写 HTTP-over-unix：`POST /images/create`（拉镜像）
+# 的响应是 chunked 的 JSON 进度流，手写解析容易出错；bollard 是成熟的客户端。
+# default-features = false + pipe：只走本机 daemon 的 unix socket；不要它默认开的
+# http（远程 TCP）与 ssl（会拖 rustls/openssl），容器里用不上。
+# 注意：本能力默认关闭，只有显式设 AIAPI_ALLOW_SELF_UPDATE=1 才启用
+# （见 core/self_update.rs 的模块头：挂 docker.sock = 给容器宿主机 root 级权限）。
+bollard = { version = "0.21", default-features = false, features = ["pipe"] }
+
 # AutoClaw 凭证解密的 DPAPI（providers/autoclaw/crypto.rs）。仅 Windows
 # 目标生效；其它平台该适配器的「导入桌面端登录态」是桩实现。
 [target.'cfg(windows)'.dependencies]

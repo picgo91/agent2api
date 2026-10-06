@@ -203,6 +203,29 @@ async fn dispatch(
         return ok_json(state.update().cancel_download());
     }
 
+    // 面板一键更新（Docker 部署，默认关闭）：通过挂进容器的 docker.sock 拉起一个
+    // 一次性的 Watchtower 去 pull + 重建本容器。见 core::self_update 的模块头。
+    if method == Method::POST && full_path == "/api/update/self-update" {
+        return match crate::server::core::self_update::run().await {
+            Ok(message) => {
+                logging::log("[Update]", &format!("🔄 {message}"));
+                ok_json(json!({ "started": true, "message": message }))
+            }
+            Err(reason) => {
+                logging::log("[Update]", &format!("❌ 一键更新未执行：{reason}"));
+                // 未启用是「配置没开」而不是「服务器故障」：用 400，前端据此提示
+                management_error(400, reason)
+            }
+        };
+    }
+
+    // 面板一键更新的可用性（网页端据此决定：显示真按钮还是「复制命令」）
+    if method == Method::GET && full_path == "/api/update/capabilities" {
+        return ok_json(json!({
+            "selfUpdate": crate::server::core::self_update::enabled(),
+        }));
+    }
+
     // 未命中任何一条 → 全局 404 的文案（Node 落到最外层 `sendJson(res, 404, …)`），
     // 注意这个 body **没有 success 字段**
     crate::server::errors::not_found_response(method.as_str(), full_path)

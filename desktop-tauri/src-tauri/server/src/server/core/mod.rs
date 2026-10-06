@@ -75,6 +75,7 @@ pub mod rate_limit;
 pub mod routing;
 pub mod sanitize;
 pub mod scheduled_tasks;
+pub mod self_update;
 pub mod task_state;
 pub mod update;
 pub mod upstream;

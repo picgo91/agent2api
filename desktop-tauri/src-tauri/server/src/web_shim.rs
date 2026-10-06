@@ -631,6 +631,10 @@ pub fn shim_js() -> &'static str {
       return invokeShell('run_installer', { path: String(path || ''), restart: restart !== false });
     },
     openReleasePage: function (url) { return invokeShell('open_release_page', { url: String(url || '') }); },
+    // 面板一键更新的可用性（true = 部署里开了 AIAPI_ALLOW_SELF_UPDATE 且挂了 docker.sock）
+    getUpdateCapabilities: function () { return call('GET', '/api/update/capabilities'); },
+    // 面板一键更新：后端通过 docker.sock 拉起一次性 Watchtower 去 pull + 重建本容器
+    selfUpdate: function () { return call('POST', '/api/update/self-update', {}); },
 
     // ── 出站指纹脱敏 ──
     getSanitize: function () { return call('GET', '/api/sanitize'); },
