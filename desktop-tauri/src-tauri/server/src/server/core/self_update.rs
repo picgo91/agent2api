@@ -127,7 +127,10 @@ pub async fn run() -> Result<String, String> {
 
     let image = watchtower_image();
 
-    // 1) 先拉更新器镜像（create/start 不会自动 pull）。流要消费掉才会真正下载完。
+    // 1) 先拉更新器镜像（create/start 不会自动 pull）。如果拉取失败，继续尝试
+    //    使用宿主机本地已有镜像；内网/国内机器常见 Docker Hub 超时，但预拉过的
+    //    watchtower 仍然可以正常启动。
+    let mut pull_error: Option<String> = None;
     let mut pull = docker.create_image(
         Some(
             CreateImageOptionsBuilder::default()
@@ -138,7 +141,10 @@ pub async fn run() -> Result<String, String> {
         None,
     );
     while let Some(chunk) = pull.next().await {
-        chunk.map_err(|error| format!("拉取更新器镜像 {image} 失败：{error}"))?;
+        if let Err(error) = chunk {
+            pull_error = Some(format!("拉取更新器镜像 {image} 失败：{error}"));
+            break;
+        }
     }
 
     // 2) 建一次性容器：挂 docker.sock、跑完自删（auto_remove）。`--run-once` 让它
@@ -168,7 +174,10 @@ pub async fn run() -> Result<String, String> {
     let created = docker
         .create_container(Some(options), body)
         .await
-        .map_err(|error| format!("创建更新器容器失败：{error}"))?;
+        .map_err(|error| match pull_error {
+            Some(reason) => format!("{reason}；本地镜像也不可用，创建更新器容器失败：{error}"),
+            None => format!("创建更新器容器失败：{error}"),
+        })?;
 
     docker
         .start_container(&created.id, None::<StartContainerOptions>)
