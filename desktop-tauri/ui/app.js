@@ -281,7 +281,9 @@ function renderTopbarStatus() {
     settings: () => (gatewayUp ? chip('网关运行中', 'ok', true) : chip('未就绪', 'bad', true))
       + (enabled ? chip(`${enabled} 个账号启用`) : ''),
     overview: () => (gatewayUp ? chip('网关运行中', 'ok') : chip('未就绪', 'bad'))
-      + (session.loggedIn ? chip('已登录', 'ok') : chip('未登录', 'warn')),
+      + (api.platform === 'web'
+        ? chip('面板已登录', 'ok')
+        : (session.loggedIn ? chip('已登录', 'ok') : chip('未登录', 'warn'))),
   };
 
   box.innerHTML = views[currentPage]?.() ?? views.overview();
