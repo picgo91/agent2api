@@ -39,18 +39,21 @@ services:
       AIAPI_PANEL_PORT: ${AIAPI_PANEL_PORT:-${AGENT2API_PANEL_PORT:-}}
       # 登录页人机验证组件环境变量，默认为0关闭，1为开启
       AIAPI_CAPTCHA_ENABLED: ${AIAPI_CAPTCHA_ENABLED:-${AGENT2API_CAPTCHA_ENABLED:-0}}
-      # ── 面板一键更新（默认关闭，按需开启）────────────────────────
-      # 设 1 后，面板更新按钮变成真的「一键更新」：后端经下面的 docker.sock
-      # 拉起一次性更新器去 pull + 重建本容器。
-      # ⚠️ 安全代价：挂载 docker.sock 等于把宿主机 Docker 的完全控制权交给本容器。
-      #    只在**自己的私有机（局域网 / 单用户）**开启；公网暴露或多人可登面板时不要开。
-      AIAPI_ALLOW_SELF_UPDATE: ${AIAPI_ALLOW_SELF_UPDATE:-0}
+      # ── 面板一键更新（默认开启，靠下面的 docker.sock 生效）──────────
+      # 面板更新按钮默认就是真的「一键更新」：后端经挂进来的 docker.sock 拉起
+      # 一次性更新器去 pull + 重建本容器。**没挂 socket 时会自动退回
+      # 「复制更新命令」**（后端 ping 不到 daemon 就不亮真按钮），所以默认开是安全的。
+      # 想彻底关掉：设 AIAPI_ALLOW_SELF_UPDATE=0。
+      # ⚠️ 安全代价：挂了 docker.sock 等于把宿主机 Docker 的完全控制权交给本容器
+      #    （能起特权容器、挂任意宿主目录）。**公网暴露或多人可登面板时，请去掉下面
+      #    的 socket 挂载**（一键按钮会自动退回复制命令），或显式设 0 关掉。
+      AIAPI_ALLOW_SELF_UPDATE: ${AIAPI_ALLOW_SELF_UPDATE:-1}
       # 其余可选变量（AIAPI_VERBOSE / AIAPI_ALLOW_NO_KEY / AIAPI_PROXY_PORT）
       # 与旧名 AGENT2API_* 都要生效，需像上面那样自行加转发行 —— 只写进
       # .env 而不在这里列出的话，本来就进不了容器（与改名前一致）。
     volumes:
       # 全部状态（SQLite 库、配置、日志）都在这一个卷里
       - ./data:/data
-    # ── 面板一键更新所需的 socket 挂载（默认关闭，与 AIAPI_ALLOW_SELF_UPDATE 配套）──
-    # 开启一键更新时才取消下面这行的注释：
-    # - /var/run/docker.sock:/var/run/docker.sock
+      # 面板一键更新：把宿主机的 docker socket 挂进来（配合上面的
+      # AIAPI_ALLOW_SELF_UPDATE）。不需要一键更新 / 介意权限放大时，删掉这一行即可。
+      - /var/run/docker.sock:/var/run/docker.sock

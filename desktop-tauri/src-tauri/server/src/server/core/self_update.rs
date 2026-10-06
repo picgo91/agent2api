@@ -13,13 +13,16 @@
 //!
 //! ── 安全边界（务必先读）──────────────────────────────────────
 //! 挂 `docker.sock` 等于把**宿主机 Docker 的完全控制权**交给这个容器（能起
-//! 特权容器、挂任意宿主目录）—— 这是本能力**默认关闭**的原因：只有显式设
-//! `AIAPI_ALLOW_SELF_UPDATE=1` 才启用；未启用时端点明确拒绝，网页端也不会显示
-//! 真按钮（见前端 update-shared / update-panel）。**只建议自己的私有机（局域网
-//! / 单用户）开启；一旦公网暴露或多人可登面板，不要开。**
+//! 特权容器、挂任意宿主目录）。因此**本能力默认开启**，但**只在本容器确实能连到
+//! docker.sock 时**才对外可用（`available()` 会 ping 一次 daemon）：
+//!   · 没挂 socket 的部署 → 探测失败 → 网页端退回「复制更新命令」，不会给出一个
+//!     点了必错的按钮；
+//!   · 想彻底关掉，设 `AIAPI_ALLOW_SELF_UPDATE=0`。
+//! ⚠️ 一旦公网暴露或多人可登面板，请确认是否真的要给容器宿主 root 级权限 ——
+//!    不要的话就**不要挂 docker.sock**（本能力会自动失效），或显式设 0 关掉。
 //!
 //! ── 相关环境变量 ──────────────────────────────────────────────
-//!   AIAPI_ALLOW_SELF_UPDATE=1                 启用本能力（默认不设 = 关闭）
+//!   AIAPI_ALLOW_SELF_UPDATE                   显式 `0` = 关闭（默认开）
 //!   AIAPI_SELF_UPDATE_WATCHTOWER_IMAGE        上游更新器镜像（默认
 //!                                             containrrr/watchtower:latest）
 //!   AIAPI_SELF_UPDATE_TARGET                  要重建的目标容器名 / 镜像名
@@ -33,16 +36,34 @@ use bollard::query_parameters::{
 };
 use futures::StreamExt;
 
-/// 启用开关：`AIAPI_ALLOW_SELF_UPDATE=1`（改名前的 `AGENT2API_` 同名变量仍可读）。
+/// 是否允许本能力：**默认开**，仅当显式设 `AIAPI_ALLOW_SELF_UPDATE=0`
+/// （或旧名 `AGENT2API_ALLOW_SELF_UPDATE=0`）时关闭。
+///
+/// 只声明「用户没反对」，不代表真的可用 —— 真正的可用性看 [`available()`]
+/// （还要能连上 docker.sock）。
 pub fn enabled() -> bool {
     for name in ["AIAPI_ALLOW_SELF_UPDATE", "AGENT2API_ALLOW_SELF_UPDATE"] {
         if let Ok(value) = std::env::var(name) {
-            if value.trim() == "1" {
-                return true;
+            if value.trim() == "0" {
+                return false;
             }
         }
     }
-    false
+    true
+}
+
+/// 本能力此刻是否**真的能用**：允许且能连到本机 docker daemon。
+///
+/// 网页端据此决定显示「一键更新」还是退回「复制更新命令」—— 没挂 socket 的部署
+/// 不会看到一个点了必错的按钮。ping 一次很轻（本地 unix socket）。
+pub async fn available() -> bool {
+    if !enabled() {
+        return false;
+    }
+    match bollard::Docker::connect_with_local_defaults() {
+        Ok(docker) => docker.ping().await.is_ok(),
+        Err(_) => false,
+    }
 }
 
 fn watchtower_image() -> String {
@@ -76,13 +97,15 @@ fn self_id_hint() -> Result<String, String> {
 /// 「handler 不 panic」的取向一致）。
 pub async fn run() -> Result<String, String> {
     if !enabled() {
-        return Err(
-            "未启用面板一键更新：请在部署里设 AIAPI_ALLOW_SELF_UPDATE=1 并挂载 docker.sock"
-                .to_string(),
-        );
+        return Err("面板一键更新已被显式关闭（AIAPI_ALLOW_SELF_UPDATE=0）".to_string());
     }
     let docker = bollard::Docker::connect_with_local_defaults()
         .map_err(|error| format!("连接 Docker 失败：{error}"))?;
+    // 连不上 daemon（多半没挂 docker.sock）时给一句可执行的指引，而不是底层报错
+    docker
+        .ping()
+        .await
+        .map_err(|error| format!("连不上 Docker（本容器是否已挂载 docker.sock？）：{error}"))?;
 
     // 目标：优先环境变量点名；否则用本容器名（inspect 自己拿到去斜杠的名字）。
     let target = match target_override() {

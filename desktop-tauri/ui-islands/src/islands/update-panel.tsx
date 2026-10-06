@@ -797,12 +797,13 @@ function UpdatePanel() {
           {snap.stateText}
         </div>
 
-        {/* 网页端且未开启一键更新时，说明「怎么把按钮变成真的一键更新」——否则用户
-            只会看到「复制更新命令」，不知道还有一键这条路。开启后这条消失。 */}
+        {/* 网页端且当前探测不到一键更新能力时，说明原因与开启方式。默认部署已开，
+            走到这里多半是没挂 docker.sock。 */}
         {isWebShell() && !snap.selfUpdate ? (
           <div className='detail' style={{ color: 'var(--text-3)', fontSize: '11.5px' }}>
-            想要面板里点一下就更新（不用去宿主机敲命令）：在部署里设 <code>AIAPI_ALLOW_SELF_UPDATE=1</code>、
-            并给容器挂载 <code>/var/run/docker.sock</code>，重启后面板会出现「一键更新」按钮。详见 README「面板一键更新」。
+            面板一键更新默认开启，但需要容器能访问宿主机 Docker：给容器挂载
+            <code> /var/run/docker.sock </code> 后重启（见 README「面板一键更新」），按钮就会变成「一键更新」。
+            不挂也没关系 —— 用上面的命令在宿主机更新即可。
           </div>
         ) : null}
 

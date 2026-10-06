@@ -219,10 +219,12 @@ async fn dispatch(
         };
     }
 
-    // 面板一键更新的可用性（网页端据此决定：显示真按钮还是「复制命令」）
+    // 面板一键更新的可用性（网页端据此决定：显示真按钮还是「复制命令」）。
+    // 用 available()（默认开 + 能连上 docker.sock 才算可用），不是 enabled()——
+    // 没挂 socket 的部署不该看到一个点了必错的按钮。
     if method == Method::GET && full_path == "/api/update/capabilities" {
         return ok_json(json!({
-            "selfUpdate": crate::server::core::self_update::enabled(),
+            "selfUpdate": crate::server::core::self_update::available().await,
         }));
     }
 
