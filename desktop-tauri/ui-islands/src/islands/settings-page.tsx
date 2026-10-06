@@ -1441,22 +1441,36 @@ function SettingsPage() {
 
   const paneClass = (cat: string): string => (snap.category === cat ? 'settings-pane active' : 'settings-pane')
 
+  const navGroups = [
+    { label: '常规', ids: ['general', 'display'] },
+    { label: '网关', ids: ['gateway', 'retry', 'timeout'] },
+    { label: '系统', ids: ['security', 'data'] },
+    { label: '其他', ids: ['feedback', 'about'] },
+  ] as const
+
   return (
     <div className='settings-layout'>
       <nav className='settings-nav' id='settings-nav'>
-        {CATEGORIES.map(item => (
-          <button
-            key={item.id}
-            type='button'
-            className={snap.category === item.id ? 'settings-nav-item active' : 'settings-nav-item'}
-            data-cat={item.id}
-            onClick={() => selectCategory(item.id)}
-          >
-            {/* 分类图标（icons.js）：与主侧栏同款 17px 图标盒，颜色随 currentColor
-                （选中态自动变主题色） */}
-            <span className='ico' dangerouslySetInnerHTML={{ __html: iconHtml(item.icon, 17) }} />
-            {item.label}
-          </button>
+        {navGroups.map(group => (
+          <React.Fragment key={group.label}>
+            <div className='settings-nav-group-label'>{group.label}</div>
+            {group.ids.map(id => {
+              const item = CATEGORIES.find(candidate => candidate.id === id)
+              if (!item) return null
+              return (
+                <button
+                  key={item.id}
+                  type='button'
+                  className={snap.category === item.id ? 'settings-nav-item active' : 'settings-nav-item'}
+                  data-cat={item.id}
+                  onClick={() => selectCategory(item.id)}
+                >
+                  <span className='ico' dangerouslySetInnerHTML={{ __html: iconHtml(item.icon, 17) }} />
+                  {item.label}
+                </button>
+              )
+            })}
+          </React.Fragment>
         ))}
       </nav>
 

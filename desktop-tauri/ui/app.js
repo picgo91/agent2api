@@ -145,13 +145,13 @@ const PAGES = ['overview', 'accounts', 'gateway', 'proxies', 'keys', 'docs', 'lo
 /** 页签中文名：顶栏面包屑用。overview 的用户可见名是「报表」、gateway 的是「模型管理」
  *  （内部标识保持不变：localStorage 记忆、showPage 与 CSS 的 [data-page] 选择器都依赖它） */
 const PAGE_LABELS = {
-  overview: '报表',
+  overview: '运行中心',
   accounts: '账号',
   gateway: '模型管理',
   proxies: '网络代理',
   keys: '网关 Key',
-  docs: '文档',
-  logs: '日志',
+  docs: '接口文档',
+  logs: '系统日志',
   tasks: '定时任务',
   requests: '请求日志',
   settings: '设置',

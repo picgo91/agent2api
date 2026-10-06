@@ -60,6 +60,7 @@
        排在最后：工具类带 !important（原因见 ui-kit/styles/globals.css 顶部），
        顺序其实已不影响结果，但保持「后加载的是更新的体系」这条阅读线索。 -->
   <link rel="stylesheet" href="islands/ui.css">
+  <link rel="stylesheet" href="css/page-redesign.css">
 </head>
 <body>
   <div class="shell">
@@ -75,26 +76,38 @@
 
       <!-- 图标由 icons.js + app.js 注入（内联 SVG，见 icons.js 顶部说明） -->
       <nav class="nav" id="nav">
-        <button class="nav-item active" data-page="overview" data-icon="overview"><span class="ico"></span><span class="label">报表</span></button>
-        <button class="nav-item" data-page="accounts" data-icon="accounts"><span class="ico"></span><span class="label">账号</span></button>
-        <button class="nav-item" data-page="gateway" data-icon="gateway"><span class="ico"></span><span class="label">模型管理</span></button>
+        <div class="nav-group" data-nav-group="runtime">
+          <div class="nav-group-label">运行中心</div>
+          <button class="nav-item active" data-page="overview" data-icon="overview"><span class="ico"></span><span class="label">运行中心</span></button>
+          <button class="nav-item" data-page="requests" data-icon="requests"><span class="ico"></span><span class="label">请求日志</span><span class="count" id="nav-count-requests" style="display:none">0</span></button>
+          <button class="nav-item" data-page="logs" data-icon="logs"><span class="ico"></span><span class="label">系统日志</span><span class="count" id="nav-count-logs" style="display:none">0</span></button>
+        </div>
+        <div class="nav-group" data-nav-group="routing">
+          <div class="nav-group-label">路由配置</div>
+          <button class="nav-item" data-page="accounts" data-icon="accounts"><span class="ico"></span><span class="label">账号</span></button>
+          <button class="nav-item" data-page="gateway" data-icon="gateway"><span class="ico"></span><span class="label">模型管理</span></button>
         <!-- 网络代理：出网出口的管理页（代理池 CRUD + 连通性测试 + Clash 出口引用）。
              挨着「模型管理」是因为它管的是同一个问题的另一半：模型管理决定
              「请求发往哪家上游」，这里决定「从哪条线路出去」。账号弹窗里的
              「出网代理」仍可用，但推荐在这里配好、账号按名字引用 ——
              改一次地址，所有引用的账号一起生效。 -->
-        <button class="nav-item" data-page="proxies" data-icon="proxies"><span class="ico"></span><span class="label">网络代理</span></button>
-        <button class="nav-item" data-page="keys" data-icon="key"><span class="ico"></span><span class="label">网关 Key</span></button>
+          <button class="nav-item" data-page="proxies" data-icon="proxies"><span class="ico"></span><span class="label">网络代理</span></button>
+        </div>
+        <div class="nav-group" data-nav-group="access">
+          <div class="nav-group-label">接入管理</div>
+          <button class="nav-item" data-page="keys" data-icon="key"><span class="ico"></span><span class="label">网关 Key</span></button>
         <!-- 文档：接口地址（Base URL / 三种对话协议 / 模型列表）与将来的使用说明。
              它原先在「网关 Key」页里，R8 按需求搬成独立一级菜单 —— 接口地址是
              「接客户端」这件事本身要查的东西，与「管理 Key」不是同一类操作，
              混在一页里用户要在两件事之间来回滚。图标用 logs（文档 + 文本行），
              语义上就是「文档」，不新画 SVG（见 icons.js）。 -->
-        <button class="nav-item" data-page="docs" data-icon="logs"><span class="ico"></span><span class="label">文档</span></button>
-        <button class="nav-item" data-page="requests" data-icon="requests"><span class="ico"></span><span class="label">请求日志</span><span class="count" id="nav-count-requests" style="display:none">0</span></button>
-        <button class="nav-item" data-page="logs" data-icon="logs"><span class="ico"></span><span class="label">日志</span><span class="count" id="nav-count-logs" style="display:none">0</span></button>
-        <button class="nav-item" data-page="tasks" data-icon="tasks"><span class="ico"></span><span class="label">定时任务</span></button>
-        <button class="nav-item" data-page="settings" data-icon="settings"><span class="ico"></span><span class="label">设置</span><span class="count" id="nav-count-update" style="display:none">新</span></button>
+          <button class="nav-item" data-page="docs" data-icon="logs"><span class="ico"></span><span class="label">接口文档</span></button>
+        </div>
+        <div class="nav-group" data-nav-group="system">
+          <div class="nav-group-label">自动化与系统</div>
+          <button class="nav-item" data-page="tasks" data-icon="tasks"><span class="ico"></span><span class="label">定时任务</span></button>
+          <button class="nav-item" data-page="settings" data-icon="settings"><span class="ico"></span><span class="label">设置</span><span class="count" id="nav-count-update" style="display:none">新</span></button>
+        </div>
       </nav>
 
       <div class="sidebar-foot">
