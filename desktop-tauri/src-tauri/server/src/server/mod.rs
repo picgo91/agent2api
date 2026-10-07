@@ -168,6 +168,14 @@ use crate::server::core::upstream::UpstreamService;
 use crate::server::db::Db;
 use crate::server::request_stats::{RequestStats, Retention};
 
+/// 启动诊断只写控制台，不作为「系统事件」落库。
+///
+/// 这些内容是每次进程启动都会重复产生的环境快照，写入持久化事件表会让新装
+/// 页面一打开就堆满默认事件，也会掩盖真正的运行期事件。
+fn startup_log(tag: &str, text: &str) {
+    logging::console_line(tag, text);
+}
+
 /// 服务器共享状态。handler 通过 `axum::extract::State` 拿到它的克隆。
 ///
 /// `port` / `config_dir` 是启动即确定、全程不变的常量；
@@ -507,13 +515,13 @@ impl ServerState {
             db,
             upgrade_pending: Arc::new(AtomicBool::new(upgrade_pending)),
         };
-        logging::log(
+        startup_log(
             "[Server]",
             "AIapi 多提供商本地网关（Rust 进程内服务）启动中…",
         );
-        logging::log("[Config]", &format!("API 端口: {}", port));
-        logging::log("[Config]", &format!("API 监听地址: {}", host));
-        logging::log(
+        startup_log("[Config]", &format!("API 端口: {}", port));
+        startup_log("[Config]", &format!("API 监听地址: {}", host));
+        startup_log(
             "[Config]",
             &format!(
                 "API Key 认证: {}",
@@ -524,14 +532,14 @@ impl ServerState {
                 }
             ),
         );
-        logging::log(
+        startup_log(
             "[Config]",
             &format!("默认模型: {}", snapshot.default_model()),
         );
-        logging::log("[Config]", &format!("计费语言: {}", snapshot.locale()));
+        startup_log("[Config]", &format!("计费语言: {}", snapshot.locale()));
         // 出站指纹脱敏一行：开着时说明「出站会剥离审核指纹」，关着时点明后果
         // （客户端 system 模板会原样发上游，可能被 400 code=11128 误拦）
-        logging::log(
+        startup_log(
             "[Config]",
             &format!(
                 "出站指纹脱敏: {}",
@@ -545,7 +553,7 @@ impl ServerState {
         // 系统提示词一行：模式 + 生效文本来源（内置默认 / 文件）+ 文件读不到时的
         // 原因。降级期是运行期状态（不是启动事实），只在设置页与日志里显示，
         // 这里不读它 —— 启动那一刻还没人触发过降级。
-        logging::log(
+        startup_log(
             "[Config]",
             &format!(
                 "系统提示词: {}（{}）{}",
@@ -557,7 +565,7 @@ impl ServerState {
                 },
             ),
         );
-        logging::log(
+        startup_log(
             "[Config]",
             &format!("配置目录: {}", state.config_dir.display()),
         ); // 数据库状态一行（排障第一手信息：库在哪、有没有就绪）。
@@ -568,17 +576,17 @@ impl ServerState {
            // 只把「本次运行数据库不可用」这个后果说清楚（各 store 会降级回落）。
         match state.db() {
             Some(db) => {
-                logging::log("[Storage]", &format!("数据库: {}", db.file().display()));
+                startup_log("[Storage]", &format!("数据库: {}", db.file().display()));
             }
             None => {
-                logging::log(
+                startup_log(
                     "[Storage]",
                     "⚠️  数据库不可用：依赖数据库的功能本次运行将降级（详见上方报错）",
                 );
             }
         }
         let current = state.store.current_account_id();
-        logging::log(
+        startup_log(
             "[Accounts]",
             &format!(
                 "账号列表: {}（当前账号 {}）",
@@ -601,7 +609,7 @@ impl ServerState {
                 .get("currentAccountId")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("未知");
-            logging::log(
+            startup_log(
                 "[Init]",
                 &format!("✅ 凭证来源: {source}（账号 {account}）"),
             );
@@ -610,7 +618,7 @@ impl ServerState {
                 .and_then(serde_json::Value::as_f64)
             {
                 let left = expires_at - logging::now_ms() as f64;
-                logging::log(
+                startup_log(
                     "[Init]",
                     &format!(
                         "   token {}",
@@ -632,7 +640,7 @@ impl ServerState {
                 .get("unavailableReason")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or(core::auth::UNCONFIGURED_REASON);
-            logging::log("[Init]", &format!("⚠️  暂无可用登录态: {reason}"));
+            startup_log("[Init]", &format!("⚠️  暂无可用登录态: {reason}"));
         }
 
         // 定时签到：开启时起调度，今天还没签且时间点已过则补签一次
@@ -653,7 +661,7 @@ impl ServerState {
                 .get("time")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or(core::auto_checkin::DEFAULT_TIME);
-            logging::log("[Checkin]", &format!("定时签到已启用：每天 {time} 执行"));
+            startup_log("[Checkin]", &format!("定时签到已启用：每天 {time} 执行"));
             state.auto_checkin.start();
         }
 

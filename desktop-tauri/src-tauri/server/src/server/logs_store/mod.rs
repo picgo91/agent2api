@@ -444,6 +444,13 @@ impl LogStore {
             .unwrap_or(0)
     }
 
+    /// 清理旧版本遗留的启动环境快照；不回退日志 id 高水位。
+    pub fn clear_startup_entries(&self) -> usize {
+        let guard = self.guard();
+        self.with_conn(&guard, sql::delete_startup_entries)
+            .unwrap_or(0)
+    }
+
     /// 追加一条日志，返回生成的条目。
     ///
     /// `ts` 为 None 时用当前时间；level/category 都会归一。

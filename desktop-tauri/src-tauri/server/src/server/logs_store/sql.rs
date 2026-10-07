@@ -86,6 +86,33 @@ pub(super) fn count_all(conn: &Connection) -> rusqlite::Result<usize> {
     Ok(count.max(0) as usize)
 }
 
+/// 删除旧版本启动时写入的环境快照，保留用户与运行期事件。
+pub(super) fn delete_startup_entries(conn: &Connection) -> rusqlite::Result<usize> {
+    const PATTERNS: &[&str] = &[
+        "[Server] AIapi 多提供商本地网关（Rust 进程内服务）启动中…",
+        "[Config] API 端口: %",
+        "[Config] API 监听地址: %",
+        "[Config] API Key 认证: %",
+        "[Config] 默认模型: %",
+        "[Config] 计费语言: %",
+        "[Config] 出站指纹脱敏: %",
+        "[Config] 系统提示词: %",
+        "[Config] 配置目录: %",
+        "[Storage] 数据库: %",
+        "[Storage] ⚠️  数据库不可用：依赖数据库的功能本次运行将降级（详见上方报错）",
+        "[Accounts] 账号列表: %",
+        "[Init] 凭证来源: %",
+        "[Init] token %",
+        "[Init] ⚠️  暂无可用登录态: %",
+        "[Checkin] 定时签到已启用：每天 %",
+    ];
+    let mut removed = 0;
+    for pattern in PATTERNS {
+        removed += conn.execute("DELETE FROM logs WHERE message LIKE ?1", [pattern])?;
+    }
+    Ok(removed)
+}
+
 /// 当前最大 id（空表为 0）—— `Stats.lastId`（已读水位）的数据源。
 ///
 /// 与旧实现 `guard.entries.last().map(|item| item.id)` 等价：`id` 单调递增，

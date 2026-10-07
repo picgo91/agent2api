@@ -76,14 +76,13 @@
 
       <!-- 图标由 icons.js + app.js 注入（内联 SVG，见 icons.js 顶部说明） -->
       <nav class="nav" id="nav">
-        <div class="nav-group" data-nav-group="runtime">
-          <div class="nav-group-label">运行中心</div>
+        <div class="nav-group nav-group-primary" data-nav-group="workspace">
+          <div class="nav-group-label">工作区</div>
           <button class="nav-item active" data-page="overview" data-icon="overview"><span class="ico"></span><span class="label">运行中心</span></button>
-          <button class="nav-item" data-page="requests" data-icon="requests"><span class="ico"></span><span class="label">请求日志</span><span class="count" id="nav-count-requests" style="display:none">0</span></button>
-          <button class="nav-item" data-page="logs" data-icon="logs"><span class="ico"></span><span class="label">系统日志</span><span class="count" id="nav-count-logs" style="display:none">0</span></button>
+          <button class="nav-item" data-page="requests" data-icon="requests"><span class="ico"></span><span class="label">流量分析</span><span class="count" id="nav-count-requests" style="display:none">0</span></button>
         </div>
-        <div class="nav-group" data-nav-group="routing">
-          <div class="nav-group-label">路由配置</div>
+        <div class="nav-group" data-nav-group="resources">
+          <div class="nav-group-label">资源与路由</div>
           <button class="nav-item" data-page="accounts" data-icon="accounts"><span class="ico"></span><span class="label">账号</span></button>
           <button class="nav-item" data-page="gateway" data-icon="gateway"><span class="ico"></span><span class="label">模型管理</span></button>
         <!-- 网络代理：出网出口的管理页（代理池 CRUD + 连通性测试 + Clash 出口引用）。
@@ -94,7 +93,7 @@
           <button class="nav-item" data-page="proxies" data-icon="proxies"><span class="ico"></span><span class="label">网络代理</span></button>
         </div>
         <div class="nav-group" data-nav-group="access">
-          <div class="nav-group-label">接入管理</div>
+          <div class="nav-group-label">开发者接入</div>
           <button class="nav-item" data-page="keys" data-icon="key"><span class="ico"></span><span class="label">网关 Key</span></button>
         <!-- 文档：接口地址（Base URL / 三种对话协议 / 模型列表）与将来的使用说明。
              它原先在「网关 Key」页里，R8 按需求搬成独立一级菜单 —— 接口地址是
@@ -103,8 +102,9 @@
              语义上就是「文档」，不新画 SVG（见 icons.js）。 -->
           <button class="nav-item" data-page="docs" data-icon="logs"><span class="ico"></span><span class="label">接口文档</span></button>
         </div>
-        <div class="nav-group" data-nav-group="system">
-          <div class="nav-group-label">自动化与系统</div>
+        <div class="nav-group" data-nav-group="operations">
+          <div class="nav-group-label">运维</div>
+          <button class="nav-item" data-page="logs" data-icon="logs"><span class="ico"></span><span class="label">系统事件</span><span class="count" id="nav-count-logs" style="display:none">0</span></button>
           <button class="nav-item" data-page="tasks" data-icon="tasks"><span class="ico"></span><span class="label">定时任务</span></button>
           <button class="nav-item" data-page="settings" data-icon="settings"><span class="ico"></span><span class="label">设置</span><span class="count" id="nav-count-update" style="display:none">新</span></button>
         </div>
@@ -136,7 +136,7 @@
         <div class="crumb">
           <span>AIapi</span>
           <span class="sep">/</span>
-          <span class="cur" id="crumb-page">报表</span>
+          <span class="cur" id="crumb-page">运行中心</span>
         </div>
         <div class="spacer"></div>
         <div class="topbar-actions" id="topbar-status"></div>

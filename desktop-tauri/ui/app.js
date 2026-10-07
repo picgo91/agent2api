@@ -151,9 +151,9 @@ const PAGE_LABELS = {
   proxies: '网络代理',
   keys: '网关 Key',
   docs: '接口文档',
-  logs: '系统日志',
+  logs: '系统事件',
   tasks: '定时任务',
-  requests: '请求日志',
+  requests: '流量分析',
   settings: '设置',
 };
 
@@ -782,6 +782,7 @@ window.wbApp = {
   showPage,
   get currentPage() { return currentPage; },
   getState: () => state,
+  isGatewayReady: () => window.wbPortPanel?.isReady?.() === true,
   runAccountAction,
   refresh,
   renderTopbarStatus,

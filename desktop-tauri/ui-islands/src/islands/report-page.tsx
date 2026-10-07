@@ -83,6 +83,8 @@ type SharedWindow = {
   wbApp?: {
     /** 本页只在「用户正看着报表页」时轮询 */
     readonly currentPage?: string
+    isGatewayReady?: () => boolean
+    showPage?: (page: string) => void
     /** 主状态（账号表）：排行卡里的提供商徽章按账号 id 现查归属 */
     getState?: () => { accounts?: { accounts?: AccountLike[] } } | null
   }
@@ -746,15 +748,39 @@ function ReportPage() {
   const heatView = summary ? heatmapView(heatmapDays, heatWidth[1]) : null
   const trendView = summary ? cacheTrendView(cacheTrendHours, trendWidth[1]) : null
   const dailyView = summary ? dailyTrendView(dailyDays, dailyWidth[1]) : null
+  const gatewayReady = shared().wbApp?.isGatewayReady?.() === true
+  const statusLabel = gatewayReady ? '网关运行正常' : '网关状态待确认'
+  const statusDetail = gatewayReady
+    ? '服务正在监听，可以接收客户端请求。'
+    : '尚未确认网关监听状态；检查服务状态或查看系统事件。'
 
   return (
     <>
-      {/* ── 统计概览 ──
-           时间范围控件住在这一块的面板头里：它控制的就是这一页的统计口径，与旁边的读数
-           同处一行最直观 */}
-      <section className='panel'>
+      <section className={`runtime-hero${gatewayReady ? ' is-ready' : ' is-pending'}`}>
+        <div className='runtime-hero-copy'>
+          <div className='runtime-eyebrow'>AI GATEWAY / CONTROL PLANE</div>
+          <h1>运行中心</h1>
+          <p>服务状态、流量表现与资源使用，一屏掌握。</p>
+        </div>
+        <div className='runtime-health'>
+          <span className='runtime-health-orbit'><i /></span>
+          <div className='runtime-health-copy'>
+            <strong>{statusLabel}</strong>
+            <span>{statusDetail}</span>
+          </div>
+          <button type='button' className='runtime-health-link' onClick={() => shared().wbApp?.showPage?.('logs')}>
+            查看系统事件 <span aria-hidden='true'>↗</span>
+          </button>
+        </div>
+        <div className='runtime-hero-index' aria-hidden='true'>01</div>
+      </section>
+
+      <section className='panel runtime-overview-panel'>
         <div className='panel-head'>
-          <h2>统计概览</h2>
+          <div className='runtime-section-title'>
+            <span className='runtime-section-kicker'>LIVE TELEMETRY</span>
+            <h2>流量概览</h2>
+          </div>
           <span className='panel-sub' id='report-range-label'>{RANGE_LABEL[rangeKey] || ''}</span>
           <div className='head-actions'>
             <SegmentedControl options={RANGE_OPTIONS} value={range}
@@ -767,6 +793,11 @@ function ReportPage() {
           </div>
         </div>
       </section>
+
+      <div className='runtime-section-heading'>
+        <div><span className='runtime-section-kicker'>INTELLIGENCE</span><h2>运行分析</h2></div>
+        <span>按时间范围拆解账号、提供商与模型表现</span>
+      </div>
 
       {/* ── Top 提供商 / Top 账号（并排两张卡，各自独立判断显隐）── */}
       <div className='report-rank-grid'>

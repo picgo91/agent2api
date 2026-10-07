@@ -85,6 +85,9 @@ pub fn init_store(db: Option<Db>, verbose: bool) -> bool {
     let _ = STORE.set(LogStore::with_db(db, || {
         crate::server::config::retention_settings().log_days
     }));
+    if let Some(store) = STORE.get() {
+        store.clear_startup_entries();
+    }
     true
 }
 
