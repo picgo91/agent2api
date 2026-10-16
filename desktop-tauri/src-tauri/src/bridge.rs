@@ -158,7 +158,7 @@ const BRIDGE_JS: &str = r#"
 
     // ── 会话 ──
     getState: () => call('GET', '/api/session'),
-    startLogin: (edition, mode, provider, socialRestore) =>
+    startLogin: (edition, mode, provider, socialRestore, proxy) =>
       invoke('start_login', {
         edition: edition || 'cn',
         mode: mode || 'embedded',
@@ -168,6 +168,10 @@ const BRIDGE_JS: &str = r#"
         // 第三方登录入口恢复（Google / GitHub / X）。缺省 false 与界面默认不勾选一致：
         // 不传就照官方登录页的形态走，不额外放宽域名白名单
         socialRestore: socialRestore === true,
+        // 可选出口代理（账号形态 JSON）。只有 Antigravity 的添加弹窗会填
+        // （Google 直连不通时换凭证走它）；别的调用点不传就是 null，
+        // Rust 侧 Option<Value> 与后端都按「没填」处理
+        proxy: proxy && typeof proxy === 'object' ? proxy : null,
       }),
     getLoginState: () => invoke('login_state'),
     cancelLogin: () => invoke('cancel_login'),

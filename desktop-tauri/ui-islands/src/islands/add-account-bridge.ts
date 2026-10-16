@@ -66,7 +66,8 @@ export type SharedWindow = {
   workbuddyDesktop?: {
     /** 壳的编译目标平台（'macos' / 'windows' / 'linux' / 'web'） */
     readonly platform?: string
-    startLogin(edition: string, mode: string, provider: string, socialRestore?: boolean): Promise<unknown>
+    /** `proxy` 只被 Antigravity 的网页登录使用（可选出口，账号形态 JSON） */
+    startLogin(edition: string, mode: string, provider: string, socialRestore?: boolean, proxy?: unknown): Promise<unknown>
     cancelLogin?(): Promise<unknown>
   }
   wbApp?: {

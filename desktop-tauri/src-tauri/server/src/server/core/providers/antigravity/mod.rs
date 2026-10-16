@@ -46,7 +46,7 @@ pub mod refresh;
 pub mod stream;
 
 use axum::http::HeaderMap;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::server::core::account_store::AccountStore;
 use crate::server::core::providers::adapter::{
@@ -55,7 +55,7 @@ use crate::server::core::providers::adapter::{
 };
 use crate::server::core::providers::content_block;
 use crate::server::core::providers::ProviderKind;
-use crate::server::core::proxies::ResolvedProxy;
+use crate::server::core::proxies::{resolve_account_proxy, ProxyResolution, ResolvedProxy};
 use crate::server::core::upstream::usage::RequestTelemetry;
 use crate::server::core::upstream::ForwardOutcome;
 use crate::server::errors::GatewayError;
@@ -244,11 +244,17 @@ impl ProviderAdapter for AntigravityAdapter {
     }
 
     /// 用回调里的一次性 `code` 换凭证并落账号。
+    ///
+    /// `proxy` 是界面在添加弹窗里可选填的出口代理（账号形态 JSON）：Google
+    /// 的 token 端点在本机直连不通时（中国大陆网络下 `oauth2.googleapis.com`
+    /// 必然超时），换码会走它；成功后同一个配置写进新账号 —— 否则令牌刷新与
+    /// 推理转发的出口仍然是直连，「登录成功但一用就超时」。
     fn exchange_login_code<'a>(
         &'a self,
         store: &'a AccountStore,
         code: &'a str,
         state: &'a str,
+        proxy: Option<&'a Value>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>,
     > {
@@ -260,7 +266,23 @@ impl ProviderAdapter for AntigravityAdapter {
                     "这次登录不属于 Antigravity（state 前缀不匹配），请重新发起",
                 ));
             }
-            let credentials = oauth::exchange_code(code, None).await?;
+            // 代理解析失败必须在换码前报错：静默直连会让用户看到的是
+            // 「连接 Google 超时」，而真正的原因（填的代理引用无效 /
+            // Clash 出口没在跑）被藏起来，是最难查的一类问题
+            let resolved = match proxy {
+                None => None,
+                Some(config) => match resolve_account_proxy(Some(config)) {
+                    Some(ProxyResolution::Resolved(proxy)) => Some(proxy),
+                    Some(ProxyResolution::Failed(message)) => {
+                        return Err(GatewayError::with_status(
+                            400,
+                            format!("登录代理不可用：{message}"),
+                        ));
+                    }
+                    None => None,
+                },
+            };
+            let credentials = oauth::exchange_code(code, resolved.as_ref()).await?;
             let account = store
                 .add_antigravity_account(&credentials, None, "web")
                 .map_err(|error| GatewayError::with_status(error.status_code, error.message))?;
@@ -269,6 +291,20 @@ impl ProviderAdapter for AntigravityAdapter {
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .to_string();
+            // 换码用的出口写进新账号（与账号页「代理」同一形状、同一校验）。
+            // 写失败不推翻这次登录：账号已经落库，用户在账号页补一次即可 ——
+            // 为一次可修的回写失败丢掉刚换来的凭证才是更坏的结果。
+            if let Some(config) = proxy.filter(|_| !account_id.is_empty()) {
+                if let Err(error) = store.update_account(&account_id, &json!({ "proxy": config })) {
+                    logging::log(
+                        "[Login]",
+                        &format!(
+                            "⚠️ Antigravity 登录代理未能写入账号 {}：{}（可在账号页手动补）",
+                            account_id, error.message
+                        ),
+                    );
+                }
+            }
             logging::log(
                 "[Login]",
                 &format!(

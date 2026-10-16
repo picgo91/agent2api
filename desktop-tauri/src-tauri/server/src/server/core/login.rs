@@ -82,6 +82,13 @@ pub struct LoginTaskState {
     /// 缺省（default）为空串，`new_handle_for_provider` 会写上一家；
     /// 空串在回调侧按「不认识」拒绝，不会静默落到某一家。
     pub provider: String,
+    /// 这次网页登录走哪个出口代理（界面可选填的账号形态 proxy JSON，
+    /// 如 `{source:'custom',…}` / `{source:'pool',proxyId}`）。
+    ///
+    /// 与 `provider` 同一理由记在任务上：回调换凭证发生在 `start_web_login`
+    /// 返回很久之后（浏览器异步回调），那时调用方已经不在场，出口只能随任务
+    /// 传递。只有消费它的实现（Antigravity —— 上游在墙外）才解释这个字段。
+    pub proxy: Option<Value>,
     pub canceled: bool,
     finished_at: Option<i64>,
 }
@@ -364,6 +371,7 @@ impl LoginService {
                 session: None,
                 edition: info.id.to_string(),
                 provider: provider.to_string(),
+                proxy: None,
                 canceled: false,
                 finished_at: None,
             })),
@@ -378,8 +386,16 @@ impl LoginService {
     /// 拿到回调里的 code 之前没有任何网络动作。因此没有后台任务、没有轮询，
     /// 任务句柄登记进表后等着 `submit_login_callback` 来收尾（或等 `cancel`）。
     ///
+    /// `proxy` 是界面可选填的出口代理（账号形态 JSON）：只有换凭证那一步
+    /// 需要它（上游直连不通的家），落账号时还会写进新账号供后续请求沿用。
+    /// 其余家不读它，传进来也只是随任务躺着。
+    ///
     /// 返回 `Err(原因)` 表示这家不支持网页登录（调用方据此报 400，文案原样透出）。
-    pub fn start_web_login(&self, kind: ProviderKind) -> Result<LoginTaskHandle, String> {
+    pub fn start_web_login(
+        &self,
+        kind: ProviderKind,
+        proxy: Option<Value>,
+    ) -> Result<LoginTaskHandle, String> {
         let label = crate::server::core::providers::meta(kind).label;
         let adapter = adapter_for(kind);
         // 先问能力再问地址：两个方法各有分工（`supports_web_login` 是恒定能力，
@@ -398,6 +414,7 @@ impl LoginService {
         handle.update(|task| {
             task.state = Some(state.clone());
             task.auth_url = Some(auth_url);
+            task.proxy = proxy;
         });
         self.tasks.register(&state, handle.clone());
         logging::log(
@@ -684,7 +701,7 @@ impl LoginService {
             }
         };
         match adapter_for(kind)
-            .exchange_login_code(&self.store, &code, state)
+            .exchange_login_code(&self.store, &code, state, task.proxy.as_ref())
             .await
         {
             Ok(account_id) => {

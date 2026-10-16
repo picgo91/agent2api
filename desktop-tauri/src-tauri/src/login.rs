@@ -676,12 +676,17 @@ pub async fn cancel(app: &AppHandle) -> Result<(), String> {
 ///
 /// `social_restore`：是否恢复 WorkBuddy 登录页的 Google / GitHub / X 入口
 /// （见 [`social_restore_script`]）。界面默认不勾选，故缺省 false。
+///
+/// `proxy`：可选出口代理（账号形态 JSON），原样进 `/api/session/login/start`
+/// 请求体 —— 只有 Antigravity 的网页登录会消费它（Google 直连不通时换凭证
+/// 走这个出口）；其余家传了也只是随登录任务躺着。
 pub async fn start(
     app: &AppHandle,
     edition: String,
     mode: String,
     provider: String,
     social_restore: bool,
+    proxy: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
     if current_login(app).is_some() {
         return Err("已有登录流程在进行，请先完成当前登录或等待超时".to_string());
@@ -740,12 +745,12 @@ pub async fn start(
     // 给它这个选项只会制造一个永远等不到回调的卡死。
     let use_external = mode == "external" && provider != "raccoon";
 
-    let started = gateway::call(
-        "POST",
-        "/api/session/login/start",
-        Some(&json!({ "edition": edition_id, "provider": provider })),
-    )
-    .await?;
+    // proxy 缺省时序列化成 null，后端按「没填」处理（显式 null 与不传同义）
+    let mut start_payload = json!({ "edition": edition_id, "provider": provider });
+    if let Some(proxy) = proxy {
+        start_payload["proxy"] = proxy;
+    }
+    let started = gateway::call("POST", "/api/session/login/start", Some(&start_payload)).await?;
     let login_state = started
         .get("state")
         .and_then(serde_json::Value::as_str)

@@ -82,8 +82,9 @@ impl LoginService {
                 return Err(error);
             }
         };
+        // 出口代理随任务带（界面可选填的那份）：发起时写进任务、回调收尾时读出
         match adapter_for(ProviderKind::Antigravity)
-            .exchange_login_code(&self.store, &code, state)
+            .exchange_login_code(&self.store, &code, state, snapshot.proxy.as_ref())
             .await
         {
             Ok(account_id) => {

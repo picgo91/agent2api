@@ -197,6 +197,15 @@ pub async fn login_start(State(state): State<ServerState>, body: Bytes) -> Respo
         .and_then(|payload| payload.get("provider").and_then(Value::as_str))
         .map(str::trim)
         .unwrap_or("");
+    // 可选出口代理（与账号页同一种形状：`{source:'custom'|'pool'|'clash',…}`）。
+    // 只对下面的「网页登录」通用分支有意义 —— Antigravity 的上游在墙外，
+    // 网关直连换不到凭证，界面在添加弹窗里可以指一个出口；workbuddy 那条
+    // 无头链与其余专用分支都不读它。显式 null / 不传都按「没填」处理。
+    let proxy = payload
+        .as_ref()
+        .and_then(|payload| payload.get("proxy"))
+        .filter(|value| !value.is_null())
+        .cloned();
     // 注册表是 provider 白名单的唯一事实来源（见 providers::kind_from_id 的说明）
     let kind = match provider {
         "" => crate::server::core::providers::ProviderKind::WorkBuddy,
@@ -344,7 +353,7 @@ pub async fn login_start(State(state): State<ServerState>, body: Bytes) -> Respo
         return management_error(400, message);
     }
     if kind != crate::server::core::providers::ProviderKind::WorkBuddy {
-        return start_web_login(state, kind).await;
+        return start_web_login(state, kind, proxy).await;
     }
     let handle = state.login().start(edition.as_deref());
     match state
@@ -372,9 +381,10 @@ pub async fn login_start(State(state): State<ServerState>, body: Bytes) -> Respo
 async fn start_web_login(
     state: ServerState,
     kind: crate::server::core::providers::ProviderKind,
+    proxy: Option<Value>,
 ) -> Response {
     let label = crate::server::core::providers::meta(kind).label;
-    let handle = match state.login().start_web_login(kind) {
+    let handle = match state.login().start_web_login(kind, proxy) {
         Ok(handle) => handle,
         Err(reason) => return management_error(400, reason),
     };

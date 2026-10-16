@@ -42,6 +42,11 @@ export type WebLoginConfig = {
   button: string
   hint?: string
   busyText?: string
+  /**
+   * 显示「出口代理」区（可选填）：发起登录时随请求带给网关，换凭证走它，
+   * 成功后写进新账号。只有上游在本机直连不通的家才给（Antigravity）。
+   */
+  proxy?: boolean
   /** 有这一级时多一个「打开方式」分段（没有的家只给内嵌窗口） */
   modes?: MethodMode[]
   /** 这一家的网页登录只在某个地区可用（当前没有家用它，结构上保留） */
@@ -518,9 +523,14 @@ const ANTIGRAVITY: ProviderConfig = {
       + '<code>http://localhost:51121/oauth-callback</code>（回调地址由官方注册钉死，改不了），'
       + '网关用一次性授权码换取凭证并加入账号列表。'
       + '<br><b>内嵌窗口会自动接住</b>这条回调；用系统浏览器时，把地址栏里那条 localhost 地址的主机端口'
-      + '改成网关的（如 <code>http://192.168.1.58:3065/oauth/callback?…</code>）再回车即可。',
+      + '改成网关的（如 <code>http://192.168.1.58:3065/oauth/callback?…</code>）再回车即可。'
+      + '<br>若网关所在机器<b>直连不上 Google</b>（换取凭证时报连接超时），'
+      + '在下方填一个出口代理（如本机 Clash 的 <code>http://127.0.0.1:7890</code>）：'
+      + '登录成功后该代理会写进新账号，供后续刷新与请求沿用。',
     button: '打开 Antigravity 授权页',
     busyText: '等待 Antigravity 登录完成…',
+    // Google 直连不通的机器（国内网关）需要这个出口，见 noteHtml
+    proxy: true,
     modes: [
       {
         value: 'embedded',

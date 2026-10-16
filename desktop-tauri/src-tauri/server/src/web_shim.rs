@@ -406,12 +406,13 @@ pub fn shim_js() -> &'static str {
 
     // ── 会话 ──
     getState: function () { return call('GET', '/api/session'); },
-    startLogin: function (edition, mode, provider) {
+    startLogin: function (edition, mode, provider, socialRestore, proxy) {
       var target = provider || 'workbuddy';
-      return runLoginFlow(target, call('POST', '/api/session/login/start', {
-        edition: edition || 'cn',
-        provider: target,
-      }));
+      var payload = { edition: edition || 'cn', provider: target };
+      // 可选出口代理（账号形态 JSON）：只有 Antigravity 的添加弹窗会填
+      // （换凭证要连 Google）；别的调用点不传，其余家收到也不会读
+      if (proxy && typeof proxy === 'object') payload.proxy = proxy;
+      return runLoginFlow(target, call('POST', '/api/session/login/start', payload));
     },
     getLoginState: function () {
       return Promise.resolve({ active: loginActive, provider: loginProvider });

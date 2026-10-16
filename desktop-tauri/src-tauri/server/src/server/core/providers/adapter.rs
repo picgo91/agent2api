@@ -773,6 +773,12 @@ pub trait ProviderAdapter: Send + Sync {
     /// 不另写一份落盘逻辑 —— 否则「手动添加」与「网页登录」两条路会在
     /// 校验、id 生成、优先级分配上慢慢分叉。
     ///
+    /// `proxy` 是这次登录界面可选填的出口代理（账号形态 JSON，随登录任务带
+    /// 到回调收尾）。**只有消费它的实现才解释这个字段**（Antigravity：上游
+    /// 在墙外，换码与后续请求都得走同一个出口）；其余实现原样忽略。填了但
+    /// 解析失败时必须在这一层报错 —— 静默直连会把「代理不可用」伪装成上游
+    /// 超时，那是最难查的一类问题。
+    ///
     /// 默认返回 501：走到这里说明路由层把一家不支持网页登录的 provider 送进来了，
     /// 那是内部契约错误，报错比静默什么都不做好。
     fn exchange_login_code<'a>(
@@ -780,6 +786,7 @@ pub trait ProviderAdapter: Send + Sync {
         _store: &'a AccountStore,
         _code: &'a str,
         _state: &'a str,
+        _proxy: Option<&'a Value>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>,
     > {

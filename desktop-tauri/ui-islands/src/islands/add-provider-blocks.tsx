@@ -49,6 +49,9 @@ import {
   type MethodId,
   type ProviderConfig,
 } from './add-account-configs'
+// 出口代理表单复用账号设置弹窗的那一份（同形状、同测试按钮、同池列表缓存）：
+// 只有 config.webLogin.proxy 的家会渲染它（当前仅 Antigravity）
+import { ProxyForm, draftOfProxy, readProxyDraft, type ProxyDraft } from './accounts-dialogs'
 import {
   afterAdd,
   addedLabelOf,
@@ -283,8 +286,12 @@ function WebLoginSection({
   const modeRef = React.useRef(mode)
   const regionRef = React.useRef(region)
   const controllerRef = React.useRef<WebLoginController | null>(null)
+  /** 出口代理草稿（仅 config.webLogin.proxy 的家渲染表单；其余家恒 none） */
+  const [proxyDraft, setProxyDraft] = React.useState<ProxyDraft>(() => draftOfProxy(null))
+  const proxyRef = React.useRef(proxyDraft)
   modeRef.current = mode
   regionRef.current = region
+  proxyRef.current = proxyDraft
 
   React.useEffect(() => {
     const engine = shared().wbWebLogin
@@ -304,11 +311,18 @@ function WebLoginSection({
       },
       // 传哪个 edition 给壳侧：写死的 edition → 地区分段当前值（Qoder 两站都要登录）
       // → 'cn'（其余家既没有地区级，后端那条链也不读这个字段）
-      start: () => shared().workbuddyDesktop?.startLogin(
-        web.edition || regionRef.current || 'cn',
-        modeRef.current || 'embedded',
-        prefix,
-      ),
+      start: () => {
+        // 出口代理先本地校验（非法输入直接抛，让引擎的 catch 弹 toast 并
+        // 复位按钮 —— 不发起一次注定失败的登录）
+        const proxy = web.proxy ? readProxyDraft(proxyRef.current) : null
+        return shared().workbuddyDesktop?.startLogin(
+          web.edition || regionRef.current || 'cn',
+          modeRef.current || 'embedded',
+          prefix,
+          false,
+          proxy,
+        )
+      },
       onSuccess: async () => {
         closeAddModals()
         await shared().wbApp?.refresh?.()
@@ -335,6 +349,19 @@ function WebLoginSection({
             options={web.modes}
             value={mode}
             onValueChange={onModeChange}
+          />
+        </div>
+      ) : null}
+      {/* 出口代理（可选）：默认「无代理（直连）」与改造前行为一致 */}
+      {web.proxy ? (
+        <div className='flex flex-col gap-2.5 border-l-2 border-border pl-[11px]'>
+          <span className='text-[12.5px] text-subtle'>
+            出口代理（可选；直连换不到凭证时填，成功后写进新账号）
+          </span>
+          <ProxyForm
+            draft={proxyDraft}
+            onChange={setProxyDraft}
+            idPrefix={`${prefix}-web-proxy`}
           />
         </div>
       ) : null}
