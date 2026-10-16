@@ -28,6 +28,7 @@
 //! 不额外起后台定时器。
 
 mod accio;
+mod antigravity;
 mod autoclaw;
 mod catpaw;
 pub mod codearts;

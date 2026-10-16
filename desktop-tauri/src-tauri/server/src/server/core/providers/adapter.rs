@@ -931,6 +931,7 @@ pub fn adapter_for(kind: ProviderKind) -> &'static dyn ProviderAdapter {
         ProviderKind::Zcode => &super::zcode::adapter::ZCODE_ADAPTER,
         ProviderKind::ZcodeIntl => &super::zcode::adapter::ZCODE_INTL_ADAPTER,
         ProviderKind::Trae => &super::trae::adapter::TRAE_ADAPTER,
+        ProviderKind::Antigravity => &super::antigravity::ANTIGRAVITY_ADAPTER,
     }
 }
 
@@ -992,6 +993,11 @@ pub fn implemented_kinds() -> Vec<ProviderKind> {
         // 不在的话刷新循环根本不会问它，症状是"界面上点了刷新、日志里
         // 一句 trae 都没有"（与"刷了但没取到"是两种完全不同的故障）。
         ProviderKind::Trae,
+        // Antigravity 已接真身（登录 / 凭据 / 目录 / 转发）。它在列表里是因为
+        // 适配器已接线；但 `supports_model_refresh()` 为 false（静态 34 条
+        // 目录，见 `antigravity::models`），刷新循环对它是空操作 —— 与 ZCode
+        // 同一口径：本列表回答「这家接线了没有」。
+        ProviderKind::Antigravity,
     ]
 }
 

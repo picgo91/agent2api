@@ -581,6 +581,32 @@ pub async fn add_account(state: &ServerState, body: &Bytes) -> Response {
             }
             store.add_trae_account(&credential, import_name, "manual")
         }
+        // Antigravity：**粘贴凭证**（accessToken / refreshToken）→ 手动添加。
+        // `prepare_account` 在只有 refreshToken 时先换一次 access；email /
+        // projectId 是 best-effort 的读数 —— 读不到也照样落账号（信封有兜底
+        // project，转发路径还会再取），「登录成功却因为读不到邮箱而判失败」
+        // 是本家明确要避免的那种行为。
+        //
+        // 「网页登录」是另一条链路（`/api/session/login/start` → Google 授权页
+        // → 壳/面板把 51121 回调转交到网关 `/oauth/callback` → 按 state 前缀
+        // 分派给 `finish_antigravity_login` → 同一个落账号入口
+        // `add_antigravity_account`）。
+        //
+        // `importDesktop` 不提供：Antigravity 桌面端的登录态在它自己的加密
+        // 存储里（与 Accio / ZCode / Trae 同一处境），给了入口只会稳定失败。
+        Some(crate::server::core::providers::ProviderKind::Antigravity) => {
+            if import_desktop {
+                return management_error(
+                    400,
+                    "Antigravity 不支持导入桌面端登录态，请用「网页登录」或粘贴凭证添加账号",
+                );
+            }
+            match crate::server::core::providers::antigravity::auth::prepare_account(&payload).await
+            {
+                Ok(credentials) => store.add_antigravity_account(&credentials, import_name, "manual"),
+                Err(error) => Err(AccountStoreError::new(error.message, error.status_code)),
+            }
+        }
         Some(crate::server::core::providers::ProviderKind::WorkBuddy) | None => {
             store.add_account(&payload, None)
         }

@@ -201,6 +201,20 @@ pub(super) fn identity_of_item(
             if variant.is_empty() { "solo" } else { &variant }
         ));
     }
+    // Antigravity：身份是 `email`（id_token 里解出来的 Google 账号邮箱），
+    // 与 `antigravity_accounts::same_identity` 的第一判据一致。缺 email 时退到
+    // `projectId`（云项目号，也是账号级的），两者都缺才是无法标识。
+    if provider == kind_id(ProviderKind::Antigravity) {
+        let email = text("email");
+        if !email.is_empty() {
+            return Ok(email);
+        }
+        let project = text("projectId");
+        if !project.is_empty() {
+            return Ok(project);
+        }
+        return Err("缺少 email 与 projectId（无法标识 Antigravity 账号）".to_string());
+    }
     // 自定义提供商：凭证就是身份 —— apiKey 非空时与添加路径「同 key 合并」
     // 完全同口径（添加路径的账号 id 就是 key 的 SHA-256 前缀）；空 key 没有
     // 稳定标识，退到账号 id（空 key 的记录 id 是随机的，但全局唯一仍然成立）。
@@ -282,6 +296,25 @@ pub(super) fn identity_of_record(provider: &str, record: &StoredAccount) -> Opti
             Err(()) => return None,
         };
         return Some(format!("{region}:{user_id}"));
+    }
+    // Antigravity：`email` → `projectId`（与 `identity_of_item` 同口径）
+    if provider == kind_id(ProviderKind::Antigravity) {
+        let email = record
+            .get("email")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if !email.is_empty() {
+            return Some(email);
+        }
+        let project = record
+            .get("projectId")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        return (!project.is_empty()).then_some(project);
     }
     // 自定义提供商：apiKey 非空即身份（同 key 合并），否则账号 id
     if provider.starts_with(crate::server::core::custom_providers::ID_PREFIX) {

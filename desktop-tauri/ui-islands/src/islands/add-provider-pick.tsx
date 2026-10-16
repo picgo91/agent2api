@@ -68,6 +68,7 @@ const PROVIDER_ICONS: Record<string, string> = {
   'zcode-intl': 'assets/providers/zcode.png',
   codearts: 'assets/providers/codearts.png',
   trae: 'assets/providers/trae.png',
+  antigravity: 'assets/providers/antigravity.png',
 }
 
 type CardItem = {
@@ -82,16 +83,14 @@ type CardItem = {
  * 第 1 步的卡片列表数据，按账号类型分三段：
  *   · 反代 —— 内置家来自 providers 摘要（现有八家）；
  *   · 预置 API —— 预置目录的官方与托管端点，点一张卡 = 创建这一家并预填；
- *     **已建过同名家的预置卡不再出现**（那张已建卡就在「自定义」段里）；
+ *     已建过同名家的预置卡仍保留，点击时给已有提供商添加账号；
  *   · 自定义 —— 已建的自定义家（customList），每张卡是「给这家加账号」的对象。
  * 「手动新建」那张卡不在这个列表里：它不是一家提供商，由渲染处单独插在队首。
  */
 function providerCards(accountType: AccountType): CardItem[] {
   const providers = shared().wbProviders
   if (accountType === TYPE_PRESET) {
-    const customNames = new Set((providers?.customList?.() || []).map(item => item.name || ''))
     return (shared().wbPresetProviders?.list || [])
-      .filter(preset => !customNames.has(preset.name))
       .map(preset => ({
         id: PRESET_CARD_PREFIX + preset.key,
         label: preset.name,

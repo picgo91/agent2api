@@ -97,6 +97,10 @@
 
 pub mod accio;
 pub mod adapter;
+/// Antigravity（Google cloudcode-pa / `v1internal` 官方信封）。适配器实现在
+/// `antigravity/`：OAuth 网页登录 + 静态 34 条模型目录 + 会话式转发。
+/// spec 来源与逐项决策见 `ANTIGRAVITY_PROTOCOL_SPEC.md`（仓库根）。
+pub mod antigravity;
 pub mod autoclaw;
 pub mod catalog;
 /// 远程模型清单的**持久化缓存**（各家的清单在进程重启后由它读回，见模块头）。
@@ -283,6 +287,20 @@ pub enum ProviderKind {
     /// `core::auto_checkin` 的提供商清单不含本家。每日签到存在，但要单独授权
     /// 才会接（见 cpa-deploy/notes/agent2api-trae-port-plan.md 的 §8 决策 3）。
     Trae,
+    /// Antigravity（Google AI IDE 的 cloudcode-pa 后端，`v1internal` 官方信封）。
+    /// 适配实现在 `providers::antigravity/`。
+    ///
+    /// ── 与别家的形态差异 ─────────────────────────────────────
+    ///   - 登录是标准 Google OAuth 授权码，但回调**固定**在
+    ///     `http://localhost:51121/oauth-callback`（CLI 自己会监听那个端口），
+    ///     网关不抢占它，由壳/面板把回调转交到 `/oauth/callback`（见
+    ///     `core::login::antigravity` 的模块头）；
+    ///   - 模型目录是**静态表**（34 条，官方客户端打包在资源里），
+    ///     `supports_model_refresh()` 为 false；
+    ///   - 上游没有签到、也没有固化的余额查询接口 —— 不在 `auto_checkin`
+    ///     清单里、`supports_usage()` 为 false；
+    ///   - 请求/响应都要转官方信封，`is_stateful()` 为 true。
+    Antigravity,
 }
 
 /// 一个提供商的静态元数据。
@@ -372,6 +390,10 @@ pub const PROVIDERS: &[ProviderMeta] = &[
         id: "trae",
         label: "Trae",
     },
+    ProviderMeta {
+        id: "antigravity",
+        label: "Antigravity",
+    },
 ];
 
 /// provider id 在注册表里的下标（未知 id → None）。
@@ -446,6 +468,7 @@ pub fn kind_from_id(id: &str) -> Option<ProviderKind> {
         "zcode-intl" => Some(ProviderKind::ZcodeIntl),
         "codearts" => Some(ProviderKind::CodeArts),
         "trae" => Some(ProviderKind::Trae),
+        "antigravity" => Some(ProviderKind::Antigravity),
         // 走到这里 = 上面的注册表判定已放行、这个 match 却没有对应分支：
         // 只可能是有人给 `PROVIDERS` 加了条目忘了加这里。开发期喊出来；
         // release 返回 None（见上：宁可为「未知」，不可误认成别家）。
@@ -478,6 +501,7 @@ pub const fn kind_id(kind: ProviderKind) -> &'static str {
         ProviderKind::ZcodeIntl => "zcode-intl",
         ProviderKind::CodeArts => "codearts",
         ProviderKind::Trae => "trae",
+        ProviderKind::Antigravity => "antigravity",
     }
 }
 

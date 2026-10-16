@@ -84,8 +84,12 @@
 //!                存储与校验的架构说明见 `core::custom_providers`
 //!   accio_accounts.rs    Accio 账号（两个地区各一家 provider）：添加（粘贴凭证 /
 //!                网页登录共用入口）、续期回写、公开形态（含 edition）
+//!   antigravity_accounts.rs  Antigravity 账号（OAuth 凭证 + email/projectId）：
+//!                添加（粘贴凭证 / 导入 / 网页登录共用入口）、续期回写、
+//!                公开形态
 
 pub mod accio_accounts;
+pub mod antigravity_accounts;
 pub mod autoclaw_accounts;
 pub mod autoclaw_import;
 pub mod catpaw_accounts;

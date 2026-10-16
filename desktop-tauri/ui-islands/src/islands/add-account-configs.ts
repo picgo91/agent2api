@@ -491,6 +491,75 @@ const TRAE: ProviderConfig = {
   ],
 }
 
+/**
+ * Antigravity（Google 的 Agent Manager）。
+ *
+ * ── 网页登录（OAuth 授权码）──────────────────────────────
+ * 授权地址由网关拼（`providers::antigravity::oauth`），回调地址**被上游钉死**为
+ * `http://localhost:51121/oauth-callback`（client 注册时的 redirect_uri，改不了、
+ * 也没有 state 之外的额外判据）。网关不做 51121 监听：本机部署时用户要把地址栏里
+ * 那条 localhost 地址的主机端口改成网关地址（与 CodeArts 同一套指引）；桌面壳里
+ * 网关的登录窗口会自己把这条 51121 回调改写到网关自己的 /oauth/callback。
+ *
+ * ── 凭据 ──────────────────────────────────────────────────
+ * `accessToken`（OAuth token 端点回的 access_token）与 `refreshToken` 至少出一个：
+ * 只粘 refreshToken 时网关会先换一次 access 再校验；两个都填才能长期免手工续期
+ * （refresh_token 只在首次授权时下发一次，丢了只能重新走浏览器授权）。
+ * `projectId` 可选：留空时网关用 loadCodeAssist 自动查询。
+ */
+const ANTIGRAVITY: ProviderConfig = {
+  provider: 'antigravity',
+  label: 'Antigravity',
+  // 桌面端登录态在 Antigravity 自己的加密存储里（与 Accio / ZCode / Trae 同一处境），
+  // 没有 auth.json 那种稳定可读的形态 —— 不生成导入段。
+  desktop: false,
+  webLogin: {
+    noteHtml: '打开 Google 授权页并用你的 Antigravity 账号登录：登录完成后官方页面会跳回<b>本机</b>的 '
+      + '<code>http://localhost:51121/oauth-callback</code>（回调地址由官方注册钉死，改不了），'
+      + '网关用一次性授权码换取凭证并加入账号列表。'
+      + '<br><b>内嵌窗口会自动接住</b>这条回调；用系统浏览器时，把地址栏里那条 localhost 地址的主机端口'
+      + '改成网关的（如 <code>http://192.168.1.58:3065/oauth/callback?…</code>）再回车即可。',
+    button: '打开 Antigravity 授权页',
+    busyText: '等待 Antigravity 登录完成…',
+    modes: [
+      {
+        value: 'embedded',
+        label: '内嵌窗口（推荐）',
+        hint: '将打开内嵌窗口；登录完成后自动加入账号列表。关掉窗口即取消等待',
+      },
+      {
+        value: 'external',
+        label: '系统浏览器',
+        hint: '将用系统默认浏览器打开授权页（会复用浏览器里已登录的 Google 账号）；'
+          + '登录完成后按上方说明把回调地址改成网关地址再回车',
+      },
+    ],
+  },
+  manualTitle: '粘贴登录凭据',
+  manualNoteHtml: '粘贴 Antigravity 的登录凭证：<code>accessToken</code> 与 <code>refreshToken</code> '
+    + '<b>至少填一个</b>（只填 refreshToken 时网关会先换一次 accessToken 再校验）；'
+    + '两个都填才能长期免手工续期。'
+    + '<br><code>projectId</code> 可选：留空时网关自动查询（Google Cloud 项目）。',
+  fields: [
+    {
+      key: 'accessToken',
+      label: 'accessToken',
+      rows: 3,
+      optional: true,
+      placeholder: 'Antigravity 的访问令牌（ya29.… 或 JWT）；与 refreshToken 至少填一个',
+    },
+    {
+      key: 'refreshToken',
+      label: 'refreshToken',
+      rows: 2,
+      optional: true,
+      placeholder: '刷新令牌（1//…）；填了才能到期自动续期',
+    },
+    { key: 'projectId', label: 'projectId', optional: true, placeholder: '可选；Google Cloud 项目 ID，留空自动查询' },
+    { key: 'name', label: '备注名', optional: true, placeholder: '可选，留空使用账号邮箱' },
+  ],
+}
+
 /** 内置家的表单块，顺序与旧 ADD_FORMS 一致（只影响 DOM 里的块顺序，不影响界面） */
 export const BUILTIN_CONFIGS: ProviderConfig[] = [
   RACCOON,
@@ -512,6 +581,8 @@ export const BUILTIN_CONFIGS: ProviderConfig[] = [
   CODEARTS,
   // Trae 只有 SOLO 那一家（没有地区分叉，理由见 TRAE 上方那段）
   TRAE,
+  // Antigravity（Google）：一家一个 provider，没有地区/额度池之分
+  ANTIGRAVITY,
 ]
 
 /** WorkBuddy 的块 id（结构特殊，单独一个组件） */

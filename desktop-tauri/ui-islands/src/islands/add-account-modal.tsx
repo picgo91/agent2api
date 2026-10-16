@@ -159,12 +159,15 @@ function AddAccountModal({
     if (id === NEW_PROVIDER_CARD_ID) {
       setState(prev => ({ ...prev, ...entry, provider: CUSTOM_PROVIDER, providerHint: '', presetKey: '' }))
     } else if (id.startsWith(PRESET_CARD_PREFIX)) {
+      const presetKey = id.slice(PRESET_CARD_PREFIX.length)
+      const preset = shared().wbPresetProviders?.presetOf?.(presetKey)
+      const existing = preset && customList().find(item => item.name === preset.name)
       setState(prev => ({
         ...prev,
         ...entry,
         provider: CUSTOM_PROVIDER,
-        providerHint: '',
-        presetKey: id.slice(PRESET_CARD_PREFIX.length),
+        providerHint: existing?.id || '',
+        presetKey: existing ? '' : presetKey,
       }))
     } else if (customList().some(item => item.id === id)) {
       setState(prev => ({ ...prev, ...entry, provider: CUSTOM_PROVIDER, providerHint: id, presetKey: '' }))
