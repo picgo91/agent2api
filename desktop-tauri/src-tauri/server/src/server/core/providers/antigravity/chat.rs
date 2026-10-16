@@ -72,7 +72,10 @@ pub fn build_plan(
         .unwrap_or("")
         .to_string();
     if upstream_key.is_empty() {
-        return Err(GatewayError::with_status(502, "Antigravity 模型目录缺少上游标识"));
+        return Err(GatewayError::with_status(
+            502,
+            "Antigravity 模型目录缺少上游标识",
+        ));
     }
     let efforts: Vec<String> = entry
         .get("reasoningEfforts")

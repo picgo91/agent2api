@@ -280,10 +280,11 @@ async fn post_form(
         } else {
             502
         };
-        return Err(
-            GatewayError::with_status(mapped, format!("Google 令牌接口返回 {status}: {detail}"))
-                .with_optional_code(Some(i64::from(status))),
-        );
+        return Err(GatewayError::with_status(
+            mapped,
+            format!("Google 令牌接口返回 {status}: {detail}"),
+        )
+        .with_optional_code(Some(i64::from(status))));
     }
     if !payload.is_object() {
         return Err(GatewayError::with_status(

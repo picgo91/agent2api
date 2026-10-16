@@ -603,7 +603,9 @@ pub async fn add_account(state: &ServerState, body: &Bytes) -> Response {
             }
             match crate::server::core::providers::antigravity::auth::prepare_account(&payload).await
             {
-                Ok(credentials) => store.add_antigravity_account(&credentials, import_name, "manual"),
+                Ok(credentials) => {
+                    store.add_antigravity_account(&credentials, import_name, "manual")
+                }
                 Err(error) => Err(AccountStoreError::new(error.message, error.status_code)),
             }
         }

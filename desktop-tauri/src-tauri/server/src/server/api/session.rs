@@ -1040,7 +1040,9 @@ fn is_antigravity_callback(params: &HashMap<String, String>) -> bool {
 fn render_antigravity_callback(outcome: Result<String, GatewayError>) -> Response {
     match outcome {
         Ok(_) => oauth_callback_page(200, "登录成功，已返回网关，可以关闭此页面。"),
-        Err(error) => oauth_callback_page(error.status_code, &format!("登录失败：{}", error.message)),
+        Err(error) => {
+            oauth_callback_page(error.status_code, &format!("登录失败：{}", error.message))
+        }
     }
 }
 

@@ -59,9 +59,15 @@ impl Credentials {
                 "缺少 Antigravity 凭证（accessToken 与 refreshToken 至少提供一个）",
             ));
         }
-        let mut expires_at = ["expiresAt", "expires_at", "expiry", "expiry_timestamp", "expires"]
-            .iter()
-            .find_map(|key| timestamp(payload.get(*key)));
+        let mut expires_at = [
+            "expiresAt",
+            "expires_at",
+            "expiry",
+            "expiry_timestamp",
+            "expires",
+        ]
+        .iter()
+        .find_map(|key| timestamp(payload.get(*key)));
         if expires_at.is_none() {
             // CLIProxyAPI 凭据文件的形态：{expires_in, timestamp}（秒）
             let expires_in = ["expires_in", "expiresIn"]

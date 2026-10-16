@@ -270,8 +270,9 @@ fn allowed_hosts(provider: &str) -> Option<&'static [&'static str]> {
         // 改道逻辑将来失效，白名单这一层也不能再拦一次 —— 那会复现「登录成功
         // 但网关等不到码」的静默故障。
         "catpaw" | "qoder" | "cline-free" | "cline-pass" | "autoclaw" | "autoclaw-intl"
-        | "accio" | "accio-cn" | "zcode" | "zcode-intl" | "codearts" | "trae"
-        | "antigravity" => None,
+        | "accio" | "accio-cn" | "zcode" | "zcode-intl" | "codearts" | "trae" | "antigravity" => {
+            None
+        }
         _ => Some(WORKBUDDY_ALLOWED_HOSTS),
     }
 }

@@ -207,7 +207,9 @@ impl AccountStore {
             .unwrap_or("")
             .trim()
             .to_string();
-        if !credentials.email.is_empty() && !stored_email.is_empty() && stored_email != credentials.email
+        if !credentials.email.is_empty()
+            && !stored_email.is_empty()
+            && stored_email != credentials.email
         {
             return Err(AccountStoreError::bad_request(
                 "Antigravity 刷新结果与原账号身份不一致",
@@ -237,9 +239,7 @@ impl AccountStore {
         let stored = record.to_value();
         let credentials = Credentials::from_payload(&stored).ok();
         let available = record.has_token() && credentials.is_some();
-        let can_refresh = credentials
-            .as_ref()
-            .is_some_and(Credentials::can_refresh);
+        let can_refresh = credentials.as_ref().is_some_and(Credentials::can_refresh);
         let mut public = serde_json::Map::new();
         for key in [
             "id",

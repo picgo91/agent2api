@@ -52,10 +52,7 @@ impl LoginService {
         &self,
         params: &HashMap<String, String>,
     ) -> Result<String, GatewayError> {
-        let state = params
-            .get("state")
-            .map(|value| value.trim())
-            .unwrap_or("");
+        let state = params.get("state").map(|value| value.trim()).unwrap_or("");
         if state.is_empty() {
             return Err(GatewayError::with_status(
                 400,
@@ -70,10 +67,7 @@ impl LoginService {
         };
         let snapshot = handle.snapshot();
         if snapshot.provider != ANTIGRAVITY_PROVIDER_ID {
-            return Err(GatewayError::with_status(
-                400,
-                "这次登录不属于 Antigravity",
-            ));
+            return Err(GatewayError::with_status(400, "这次登录不属于 Antigravity"));
         }
         if snapshot.done {
             // 幂等：重复回调不是错误（见校验口径 2）

@@ -184,7 +184,11 @@ fn sanitize_name(raw: &str, used: &mut Vec<String>) -> String {
         .trim()
         .chars()
         .map(|character| {
-            if character.is_ascii_alphanumeric() || character == '_' || character == '.' || character == '-' {
+            if character.is_ascii_alphanumeric()
+                || character == '_'
+                || character == '.'
+                || character == '-'
+            {
                 character
             } else {
                 '_'
@@ -385,7 +389,9 @@ fn convert_messages(body: &Value, converter: &mut Converter) {
                     // 中途的 system → 降级为 user 文本、<system-reminder> 包裹
                     push_parts(
                         "user",
-                        vec![json!({ "text": format!("<system-reminder>\n{text}\n</system-reminder>") })],
+                        vec![
+                            json!({ "text": format!("<system-reminder>\n{text}\n</system-reminder>") }),
+                        ],
                         &mut converter.contents,
                     );
                 }
@@ -433,9 +439,7 @@ fn convert_messages(body: &Value, converter: &mut Converter) {
                             .filter(|value| !value.is_empty())
                             .map(str::to_string)
                             .unwrap_or_else(|| format!("tool_{index}"));
-                        converter
-                            .tool_names
-                            .insert(client_id.clone(), name.clone());
+                        converter.tool_names.insert(client_id.clone(), name.clone());
                         let args = function
                             .get("arguments")
                             .map(tool_args_value)
@@ -470,7 +474,11 @@ fn convert_messages(body: &Value, converter: &mut Converter) {
                     None => String::new(),
                 };
                 // 结果保留为**字符串**（spec C.3：response.result），空 → "{}"
-                let result = if content.is_empty() { "{}" } else { content.as_str() };
+                let result = if content.is_empty() {
+                    "{}"
+                } else {
+                    content.as_str()
+                };
                 let mut function_response = json!({
                     "name": name,
                     "response": { "result": result },
@@ -768,10 +776,7 @@ pub fn build_upstream_body(
     };
 
     let mut request = Map::new();
-    request.insert(
-        "contents".to_string(),
-        Value::Array(converter.contents),
-    );
+    request.insert("contents".to_string(), Value::Array(converter.contents));
     if !system_instruction.is_empty() {
         request.insert(
             "systemInstruction".to_string(),

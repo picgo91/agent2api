@@ -32,7 +32,10 @@ const DEFAULT_TTL_MS: i64 = 60 * 60 * 1000;
 static FLIGHTS: OnceLock<Table<Credentials>> = OnceLock::new();
 
 /// 取账号记录 + 凭证（不刷新）
-pub fn snapshot(store: &AccountStore, account_id: &str) -> Result<(Value, Credentials), GatewayError> {
+pub fn snapshot(
+    store: &AccountStore,
+    account_id: &str,
+) -> Result<(Value, Credentials), GatewayError> {
     let record = store
         .antigravity_account_record(account_id)
         .ok_or_else(|| GatewayError::with_status(404, "Antigravity 账号不存在，请先添加账号"))?;

@@ -37,11 +37,8 @@ pub async fn request(
                 GatewayError::with_status(504, "Antigravity 请求超时，请检查网络后重试")
                     .with_code("antigravity_transport")
             } else {
-                GatewayError::with_status(
-                    502,
-                    "无法连接 Google 服务，请检查网络或账号代理设置",
-                )
-                .with_code("antigravity_transport")
+                GatewayError::with_status(502, "无法连接 Google 服务，请检查网络或账号代理设置")
+                    .with_code("antigravity_transport")
             }
         })
 }
@@ -94,14 +91,7 @@ pub async fn load_code_assist(
     proxy: Option<&ResolvedProxy>,
 ) -> Result<Value, GatewayError> {
     let body = json!({ "metadata": { "ideType": "ANTIGRAVITY" } });
-    let response = post_json(
-        &endpoints::load_code_assist_url(),
-        token,
-        &body,
-        &[],
-        proxy,
-    )
-    .await?;
+    let response = post_json(&endpoints::load_code_assist_url(), token, &body, &[], proxy).await?;
     payload(response, "项目查询")
 }
 

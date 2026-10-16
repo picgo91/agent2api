@@ -134,5 +134,8 @@ pub fn is_image(key: &str) -> bool {
 
 /// 公开的重查入口（路由失败时的文案用）
 pub fn known_names() -> Vec<String> {
-    MODEL_SPECS.iter().map(|(key, ..)| (*key).to_string()).collect()
+    MODEL_SPECS
+        .iter()
+        .map(|(key, ..)| (*key).to_string())
+        .collect()
 }
