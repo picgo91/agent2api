@@ -134,10 +134,6 @@ pub(crate) fn refresh_meta(kind: ProviderKind) -> (bool, i64) {
             super::trae::models::remote_refreshed(),
             super::trae::models::last_refreshed_at(),
         ),
-        // Antigravity 的目录是**静态表**（34 条内联在 `antigravity::models`，
-        // 官方客户端同样打包在资源里）：永远不是远程来源，也没有刷新时刻 ——
-        // 与 ZCode 同一口径，回 `(false, 0)` 而不是编一个时间。
-        ProviderKind::Antigravity => (false, 0),
     }
 }
 

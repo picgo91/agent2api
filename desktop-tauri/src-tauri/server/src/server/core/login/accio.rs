@@ -78,7 +78,7 @@ impl LoginService {
             return Ok(String::new());
         }
         match adapter_for(region.kind())
-            .exchange_login_code(&self.store, code, state, snapshot.proxy.as_ref())
+            .exchange_login_code(&self.store, code, state)
             .await
         {
             Ok(account_id) => {

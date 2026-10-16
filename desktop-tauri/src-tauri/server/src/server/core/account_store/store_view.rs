@@ -236,9 +236,6 @@ impl AccountStore {
             // 所以这里没有 `is_trae_family` —— 将来接国际版时另立 kind、
             // 另开一个分支，不要往本家的记录上挂 `region` 字段。
             self.to_trae_public_account(record)
-        } else if record.provider() == super::antigravity_accounts::ANTIGRAVITY_PROVIDER_ID {
-            // Antigravity 只有一家（Google 官方后端，没有地区分版）
-            self.to_antigravity_public_account(record)
         } else if record
             .provider()
             .starts_with(crate::server::core::custom_providers::ID_PREFIX)

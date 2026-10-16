@@ -262,17 +262,8 @@ fn allowed_hosts(provider: &str) -> Option<&'static [&'static str]> {
         // Trae 必须显式列在这里：落进默认分支会拿到 WorkBuddy 的白名单，
         // 那张表**既没有** `trae.cn`（授权页）**也没有** `127.0.0.1`（回调），
         // 症状正是本文件上面警告的那种 —— 窗口一片空白，日志什么也看不出。
-        //
-        // Antigravity 同样不设限：授权页在 `accounts.google.com`，登录后按账号
-        // 配置继续跳别的 Google 主机 / 第三方（不可穷举）；回调是被官方注册钉死的
-        // `http://localhost:51121/oauth-callback`。内嵌窗口里那条回调由
-        // [`antigravity_callback_forward`] 提前改道（见下面两处拦截），就算
-        // 改道逻辑将来失效，白名单这一层也不能再拦一次 —— 那会复现「登录成功
-        // 但网关等不到码」的静默故障。
         "catpaw" | "qoder" | "cline-free" | "cline-pass" | "autoclaw" | "autoclaw-intl"
-        | "accio" | "accio-cn" | "zcode" | "zcode-intl" | "codearts" | "trae" | "antigravity" => {
-            None
-        }
+        | "accio" | "accio-cn" | "zcode" | "zcode-intl" | "codearts" | "trae" => None,
         _ => Some(WORKBUDDY_ALLOWED_HOSTS),
     }
 }
@@ -381,52 +372,7 @@ fn autoclaw_callback_forward(url: &url::Url) -> Option<String> {
     ))
 }
 
-/// Antigravity 的 OAuth 回调端口 / 路径：官方 client 注册的 redirect_uri
-/// 是 `http://localhost:51121/oauth-callback`（逐字钉死、没有可配置项；
-/// 见 `providers::antigravity::oauth`）。网关**不监听**这个端口 ——
-/// 内嵌窗口把这条导航改成访问网关自己的 /oauth/callback。
-const ANTIGRAVITY_CALLBACK_PORT: u16 = 51121;
-const ANTIGRAVITY_CALLBACK_PATH: &str = "/oauth-callback";
-
-/// Antigravity OAuth 的回调：命中时返回**网关自己的**回调地址（把这次导航改道过去）。
-///
-/// ── 为什么内嵌窗口要拦这一手 ────────────────────────────────
-/// 回调地址是官方 client 注册时钉死的 `localhost:51121`，网关不监听（也不该去
-/// 抢官方客户端可能占用的端口）；桌面壳里那条回调导航必然落空。内嵌窗口是我们
-/// 自己的窗口，可以在请求发出之前把它截下来、改成访问网关自己的 /oauth/callback
-/// （路径顺带归一：`oauth-callback` → `oauth/callback`），授权码由网关换。
-///
-/// ── 口径（宽进严出，宁可不拦也别拦错）───────────────────────
-/// 只认「http + localhost/127.0.0.1 + 端口恰好 51121 + 路径 /oauth-callback」，
-/// 并且**跳过网关自己的端口** —— 用户完全可以把网关端口设成 51121，那时回调
-/// 本来就落在我们身上，再改道就成了自我循环（拦下 → 跳同一个地址 → 拦下）。
-fn antigravity_callback_forward(url: &url::Url) -> Option<String> {
-    if url.scheme() != "http" {
-        return None;
-    }
-    let host = url.host_str()?.to_ascii_lowercase();
-    if host != "localhost" && host != "127.0.0.1" {
-        return None;
-    }
-    let port = url.port_or_known_default()?;
-    if port == crate::gateway::proxy_port() || port != ANTIGRAVITY_CALLBACK_PORT {
-        return None;
-    }
-    if url.path() != ANTIGRAVITY_CALLBACK_PATH {
-        return None;
-    }
-    let query = url
-        .query()
-        .map(|value| format!("?{value}"))
-        .unwrap_or_default();
-    Some(format!(
-        "http://localhost:{}/oauth/callback{query}",
-        crate::gateway::proxy_port()
-    ))
-}
-
-/// 把登录窗口导航到改道后的地址（[`autoclaw_callback_forward`] /
-/// [`antigravity_callback_forward`] 的落地点）。
+/// 把登录窗口导航到改道后的地址（[`autoclaw_callback_forward`] 的落地点）。
 ///
 /// 用 `navigate` 而不是 `eval("location.href=…")`：前者是壳侧直接下发导航，
 /// 不依赖页面上下文还能不能执行脚本（授权页是第三方的，不该假设它允许我们
@@ -438,10 +384,10 @@ fn navigate_login_window(app: &AppHandle, label: &str, target: &str) {
     match url::Url::parse(target) {
         Ok(parsed) => {
             if let Err(error) = window.navigate(parsed) {
-                eprintln!("[login] 登录回调改道失败: {error}");
+                eprintln!("[login] AutoClaw 回调改道失败: {error}");
             }
         }
-        Err(error) => eprintln!("[login] 登录回调改道地址无效（{target}）: {error}"),
+        Err(error) => eprintln!("[login] AutoClaw 回调改道地址无效（{target}）: {error}"),
     }
 }
 
@@ -488,12 +434,6 @@ fn normalize_provider(provider: &str) -> Result<&'static str, String> {
         // 上游把这个地址按正则逐字校验），所以窗口**必须允许**导航到本机端口，
         // 否则用户点完授权、回调请求根本发不出去（见下面 allowed_hosts 的同一条）。
         "trae" => Ok("trae"),
-        // Antigravity（Google 的 Agent Manager）：授权地址由**后端适配器**现拼
-        // （OAuth 授权码；回调 URL 被官方 client 注册钉死在
-        // `http://localhost:51121/oauth-callback`），壳侧只负责开窗口与轮询 ——
-        // 与 CodeArts 同一条路。内嵌窗口里那条 51121 回调由
-        // [`antigravity_callback_forward`] 改成访问网关自己（见下面两处拦截）。
-        "antigravity" => Ok("antigravity"),
         other => Err(format!("不支持网页登录的提供商：{other}")),
     }
 }
@@ -676,17 +616,12 @@ pub async fn cancel(app: &AppHandle) -> Result<(), String> {
 ///
 /// `social_restore`：是否恢复 WorkBuddy 登录页的 Google / GitHub / X 入口
 /// （见 [`social_restore_script`]）。界面默认不勾选，故缺省 false。
-///
-/// `proxy`：可选出口代理（账号形态 JSON），原样进 `/api/session/login/start`
-/// 请求体 —— 只有 Antigravity 的网页登录会消费它（Google 直连不通时换凭证
-/// 走这个出口）；其余家传了也只是随登录任务躺着。
 pub async fn start(
     app: &AppHandle,
     edition: String,
     mode: String,
     provider: String,
     social_restore: bool,
-    proxy: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
     if current_login(app).is_some() {
         return Err("已有登录流程在进行，请先完成当前登录或等待超时".to_string());
@@ -745,12 +680,12 @@ pub async fn start(
     // 给它这个选项只会制造一个永远等不到回调的卡死。
     let use_external = mode == "external" && provider != "raccoon";
 
-    // proxy 缺省时序列化成 null，后端按「没填」处理（显式 null 与不传同义）
-    let mut start_payload = json!({ "edition": edition_id, "provider": provider });
-    if let Some(proxy) = proxy {
-        start_payload["proxy"] = proxy;
-    }
-    let started = gateway::call("POST", "/api/session/login/start", Some(&start_payload)).await?;
+    let started = gateway::call(
+        "POST",
+        "/api/session/login/start",
+        Some(&json!({ "edition": edition_id, "provider": provider })),
+    )
+    .await?;
     let login_state = started
         .get("state")
         .and_then(serde_json::Value::as_str)
@@ -810,17 +745,14 @@ pub async fn start(
         // Trae 只有一家（国内 SOLO 通道；国际版是另一套协议、另立 provider id），
         // 品牌名里不需要地区
         "trae" => "Trae",
-        // Antigravity 只有一家（回调被官方注册钉死，没有地区/版本分叉），
-        // 品牌名里不需要地区
-        "antigravity" => "Antigravity",
         _ => "WorkBuddy",
     };
-    // 窗口标题：Cline 两家的池、ZCode 两家的地区、CodeArts / Trae / Antigravity
-    // 的单一家都已经在品牌名里，不再拼 edition 后缀（否则会出现「登录 Cline Free
-    // 国内版账号」「登录 ZCode 国内版 国内版账号」这种说不通的标题）
+    // 窗口标题：Cline 两家的池、ZCode 两家的地区、CodeArts / Trae 的单一家
+    // 都已经在品牌名里，不再拼 edition 后缀（否则会出现「登录 Cline Free 国内版
+    // 账号」「登录 ZCode 国内版 国内版账号」这种说不通的标题）
     let title = if matches!(
         provider,
-        "cline-free" | "cline-pass" | "zcode" | "zcode-intl" | "codearts" | "trae" | "antigravity"
+        "cline-free" | "cline-pass" | "zcode" | "zcode-intl" | "codearts" | "trae"
     ) {
         format!("登录 {provider_label} 账号")
     } else {
@@ -1177,20 +1109,8 @@ async fn run_embedded(
         // 它的回调落在 z.ai 登记的那四个端口上，那几个端口可能被官方客户端
         // 占着（回调会被它接走）。这里在请求发出前把导航改到网关自己的回调
         // 路由 —— 理由与口径见 `autoclaw_callback_forward`。
-        //
-        // Antigravity 同一手法：它的回调地址被官方注册钉死在 localhost:51121
-        // （我们不监听那个端口），不改道这条导航必然落空 —— 理由与口径见
-        // `antigravity_callback_forward`。
         .on_navigation(move |url| {
             if let Some(target) = autoclaw_callback_forward(url) {
-                let app = app_for_forward.clone();
-                let label = label_for_forward.clone();
-                tauri::async_runtime::spawn(async move {
-                    navigate_login_window(&app, &label, &target);
-                });
-                return false;
-            }
-            if let Some(target) = antigravity_callback_forward(url) {
                 let app = app_for_forward.clone();
                 let label = label_for_forward.clone();
                 tauri::async_runtime::spawn(async move {
@@ -1222,19 +1142,10 @@ async fn run_embedded(
         //     （wry 在没有 handler 时对每个 NewWindowRequested 都 SetHandled(true)），
         //     所以这不是「放开弹窗」，只是把回调那一种从被静默丢弃变成被接住。
         //
-        // AutoClaw / Antigravity 的改道同样先判（两者走的都是顶层 302，正常
-        // 不该落到这里；但授权页若改用 window.open 打开回调，没有这一支就会
-        // 「登录成功却毫无反应」）。
+        // AutoClaw 的改道同样先判（它走的是顶层 302，正常不该落到这里；但授权页
+        // 若改用 window.open 打开回调，没有这一支就会「登录成功却毫无反应」）。
         .on_new_window(move |url, _features| {
             if let Some(target) = autoclaw_callback_forward(&url) {
-                let app = app_for_window.clone();
-                let label = label_for_window.clone();
-                tauri::async_runtime::spawn(async move {
-                    navigate_login_window(&app, &label, &target);
-                });
-                return tauri::webview::NewWindowResponse::Deny;
-            }
-            if let Some(target) = antigravity_callback_forward(&url) {
                 let app = app_for_window.clone();
                 let label = label_for_window.clone();
                 tauri::async_runtime::spawn(async move {

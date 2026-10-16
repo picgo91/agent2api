@@ -294,14 +294,11 @@ impl ProviderAdapter for AccioAdapter {
     ///
     /// `state` 在这里再校验一次（深度防御：回调路由已比对过，但真正的凭据是
     /// pending 表里那份 —— 取不到就是「不是本进程发起的那一轮」）。
-    ///
-    /// `_proxy` 不消费（上游国内可达；带代理区的只有 Antigravity）。
     fn exchange_login_code<'a>(
         &'a self,
         store: &'a AccountStore,
         code: &'a str,
         state: &'a str,
-        _proxy: Option<&'a Value>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>,
     > {

@@ -158,12 +158,12 @@
     {
       key: 'opencode-go', name: 'OpenCode Go', icon: 'opencode-go.png',
       protocol: P.openai, baseUrl: 'https://opencode.ai/zen/go/v1',
-      hint: 'OpenCode Go 套餐端点；填写 Go 的 API Key 接入',
+      hint: '同地址换 anthropic 协议即走它的 Claude 兼容端点',
     },
     {
       key: 'opencode-zen', name: 'OpenCode Zen', icon: 'opencode-zen.png',
       protocol: P.openai, baseUrl: 'https://opencode.ai/zen/v1',
-      hint: 'OpenCode Zen 端点（与 Go 独立）；填写 Zen 的 API Key 接入',
+      hint: '同地址换 anthropic 协议即走它的 Claude 兼容端点',
     },
     {
       key: 'ollama-local', name: 'Ollama（本地）', icon: 'ollama-local.png',

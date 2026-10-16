@@ -38,7 +38,7 @@ use crate::server::config;
 use crate::server::core::login::AUTH_URL_WAIT_MS;
 use crate::server::core::providers::router;
 use crate::server::core::routing;
-use crate::server::errors::{management_error, GatewayError};
+use crate::server::errors::management_error;
 use crate::server::http::{ok_json, parse_body};
 use crate::server::logging;
 use crate::server::ServerState;
@@ -197,15 +197,6 @@ pub async fn login_start(State(state): State<ServerState>, body: Bytes) -> Respo
         .and_then(|payload| payload.get("provider").and_then(Value::as_str))
         .map(str::trim)
         .unwrap_or("");
-    // 可选出口代理（与账号页同一种形状：`{source:'custom'|'pool'|'clash',…}`）。
-    // 只对下面的「网页登录」通用分支有意义 —— Antigravity 的上游在墙外，
-    // 网关直连换不到凭证，界面在添加弹窗里可以指一个出口；workbuddy 那条
-    // 无头链与其余专用分支都不读它。显式 null / 不传都按「没填」处理。
-    let proxy = payload
-        .as_ref()
-        .and_then(|payload| payload.get("proxy"))
-        .filter(|value| !value.is_null())
-        .cloned();
     // 注册表是 provider 白名单的唯一事实来源（见 providers::kind_from_id 的说明）
     let kind = match provider {
         "" => crate::server::core::providers::ProviderKind::WorkBuddy,
@@ -353,7 +344,7 @@ pub async fn login_start(State(state): State<ServerState>, body: Bytes) -> Respo
         return management_error(400, message);
     }
     if kind != crate::server::core::providers::ProviderKind::WorkBuddy {
-        return start_web_login(state, kind, proxy).await;
+        return start_web_login(state, kind).await;
     }
     let handle = state.login().start(edition.as_deref());
     match state
@@ -381,10 +372,9 @@ pub async fn login_start(State(state): State<ServerState>, body: Bytes) -> Respo
 async fn start_web_login(
     state: ServerState,
     kind: crate::server::core::providers::ProviderKind,
-    proxy: Option<Value>,
 ) -> Response {
     let label = crate::server::core::providers::meta(kind).label;
-    let handle = match state.login().start_web_login(kind, proxy) {
+    let handle = match state.login().start_web_login(kind) {
         Ok(handle) => handle,
         Err(reason) => return management_error(400, reason),
     };
@@ -1000,12 +990,6 @@ pub async fn login_codearts_callback(
     State(state): State<ServerState>,
     Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
-    // 这条路由也收 Antigravity 的回调（Google 固定回调 51121 被壳/面板重写到
-    // 网关的 `/oauth/callback`，见 `core::login::antigravity` 模块头）。
-    // 先按 state 前缀分派，其余 state 才走 CodeArts 收尾。
-    if is_antigravity_callback(&params) {
-        return render_antigravity_callback(state.login().finish_antigravity_login(&params).await);
-    }
     render_codearts_callback(state.login().finish_codearts_login(&params).await)
 }
 
@@ -1027,33 +1011,7 @@ pub async fn login_codearts_callback_post(
                 .collect();
         }
     }
-    if is_antigravity_callback(&params) {
-        return render_antigravity_callback(state.login().finish_antigravity_login(&params).await);
-    }
     render_codearts_callback(state.login().finish_codearts_login(&params).await)
-}
-
-/// 这次回调查询串是不是 Antigravity 发起的（判据是 `state` 前缀）。
-///
-/// 用**前缀**而不是「查任务表」：任务可能已过期被清理，那种回调应当得到
-/// 「这次登录已取消或已过期」（`finish_antigravity_login` 的 404），
-/// 而不是被当成 CodeArts 回调误报「state 不匹配」。
-fn is_antigravity_callback(params: &HashMap<String, String>) -> bool {
-    params.get("state").is_some_and(|state| {
-        state
-            .trim_start()
-            .starts_with(crate::server::core::providers::antigravity::oauth::STATE_PREFIX)
-    })
-}
-
-/// Antigravity 回调的收尾页（成功/失败都是同一张浏览器帮助页）。
-fn render_antigravity_callback(outcome: Result<String, GatewayError>) -> Response {
-    match outcome {
-        Ok(_) => oauth_callback_page(200, "登录成功，已返回网关，可以关闭此页面。"),
-        Err(error) => {
-            oauth_callback_page(error.status_code, &format!("登录失败：{}", error.message))
-        }
-    }
 }
 
 /// 三种收尾各回什么给浏览器。

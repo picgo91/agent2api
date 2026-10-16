@@ -354,15 +354,11 @@ impl ProviderAdapter for RaccoonAdapter {
     }
 
     /// 用回调里的一次性 code 换凭证并落账号（`raccoon::oauth::exchange_code`）。
-    ///
-    /// `_proxy` 不消费：上游（腾讯）在国内直连可达，网页登录没有出口需求
-    /// （界面也只给 Antigravity 配了代理区）。
     fn exchange_login_code<'a>(
         &'a self,
         store: &'a AccountStore,
         code: &'a str,
         state: &'a str,
-        _proxy: Option<&'a Value>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<String, GatewayError>> + Send + 'a>,
     > {

@@ -133,14 +133,6 @@ const PROVIDER_FEATURES: Record<string, ProviderFeatures> = {
   // 且它记的「签到钱包」与模型调用真正扣的积分池是两笔钱 —— 不给按钮，免得给一个
   // 点了必然报错（或报出一个对不上官方数字的余额）的入口。
   trae: { usage: true, checkin: false, edition: false, identifier: 'uid', expiry: 'expiresAt' },
-  // Antigravity（Google 的 Agent Manager）。
-  // `usage: false` —— 上游没有余额接口（`providers::antigravity` 模块头：`supports_usage()`
-  //   为 false），给了按钮点了必报「不支持余额查询」。
-  // `identifier: 'email'` + `emailAsName: true` —— 账号身份就是 Google 邮箱（id_token 里解出的），
-  //   展示名优先用邮箱。
-  // `expiry: 'expiresAt'` —— 访问令牌到期时间（约一小时），有 refreshToken 时到期自动续期，
-  //   所以这一列要显示、且填了 refreshToken 才不会长期飘红。
-  antigravity: { usage: false, checkin: false, edition: false, identifier: 'email', expiry: 'expiresAt', emailAsName: true },
 }
 
 /**

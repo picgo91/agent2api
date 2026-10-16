@@ -242,9 +242,6 @@ pub async fn change_port(app: AppHandle, port: u16) -> Result<Value, String> {
 /// 主窗口 —— 于是「拿地址」这一步在渲染层完成，壳只负责开窗口。因此它走
 /// [`start_autoclaw_oauth_login`]（入参是已经拿到的 state + authUrl），
 /// 不走这里。
-/// `proxy` 是可选出口代理（账号形态 JSON，随请求体透传给网关的
-/// `/api/session/login/start`）：只有 Antigravity 的网页登录在添加弹窗里
-/// 提供这个输入（Google 直连不通时换凭证走它）。其余家传了也会被忽略。
 #[tauri::command]
 pub async fn start_login(
     app: AppHandle,
@@ -252,7 +249,6 @@ pub async fn start_login(
     mode: String,
     provider: Option<String>,
     social_restore: Option<bool>,
-    proxy: Option<Value>,
 ) -> Result<Value, String> {
     login::start(
         &app,
@@ -260,7 +256,6 @@ pub async fn start_login(
         mode,
         provider.unwrap_or_default(),
         social_restore.unwrap_or(false),
-        proxy,
     )
     .await
 }
